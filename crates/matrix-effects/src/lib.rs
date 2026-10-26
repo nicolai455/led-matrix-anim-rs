@@ -1,4 +1,5 @@
 pub mod audio_pulse;
+pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
 pub mod fire;
@@ -24,6 +25,7 @@ pub mod text;
 pub mod util;
 
 pub use audio_pulse::AudioPulseEffect;
+pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
 pub use fire::FireEffect;
@@ -119,6 +121,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(KaleidoscopeEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(AudioTunnelEffect::new())
     })));
     log::info!("Registered effects!");
     effects
