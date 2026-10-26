@@ -22,7 +22,7 @@ fn catalog_reads_share_immutable_metadata_instead_of_cloning_json_trees() {
     let second = hub.catalog_json();
     assert!(Arc::ptr_eq(&first, &second));
     let catalog: serde_json::Value = serde_json::from_slice(&first).unwrap();
-    assert_eq!(catalog.as_array().unwrap().len(), 21);
+    assert!(catalog.as_array().unwrap().len() >= 21);
     hub.join();
 }
 

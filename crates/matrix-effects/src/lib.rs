@@ -1,11 +1,14 @@
 pub mod audio_pulse;
+pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
 pub mod fire;
 pub mod frames;
 pub mod freq_bars;
+pub mod kaleidoscope;
 pub mod lazy;
 pub mod matrix_rain;
+pub mod metaballs;
 pub mod plasma;
 pub mod pulse_ball;
 pub mod radial_spectrum;
@@ -22,13 +25,16 @@ pub mod text;
 pub mod util;
 
 pub use audio_pulse::AudioPulseEffect;
+pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
 pub use fire::FireEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
+pub use kaleidoscope::KaleidoscopeEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use matrix_rain::MatrixRainEffect;
+pub use metaballs::MetaballsEffect;
 pub use plasma::PlasmaEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
@@ -110,6 +116,15 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
         Box::new(StroboscopeEffect::new())
     })));
     effects.push(Box::new(LazyEffect::new(|| Box::new(FramesEffect::new()))));
-    log::info!("All 21 effects registered!");
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(MetaballsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(KaleidoscopeEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(AudioTunnelEffect::new())
+    })));
+    log::info!("Registered effects!");
     effects
 }
