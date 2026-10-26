@@ -1,0 +1,15 @@
+# Rust build artifacts
+target/
+firmware/target/
+tests/target/
+
+# Espressif / ESP-IDF build artifacts
+firmware/.embuild/
+firmware/cfg.toml
+
+# Local runtime & sensitive configuration
+*.log
+network.json
+state.json
+firmware/network.json
+firmware/state.json

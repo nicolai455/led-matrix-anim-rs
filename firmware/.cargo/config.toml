@@ -1,0 +1,26 @@
+[target.xtensa-esp32-espidf]
+linker = "ldproxy"
+rustflags = [
+    "--cfg", "espidf_time_64",
+    "-C", "default-linker-libraries",
+    # Xtensa LLVM cannot lower vectorized float constant pools in API/serde code.
+    "-C", "no-vectorize-slp",
+    "-C", "no-vectorize-loops",
+]
+
+[target.xtensa-esp32s3-espidf]
+linker = "ldproxy"
+rustflags = [
+    "--cfg", "espidf_time_64",
+    "-C", "default-linker-libraries",
+    # Xtensa LLVM cannot lower vectorized float constant pools in API/serde code.
+    "-C", "no-vectorize-slp",
+    "-C", "no-vectorize-loops",
+]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+PYTHON_DEPS_CHECKED = "1"
+IDF_COMPONENT_MANAGER = "0"

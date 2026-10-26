@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/matrix-core",
+    "crates/matrix-effects",
+    "crates/matrix-control",
+    "crates/matrix-preview",
+]
+exclude = [
+    "firmware",
+    "tests",
+]

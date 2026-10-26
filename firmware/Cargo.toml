@@ -1,0 +1,53 @@
+[package]
+name = "matrix-firmware"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[features]
+default = []
+esp32s3 = []
+bare = []
+
+[dependencies]
+matrix-core = { path = "../crates/matrix-core" }
+matrix-effects = { path = "../crates/matrix-effects" }
+matrix-control = { path = "../crates/matrix-control", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+anyhow = "1.0"
+
+[target.'cfg(target_os = "espidf")'.dependencies]
+esp-idf-svc = { version = "0.51", default-features = false, features = ["std", "binstart"] }
+esp-idf-hal = { version = "0.45", default-features = false }
+esp-idf-sys = { version = "0.36", default-features = false }
+embedded-svc = { version = "0.28", default-features = false }
+
+[profile.release]
+opt-level = 2
+# Xtensa LLVM currently crashes when fat LTO merges serde float visitors.
+# Keep per-crate optimization and avoid that backend path.
+lto = false
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Checked f64-to-f32 microphone deserialization avoids the Xtensa
+# visitor codegen bug, allowing networking and firmware size optimization.
+[profile.release.package.matrix-firmware]
+opt-level = "z"
+
+[profile.release.package.matrix-control]
+opt-level = "z"
+
+[build-dependencies]
+embuild = { version = "0.33", features = ["espidf"] }
+
+[profile.release.package.matrix-core]
+opt-level = "z"
+
+[profile.release.package.matrix-effects]
+opt-level = "z"

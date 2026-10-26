@@ -1,0 +1,29 @@
+[package]
+name = "matrix-integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+matrix-core = { path = "../crates/matrix-core" }
+matrix-effects = { path = "../crates/matrix-effects" }
+matrix-control = { path = "../crates/matrix-control", default-features = false }
+serde_json = "1"
+
+[[test]]
+name = "integration"
+path = "integration.rs"
+
+[[test]]
+name = "cycle_interval"
+path = "cycle_interval.rs"
+
+[[test]]
+name = "state_labels"
+path = "state_labels.rs"
+
+[[test]]
+name = "mic_deserialization"
+path = "mic_deserialization.rs"

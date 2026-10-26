@@ -1,0 +1,743 @@
+[
+  {
+    "id": "audio_pulse",
+    "name": "Audio Pulse",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 40.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "reactivity",
+        "label": "Reactivity",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "decay",
+        "label": "Decay",
+        "kind": "number",
+        "min": 10.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 50.0
+      }
+    ]
+  },
+  {
+    "id": "audio_waveform",
+    "name": "Waveform",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 40.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "amplitude",
+        "label": "Amplitude",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "thickness",
+        "label": "Thickness",
+        "kind": "number",
+        "min": 1.0,
+        "max": 5.0,
+        "step": 1.0,
+        "default": 2.0
+      }
+    ]
+  },
+  {
+    "id": "black_hole",
+    "name": "Black Hole",
+    "parameters": [
+      {
+        "id": "orbit_speed",
+        "label": "Orbit speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "default": 30.0
+      },
+      {
+        "id": "particle_count",
+        "label": "Particles",
+        "kind": "number",
+        "min": 1.0,
+        "max": 32.0,
+        "step": 1.0,
+        "default": 12.0
+      },
+      {
+        "id": "trail_length",
+        "label": "Trail length",
+        "kind": "number",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 70.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "audio_enabled",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "audio_amount",
+        "label": "Audio amount",
+        "kind": "number",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 50.0
+      }
+    ]
+  },
+  {
+    "id": "fire",
+    "name": "Fire",
+    "parameters": [
+      {
+        "id": "intensity",
+        "label": "Intensity",
+        "kind": "number",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 60.0
+      },
+      {
+        "id": "cooling",
+        "label": "Cooling",
+        "kind": "number",
+        "min": 10.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 55.0
+      },
+      {
+        "id": "sparking",
+        "label": "Sparking",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 120.0
+      },
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 50.0
+      },
+      {
+        "id": "audio_reactive",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      }
+    ]
+  },
+  {
+    "id": "Frames",
+    "name": "Frames",
+    "parameters": []
+  },
+  {
+    "id": "freq_bars",
+    "name": "Frequency Bars",
+    "parameters": [
+      {
+        "id": "scale",
+        "label": "Scale",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "peak_hold",
+        "label": "Peak hold",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 1.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "mirror",
+        "label": "Mirror",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "input_mode",
+        "label": "Input mode",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "wave_height",
+        "label": "Wave height",
+        "kind": "number",
+        "min": 0.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "wave_speed",
+        "label": "Wave speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      }
+    ]
+  },
+  {
+    "id": "matrix_rain",
+    "name": "Matrix Rain",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 40.0
+      },
+      {
+        "id": "density",
+        "label": "Density",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 50.0
+      },
+      {
+        "id": "color_mode",
+        "label": "Color",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "audio_reactive",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      }
+    ]
+  },
+  {
+    "id": "plasma",
+    "name": "Plasma",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 30.0
+      },
+      {
+        "id": "scale",
+        "label": "Scale",
+        "kind": "number",
+        "min": 1.0,
+        "max": 50.0,
+        "step": 1.0,
+        "default": 15.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "audio_reactive",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      }
+    ]
+  },
+  {
+    "id": "pulse_ball",
+    "name": "Pulse Ball",
+    "parameters": [
+      {
+        "id": "source",
+        "label": "Pulse source",
+        "kind": "select",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "color_mode",
+        "label": "Color mode",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "hue",
+        "label": "Solid hue",
+        "kind": "number",
+        "min": 0.0,
+        "max": 360.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "color_speed",
+        "label": "Rainbow speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 25.0
+      },
+      {
+        "id": "reactivity",
+        "label": "Reactivity",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "decay",
+        "label": "Decay",
+        "kind": "number",
+        "min": 10.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 50.0
+      },
+      {
+        "id": "bpm",
+        "label": "Demo tempo",
+        "kind": "number",
+        "min": 30.0,
+        "max": 240.0,
+        "step": 1.0,
+        "default": 120.0
+      }
+    ]
+  },
+  {
+    "id": "radial_spectrum",
+    "name": "Radial Spectrum",
+    "parameters": [
+      {
+        "id": "rotation_speed",
+        "label": "Rotation speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 25.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "scale",
+        "label": "Scale",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "mirror",
+        "label": "Mirror",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 1.0
+      }
+    ]
+  },
+  {
+    "id": "Rainbow",
+    "name": "Rainbow",
+    "parameters": []
+  },
+  {
+    "id": "ripple",
+    "name": "Ripple",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 40.0
+      },
+      {
+        "id": "ripple_count",
+        "label": "Ripples",
+        "kind": "number",
+        "min": 1.0,
+        "max": 8.0,
+        "step": 1.0,
+        "default": 3.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "audio_reactive",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      }
+    ]
+  },
+  {
+    "id": "Solid",
+    "name": "Solid",
+    "parameters": []
+  },
+  {
+    "id": "spectrogram",
+    "name": "Spectrogram",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 50.0
+      },
+      {
+        "id": "palette",
+        "label": "Palette",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "gain",
+        "label": "Gain",
+        "kind": "number",
+        "min": 10.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      }
+    ]
+  },
+  {
+    "id": "spinning_cube",
+    "name": "Spinning Cube",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Spin speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "default": 45.0
+      },
+      {
+        "id": "size",
+        "label": "Size",
+        "kind": "number",
+        "min": 50.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "color_mode",
+        "label": "Color mode",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "hue",
+        "label": "Solid hue",
+        "kind": "number",
+        "min": 0.0,
+        "max": 360.0,
+        "step": 1.0,
+        "default": 30.0
+      }
+    ]
+  },
+  {
+    "id": "spinning_donut",
+    "name": "Spinning Donut",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Spin speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "default": 45.0
+      },
+      {
+        "id": "size",
+        "label": "Size",
+        "kind": "number",
+        "min": 50.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "color_mode",
+        "label": "Color mode",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "hue",
+        "label": "Solid hue",
+        "kind": "number",
+        "min": 0.0,
+        "max": 360.0,
+        "step": 1.0,
+        "default": 30.0
+      }
+    ]
+  },
+  {
+    "id": "starfield",
+    "name": "Starfield",
+    "parameters": [
+      {
+        "id": "star_count",
+        "label": "Stars",
+        "kind": "number",
+        "min": 10.0,
+        "max": 128.0,
+        "step": 1.0,
+        "default": 64.0
+      },
+      {
+        "id": "warp_speed",
+        "label": "Warp speed",
+        "kind": "number",
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 30.0
+      },
+      {
+        "id": "color_mode",
+        "label": "Color",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "audio_reactive",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      }
+    ]
+  },
+  {
+    "id": "stroboscope",
+    "name": "Stroboscope",
+    "parameters": [
+      {
+        "id": "speed",
+        "label": "Flash rate",
+        "kind": "number",
+        "min": 1.0,
+        "max": 30.0,
+        "step": 1.0,
+        "default": 10.0
+      },
+      {
+        "id": "mode",
+        "label": "Mode",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "color",
+        "label": "Color",
+        "kind": "select",
+        "min": 0.0,
+        "max": 3.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "duration",
+        "label": "Flash duration",
+        "kind": "number",
+        "min": 10.0,
+        "max": 80.0,
+        "step": 1.0,
+        "default": 25.0
+      },
+      {
+        "id": "audio_reactive",
+        "label": "Audio reactive",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 1.0
+      }
+    ]
+  },
+  {
+    "id": "TestPattern",
+    "name": "TestPattern",
+    "parameters": []
+  },
+  {
+    "id": "TextStatic",
+    "name": "TextStatic",
+    "parameters": []
+  },
+  {
+    "id": "TextScroll",
+    "name": "TextScroll",
+    "parameters": []
+  }
+]
