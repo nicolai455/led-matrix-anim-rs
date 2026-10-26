@@ -47,19 +47,29 @@ export CARGO_HOME="${CARGO_HOME:-$DEFAULT_CARGO}"
 # Auto-discover IDF_PATH
 if [ -z "${IDF_PATH:-}" ]; then
     IDF_PATH=$(find_first \
+        "/home/nicolai/repos_priv/led_matix_anim/rust/firmware/.embuild/espressif/esp-idf/v5.2.1" \
         "$SCRIPT_DIR/.embuild/espressif/esp-idf/v5.2.1" \
         "$SCRIPT_DIR/.embuild/espressif/esp-idf/v5.2.*" \
         "$HOME/.espressif/esp-idf/v5.2.*" \
         "$HOME/.espressif/esp-idf/v5.*" || true)
-    export IDF_PATH
+    if [ -n "$IDF_PATH" ]; then
+        export IDF_PATH
+    else
+        unset IDF_PATH
+    fi
 fi
 
 # Auto-discover IDF_TOOLS_PATH
 if [ -z "${IDF_TOOLS_PATH:-}" ]; then
     IDF_TOOLS_PATH=$(find_first \
+        "/home/nicolai/repos_priv/led_matix_anim/rust/firmware/.embuild/espressif" \
         "$SCRIPT_DIR/.embuild/espressif" \
         "$HOME/.espressif" || true)
-    export IDF_TOOLS_PATH
+    if [ -n "$IDF_TOOLS_PATH" ]; then
+        export IDF_TOOLS_PATH
+    else
+        unset IDF_TOOLS_PATH
+    fi
 fi
 
 export PYTHON_DEPS_CHECKED=1

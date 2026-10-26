@@ -276,7 +276,7 @@ fn get_part_color(part: Part, shade: f32, base_hue: f32, color_mode: usize, soli
             Part::Fin => h = (h + 0.75) % 1.0,
             Part::Flank => {}
         }
-        let sat = if part == Part::Belly { 0.65 } else { 0.95 };
+        let sat = if part == Part::Belly { std::hint::black_box(0.65f32) } else { std::hint::black_box(0.95f32) };
         hsv_to_rgb(h, sat, shade)
     } else {
         // Solid hue
@@ -453,13 +453,16 @@ impl Effect for RotatingFishEffect {
         }
 
         // Set rotation angles based on axis parameter
-        let (yaw, pitch, roll): (f32, f32, f32) = if self.values[0] == 0.0 {
-            // Horizontal rotation
-            (angle, 0.20, 0.0)
+        let yaw: f32;
+        let pitch: f32;
+        let roll: f32 = 0.0;
+        if self.values[0] == 0.0 {
+            yaw = angle;
+            pitch = 0.20;
         } else {
-            // Vertical rotation
-            (0.22, angle, 0.0)
-        };
+            yaw = 0.22;
+            pitch = angle;
+        }
 
         let cy = yaw.cos();
         let sy = yaw.sin();
@@ -605,7 +608,7 @@ impl Effect for RotatingFishEffect {
         }
 
         // Render eyes when facing camera
-        for &e in &[25usize, 26usize] {
+        for e in [25, 26] {
             if v_rot[e].z > -0.25 {
                 let px = sx[e].round() as i32;
                 let py = sy[e].round() as i32;
