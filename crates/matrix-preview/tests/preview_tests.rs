@@ -1,4 +1,8 @@
-use matrix_preview::{preview_input, preview_input_capacity, preview_render, preview_sync};
+use matrix_preview::{
+    preview_audio_available, preview_audio_bands, preview_audio_beat, preview_audio_level,
+    preview_audio_pcm, preview_audio_peak, preview_input, preview_input_capacity, preview_render,
+    preview_sync,
+};
 use serde_json::json;
 static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -135,4 +139,41 @@ fn test_unknown_or_frame_effect_returns_nonzero_status() {
         status_frame_player, 0,
         "FramePlayer effect must return non-zero for frontend device fallback"
     );
+}
+
+#[test]
+fn test_preview_audio_telemetry_and_pcm_export() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let state = json!({
+        "state": "ON",
+        "brightness": 200,
+        "effect": "Frequency Bars",
+        "effect_id": "freq_bars",
+        "audio_source": "Synthetic"
+    });
+    let status = sync_json(&state);
+    assert_eq!(status, 0);
+
+    let _ptr = preview_render(1000.0);
+    assert_eq!(preview_audio_available(), 1);
+    let level = preview_audio_level();
+    let peak = preview_audio_peak();
+    let _beat = preview_audio_beat();
+    assert!((0.0..=1.0).contains(&level));
+    assert!((0.0..=1.0).contains(&peak));
+
+    let bands_ptr = preview_audio_bands();
+    assert!(!bands_ptr.is_null());
+    let bands = unsafe { std::slice::from_raw_parts(bands_ptr, 16) };
+    for &b in bands {
+        assert!((0.0..=1.0).contains(&b));
+    }
+
+    let pcm_ptr = preview_audio_pcm(1.0, 512, 22050.0);
+    assert!(!pcm_ptr.is_null());
+    let pcm = unsafe { std::slice::from_raw_parts(pcm_ptr, 512) };
+    assert_eq!(pcm.len(), 512);
+    for &s in pcm {
+        assert!((-1.0..=1.0).contains(&s));
+    }
 }

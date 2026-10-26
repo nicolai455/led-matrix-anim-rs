@@ -79,6 +79,15 @@ fn map_submit_result(res: Result<SubmitOutcome, String>) -> HttpResponse {
 }
 
 pub fn handle_api_request(ctx: &ApiContext, method: &str, path: &str, body: &[u8]) -> HttpResponse {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        handle_api_request_inner(ctx, method, path, body)
+    })) {
+        Ok(resp) => resp,
+        Err(_) => HttpResponse::err_json(500, "internal server error"),
+    }
+}
+
+fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[u8]) -> HttpResponse {
     let method = method.to_uppercase();
 
     match (method.as_str(), path) {

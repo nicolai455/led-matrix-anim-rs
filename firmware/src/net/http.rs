@@ -11,6 +11,18 @@ pub struct FirmwareHttpServer {
     _server: esp_idf_svc::http::server::EspHttpServer<'static>,
 }
 
+#[cfg(target_os = "espidf")]
+fn memory_is_low() -> bool {
+    unsafe {
+        let free = esp_idf_sys::esp_get_free_heap_size();
+        let largest_block =
+            esp_idf_sys::heap_caps_get_largest_free_block(esp_idf_sys::MALLOC_CAP_8BIT);
+        // Shed incoming dynamic API requests when free heap drops below 16 KB or largest
+        // allocatable block drops below 8 KB. This protects the ESP32 from OOM aborts.
+        free < 16 * 1024 || largest_block < 8 * 1024
+    }
+}
+
 impl FirmwareHttpServer {
     #[cfg(target_os = "espidf")]
     pub fn start(
@@ -76,6 +88,12 @@ impl FirmwareHttpServer {
         let ctx = api_ctx.clone();
         server
             .fn_handler("/api/*", Method::Get, move |req| {
+                if memory_is_low() {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(503, "device low on memory, shedding load"),
+                    );
+                }
                 let uri = req.uri().to_string();
                 if matches!(uri.as_str(), "/api/effects" | "/api/catalog") {
                     use embedded_svc::io::Write;
@@ -102,6 +120,12 @@ impl FirmwareHttpServer {
         let ctx = api_ctx.clone();
         server
             .fn_handler("/api/*", Method::Post, move |mut req| {
+                if memory_is_low() {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(503, "device low on memory, shedding load"),
+                    );
+                }
                 let uri = req.uri().to_string();
                 let mut body = Vec::new();
                 let mut buf = [0u8; 512];

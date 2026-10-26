@@ -15,6 +15,7 @@ function harness() {
     if (!elements.has(id)) elements.set(id, {
       value: id === 'previewMode' ? 'browser' : '', textContent: '', style: {},
       classList: { add() {}, remove() {}, toggle() {} },
+      dataset: {},
       getContext: () => context, appendChild() {}, addEventListener() {},
     });
     return elements.get(id);
@@ -116,4 +117,81 @@ test('unsupported local effects use explicit device fallback', async () => {
   await h.run('pollPreview()');
   assert.deepEqual(h.requests, ['/api/frame']);
   assert.match(h.element('previewStatus').textContent, /device/i);
+});
+test('effect parameter labels render correctly from label property and never as undefined', () => {
+  const h = harness();
+  const created = [];
+  h.sandbox.document.createElement = tag => {
+    const el = {
+      tagName: tag,
+      style: {},
+      dataset: {},
+      children: [],
+      classList: { add() {}, remove() {}, toggle() {} },
+      appendChild(child) { this.children.push(child); },
+      querySelector: sel => ({ style: {}, oninput: null, onchange: null }),
+      querySelectorAll: () => [],
+    };
+    created.push(el);
+    return el;
+  };
+  h.run(`
+    catalog = [{
+      id: 'test_fx',
+      name: 'Test FX',
+      parameters: [
+        { id: 'spd', label: 'Speed', kind: 'number', min: 0, max: 100, step: 1, default: 50 },
+        { id: 'opt', label: 'Palette', kind: 'select', options: ['A', 'B'], default: 0 },
+        { id: 'chk', label: 'Audio Reactive', kind: 'boolean', default: 0 }
+      ]
+    }];
+    state = { effect: 'Test FX', effects: {} };
+    renderParameters();
+  `);
+  const paramLabels = created.filter(e => e.className === 'param-label');
+  assert.equal(paramLabels.length, 3);
+  assert.ok(paramLabels[0].innerHTML.includes('Speed'));
+  assert.ok(paramLabels[1].innerHTML.includes('Palette'));
+  assert.ok(paramLabels[2].innerHTML.includes('Audio Reactive'));
+  for (const pl of paramLabels) {
+    assert.ok(!pl.innerHTML.includes('undefined'), 'param label contains undefined');
+  }
+});
+test('synthetic audio enables listen button and wasm updates visualizer bands', () => {
+  const h = harness();
+  const bandsEl = [];
+  for (let i = 0; i < 16; i++) {
+    bandsEl.push({ style: { height: '0%' } });
+  }
+  h.sandbox.document.querySelectorAll = sel => sel === '.band-col' ? bandsEl : [];
+  const fakeBands = new Float32Array(16);
+  fakeBands[0] = 0.95;
+  fakeBands[15] = 0.42;
+
+  h.run(`
+    previewRenderer = {
+      memory: new WebAssembly.Memory({initial: 1}),
+      preview_input: () => 8192,
+      preview_input_capacity: () => 16384,
+      preview_sync: () => 0,
+      preview_render: () => 0,
+      preview_audio_bands: () => 1024,
+      preview_audio_pcm: () => 2048,
+    };
+    new Float32Array(previewRenderer.memory.buffer, 1024, 16).set([0.95, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.42]);
+    state = { audio_source: 'Synthetic', on: true };
+    syncPreviewState();
+    updateUI();
+  `);
+  assert.equal(h.element('audioSoundBtn').style.display, 'inline-block');
+
+  h.run(`animatePreview(100);`);
+  assert.equal(bandsEl[0].style.height, '95.0%');
+  assert.equal(bandsEl[15].style.height, '42.0%');
+
+  h.run(`
+    state.audio_source = 'Off';
+    updateUI();
+  `);
+  assert.equal(h.element('audioSoundBtn').style.display, 'none');
 });

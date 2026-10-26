@@ -12,6 +12,8 @@ struct Preview {
     input: Box<[u8; INPUT_CAPACITY]>,
     output: Box<[u8; OUTPUT_BYTES]>,
     audio: AudioSnapshot,
+    current_audio: AudioSnapshot,
+    pcm_buffer: Box<[f32; 2048]>,
     audio_time: u64,
     consumed_beat: Option<u64>,
 }
@@ -22,6 +24,8 @@ impl Preview {
             input: Box::new([0; INPUT_CAPACITY]),
             output: Box::new([0; OUTPUT_BYTES]),
             audio: AudioSnapshot::default(),
+            current_audio: AudioSnapshot::default(),
+            pcm_buffer: Box::new([0.0; 2048]),
             audio_time: 0,
             consumed_beat: None,
         }
@@ -159,6 +163,7 @@ pub extern "C" fn preview_render(now_ms: f64) -> *const u8 {
     if !audio.available {
         audio.beat = false;
     }
+    p.current_audio = audio.clone();
     let frame = if p.engine.is_on() {
         p.engine.render(now, &audio)
     } else {
@@ -174,6 +179,70 @@ pub extern "C" fn preview_render(now_ms: f64) -> *const u8 {
         ]);
     }
     p.output.as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn preview_audio_bands() -> *const f32 {
+    let mut state = STATE.lock().unwrap();
+    let p = state.get_or_insert_with(Preview::new);
+    p.current_audio.bands.as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn preview_audio_level() -> f32 {
+    let mut state = STATE.lock().unwrap();
+    let p = state.get_or_insert_with(Preview::new);
+    p.current_audio.level
+}
+
+#[no_mangle]
+pub extern "C" fn preview_audio_peak() -> f32 {
+    let mut state = STATE.lock().unwrap();
+    let p = state.get_or_insert_with(Preview::new);
+    p.current_audio.peak
+}
+
+#[no_mangle]
+pub extern "C" fn preview_audio_beat() -> i32 {
+    let mut state = STATE.lock().unwrap();
+    let p = state.get_or_insert_with(Preview::new);
+    if p.current_audio.beat {
+        1
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn preview_audio_available() -> i32 {
+    let mut state = STATE.lock().unwrap();
+    let p = state.get_or_insert_with(Preview::new);
+    if p.current_audio.available {
+        1
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn preview_audio_pcm(
+    start_sec: f64,
+    num_samples: usize,
+    sample_rate: f64,
+) -> *const f32 {
+    let mut state = STATE.lock().unwrap();
+    let p = state.get_or_insert_with(Preview::new);
+    let count = num_samples.min(2048);
+    let sr = if sample_rate > 1000.0 {
+        sample_rate
+    } else {
+        22050.0
+    };
+    for i in 0..count {
+        let t = (start_sec + (i as f64) / sr) as f32;
+        p.pcm_buffer[i] = matrix_core::synthetic_audio_sample(t);
+    }
+    p.pcm_buffer.as_ptr()
 }
 
 #[cfg(test)]

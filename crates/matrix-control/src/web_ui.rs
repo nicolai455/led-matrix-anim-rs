@@ -46,6 +46,7 @@ h2 { font-size:0.8rem; font-weight:600; margin-bottom:10px; color:var(--muted); 
 .preview-wrap { display:flex; flex-direction:column; align-items:center; }
 .matrix-preview { width:min(100%, 448px); height:auto; aspect-ratio:1; image-rendering:pixelated; border:2px solid var(--border); border-radius:4px; background:#000; }
 .preview-controls { width:min(100%, 448px); margin-top:12px; }
+.preview-controls label { display:block; font-size:0.85rem; margin-bottom:6px; color:var(--text); }
 .preview-note { font-size:0.75rem; color:var(--muted); margin-top:8px; line-height:1.5; }
 
 .toggle { position:relative; display:inline-block; width:48px; height:26px; }
@@ -69,7 +70,11 @@ input:checked + .toggle-track:before { transform:translateX(22px); }
 .param-item { margin-bottom:12px; }
 .param-item:last-child { margin-bottom:0; }
 .param-label { display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px; }
-.param-select { width:100%; background:var(--card-hover); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; }
+select, .param-select { width:100%; background:var(--card-hover); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 32px 8px 10px; font-family:inherit; font-size:0.85rem; line-height:1.4; cursor:pointer; outline:none; appearance:none; -webkit-appearance:none; -moz-appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; transition:border-color 0.15s, box-shadow 0.15s; }
+select:hover, .param-select:hover { border-color:var(--accent); }
+select:focus, .param-select:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(88,166,255,0.2); }
+select:disabled, .param-select:disabled { opacity:0.5; cursor:not-allowed; }
+select option, .param-select option { background:var(--card); color:var(--text); }
 
 /* Buttons */
 .btn-row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
@@ -114,7 +119,7 @@ input:checked + .toggle-track:before { transform:translateX(22px); }
   <canvas class="matrix-preview" id="previewCanvas" width="32" height="32" aria-label="LED matrix preview"></canvas>
   <div class="preview-controls">
     <label for="previewMode">Preview rendering</label>
-    <select id="previewMode" onchange="changePreviewMode()">
+    <select id="previewMode" class="param-select" onchange="changePreviewMode()">
       <option value="browser">Browser · smooth, low ESP load</option>
       <option value="device">Device frames · exact, higher ESP load</option>
       <option value="off">Off</option>
@@ -167,7 +172,10 @@ input:checked + .toggle-track:before { transform:translateX(22px); }
 
 <!-- Audio -->
 <div class="card">
-  <h2>Audio Reactivity</h2>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h2 style="margin:0">Audio Reactivity</h2>
+    <button class="btn" id="audioSoundBtn" style="padding:4px 10px; font-size:0.8rem; display:none" onclick="toggleAudioPreviewSound()">🔊 Listen to Synth</button>
+  </div>
   <div class="audio-btns">
     <div class="audio-btn" id="audioOff" onclick="setAudio('Off')">Off</div>
     <div class="audio-btn" id="audioSynthetic" onclick="setAudio('Synthetic')">Synthetic</div>
@@ -380,12 +388,91 @@ function animatePreview(now) {
       const ptr = previewRenderer.preview_render(previewLastTime);
       previewImage.data.set(new Uint8Array(previewRenderer.memory.buffer, ptr, 4096));
       previewCtx.putImageData(previewImage, 0, 0);
+
+      if (typeof previewRenderer.preview_audio_bands === 'function' && state.audio_source === 'Synthetic' && typeof document.querySelectorAll === 'function') {
+        const bandsPtr = previewRenderer.preview_audio_bands();
+        if (bandsPtr && previewRenderer.memory) {
+          const bands = new Float32Array(previewRenderer.memory.buffer, bandsPtr, 16);
+          const cols = document.querySelectorAll('.band-col');
+          for (let i = 0; i < 16 && i < cols.length; i++) {
+            if (cols[i] && cols[i].style) {
+              const h = Math.min(100, Math.max(0, bands[i] * 100));
+              cols[i].style.height = h.toFixed(1) + '%';
+            }
+          }
+        }
+      }
     } catch (e) {
       previewReady = false;
       previewStatus('Browser renderer stopped. Select Device frames for the ESP preview.');
     }
   }
   requestAnimationFrame(animatePreview);
+}
+
+let audioPreviewCtx = null;
+let audioPreviewNode = null;
+let audioPreviewPlaying = false;
+let audioPreviewTime = 0;
+
+function toggleAudioPreviewSound() {
+  if (audioPreviewPlaying) {
+    stopAudioPreviewSound();
+  } else {
+    startAudioPreviewSound();
+  }
+}
+
+function startAudioPreviewSound() {
+  if (!previewRenderer || typeof previewRenderer.preview_audio_pcm !== 'function') return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!audioPreviewCtx) {
+      audioPreviewCtx = new AudioCtx();
+    }
+    if (audioPreviewCtx.state === 'suspended') {
+      audioPreviewCtx.resume();
+    }
+    const sampleRate = audioPreviewCtx.sampleRate;
+    const bufferSize = 2048;
+    audioPreviewNode = audioPreviewCtx.createScriptProcessor(bufferSize, 0, 1);
+    audioPreviewTime = (performance.now() + previewClockOffset) / 1000.0;
+    audioPreviewNode.onaudioprocess = function(e) {
+      if (!audioPreviewPlaying || !previewRenderer || typeof previewRenderer.preview_audio_pcm !== 'function') return;
+      const out = e.outputBuffer.getChannelData(0);
+      const ptr = previewRenderer.preview_audio_pcm(audioPreviewTime, out.length, sampleRate);
+      if (ptr && previewRenderer.memory) {
+        const wasmSamples = new Float32Array(previewRenderer.memory.buffer, ptr, out.length);
+        out.set(wasmSamples);
+      }
+      audioPreviewTime += out.length / sampleRate;
+    };
+    audioPreviewNode.connect(audioPreviewCtx.destination);
+    audioPreviewPlaying = true;
+    const btn = document.getElementById('audioSoundBtn');
+    if (btn) {
+      btn.textContent = '⏹ Stop Sound';
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.color = 'var(--accent)';
+    }
+  } catch (e) {
+    console.error('Audio preview sound error:', e);
+  }
+}
+
+function stopAudioPreviewSound() {
+  audioPreviewPlaying = false;
+  if (audioPreviewNode) {
+    try { audioPreviewNode.disconnect(); } catch (e) {}
+    audioPreviewNode = null;
+  }
+  const btn = document.getElementById('audioSoundBtn');
+  if (btn) {
+    btn.textContent = '🔊 Listen to Synth';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }
 }
 
 function showToast(msg, bg) {
@@ -615,6 +702,11 @@ function updateUI() {
     if (el) el.classList.toggle('active', state.audio_source === s);
   });
   document.getElementById('audioVisualizer').style.display = (state.audio_source !== 'Off') ? 'block' : 'none';
+  const soundBtn = document.getElementById('audioSoundBtn');
+  if (soundBtn) soundBtn.style.display = (state.audio_source === 'Synthetic') ? 'inline-block' : 'none';
+  if (state.audio_source !== 'Synthetic' && typeof audioPreviewPlaying !== 'undefined' && audioPreviewPlaying) {
+    stopAudioPreviewSound();
+  }
 
   // Update visualizer bands
   if (state.bands && state.bands.length === 16) {
@@ -686,9 +778,10 @@ function renderParameters() {
       const item = document.createElement('div');
       item.className = 'param-item';
 
+      const paramLabel = p.label || p.name || p.id;
       const label = document.createElement('div');
       label.className = 'param-label';
-      label.innerHTML = '<span>' + p.name + '</span><span id="pval_' + p.id + '"></span>';
+      label.innerHTML = '<span>' + paramLabel + '</span><span id="pval_' + p.id + '"></span>';
       item.appendChild(label);
 
       if (p.kind === 'boolean') {

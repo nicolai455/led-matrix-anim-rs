@@ -414,41 +414,12 @@ fn fft(re: &mut [f32; FFT_SIZE], im: &mut [f32; FFT_SIZE]) {
     }
 }
 
-/// Generates a synthetic audio snapshot with deterministic beats and rhythmic frequency movement.
+mod techno;
+pub use techno::{generate_synthetic_audio, synthetic_audio_sample};
+
+/// Generates a realistic synthetic audio snapshot based on a 5-second techno beat loop (120 BPM).
 pub fn synthetic_audio(now_ms: u64) -> AudioSnapshot {
-    let phase = ((now_ms % 500) as f32) / 500.0;
-    let bass = (-phase * 7.0).exp();
-    let mid = 0.5 + 0.35 * (((now_ms % 4000) as f32) * (TWO_PI / 4000.0)).sin();
-    let treble = 0.2 + 0.5 * (1.0 - phase);
-    let level = (bass + mid + treble) / 3.0;
-
-    let mut bands = [0.0f32; 16];
-    for (i, band) in bands.iter_mut().enumerate() {
-        *band = if i < 5 {
-            bass
-        } else if i < 11 {
-            mid
-        } else {
-            treble
-        };
-    }
-
-    let beat = (now_ms % 500) < 50;
-
-    let mut waveform = [0.0f32; 128];
-    for (i, wave) in waveform.iter_mut().enumerate() {
-        let wave_phase = (i as f32) * 0.15 + (now_ms as f32) * 0.01;
-        *wave = (wave_phase.sin() * level).clamp(-1.0, 1.0);
-    }
-
-    AudioSnapshot {
-        bands,
-        waveform,
-        level: clamp01(level),
-        peak: clamp01(bass.max(mid).max(treble)),
-        beat,
-        available: true,
-    }
+    generate_synthetic_audio(now_ms)
 }
 
 #[cfg(test)]

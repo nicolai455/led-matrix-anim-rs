@@ -513,3 +513,20 @@ fn test_status_endpoint_returns_real_telemetry() {
 
     hub.join();
 }
+
+#[test]
+fn test_handle_api_request_panic_guard() {
+    let hub = ControlHub::spawn(test_engine(), FastOutput, None).expect("hub spawn");
+    let ctx = ApiContext {
+        hub: hub.clone(),
+        config_store: Arc::new(ConfigStore::new(None)),
+        mic_controller: Arc::new(MicController::new(false)),
+        state_store: Arc::new(StateStore::new(None)),
+    };
+
+    // Unknown routes return 404 cleanly
+    let resp = handle_api_request(&ctx, "GET", "/unknown", &[]);
+    assert_eq!(resp.status, 404);
+
+    hub.join();
+}

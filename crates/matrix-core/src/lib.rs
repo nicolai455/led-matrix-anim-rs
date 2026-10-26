@@ -8,8 +8,8 @@ pub mod state;
 
 // Re-export fixed public core API items at root of crate
 pub use audio::{
-    synthetic_audio, AudioSnapshot, MicDsp, MicSettings, BANDS as AUDIO_BANDS, FFT_SIZE,
-    SAMPLE_RATE as AUDIO_SAMPLE_RATE,
+    synthetic_audio, synthetic_audio_sample, AudioSnapshot, MicDsp, MicSettings,
+    BANDS as AUDIO_BANDS, FFT_SIZE, SAMPLE_RATE as AUDIO_SAMPLE_RATE,
 };
 pub use effect::{Effect, ParameterDescriptor, ParameterKind, RenderContext};
 pub use engine::{AudioMode, Engine};
