@@ -57,6 +57,7 @@ fn test_sync_valid_state_and_render_power_off() {
     let output = unsafe { std::slice::from_raw_parts(ptr, 4096) };
 
     // When power is OFF, all RGB channels must be 0 and alpha 255
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     for chunk in output.chunks_exact(4) {
         assert_eq!(chunk[0], 0, "R should be 0 when OFF");
         assert_eq!(chunk[1], 0, "G should be 0 when OFF");

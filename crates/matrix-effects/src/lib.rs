@@ -6,6 +6,7 @@ pub mod frames;
 pub mod freq_bars;
 pub mod lazy;
 pub mod matrix_rain;
+pub mod metaballs;
 pub mod plasma;
 pub mod pulse_ball;
 pub mod radial_spectrum;
@@ -29,6 +30,7 @@ pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use matrix_rain::MatrixRainEffect;
+pub use metaballs::MetaballsEffect;
 pub use plasma::PlasmaEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
@@ -110,6 +112,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
         Box::new(StroboscopeEffect::new())
     })));
     effects.push(Box::new(LazyEffect::new(|| Box::new(FramesEffect::new()))));
-    log::info!("All 21 effects registered!");
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(MetaballsEffect::new())
+    })));
+    log::info!("Registered effects!");
     effects
 }

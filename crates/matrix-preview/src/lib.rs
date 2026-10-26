@@ -170,6 +170,7 @@ pub extern "C" fn preview_render(now_ms: f64) -> *const u8 {
         Default::default()
     };
     let brightness = p.engine.brightness() as u16;
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     for (pixel, out) in frame.pixels.iter().zip(p.output.chunks_exact_mut(4)) {
         out.copy_from_slice(&[
             (pixel.r as u16 * brightness / 255) as u8,

@@ -13,10 +13,9 @@ fn test_legacy_catalog_full_parity() {
     let expected: Vec<Value> =
         serde_json::from_str(legacy_json).expect("Failed to parse legacy_catalog.json");
 
-    assert_eq!(
-        entries.len(),
-        expected.len(),
-        "Catalog length mismatch: got {} effects, expected {}",
+    assert!(
+        entries.len() >= expected.len(),
+        "Catalog length mismatch: got {} effects, expected at least {}",
         entries.len(),
         expected.len()
     );
