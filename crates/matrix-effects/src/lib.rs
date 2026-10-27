@@ -57,6 +57,7 @@ pub mod supernova;
 pub mod test_pattern;
 pub mod text;
 pub mod text_effects;
+pub mod ufo_abduction;
 pub mod util;
 pub mod water_caustics;
 pub mod yin_yang;
@@ -122,6 +123,7 @@ pub use text::{
     draw_centered_text, draw_char, draw_text, text_width, TextScrollEffect, TextStaticEffect,
 };
 pub use text_effects::TextEffectsEffect;
+pub use ufo_abduction::UfoAbductionEffect;
 pub use water_caustics::WaterCausticsEffect;
 pub use yin_yang::YinYangEffect;
 
@@ -310,6 +312,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(YinYangEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(UfoAbductionEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
