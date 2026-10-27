@@ -9,6 +9,7 @@ pub mod bouncing_speakers;
 pub mod cyber_rain;
 pub mod cyber_tunnel;
 pub mod dancing_banana;
+pub mod dancing_skeleton;
 pub mod disco_ball;
 pub mod disco_floor;
 pub mod dna_spiral;
@@ -76,6 +77,7 @@ pub use bouncing_speakers::BouncingSpeakersEffect;
 pub use cyber_rain::CyberRainEffect;
 pub use cyber_tunnel::CyberTunnelEffect;
 pub use dancing_banana::DancingBananaEffect;
+pub use dancing_skeleton::DancingSkeletonEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
 pub use dna_spiral::DnaSpiralEffect;
@@ -330,6 +332,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PopcatEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DancingSkeletonEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
