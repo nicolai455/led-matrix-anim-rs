@@ -7,6 +7,7 @@ pub mod fire;
 pub mod fireworks;
 pub mod frames;
 pub mod freq_bars;
+pub mod game_of_life;
 pub mod kaleidoscope;
 pub mod lazy;
 pub mod lissajous;
@@ -36,6 +37,7 @@ pub use fire::FireEffect;
 pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
+pub use game_of_life::GameOfLifeEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use lissajous::LissajousEffect;
@@ -139,6 +141,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(LissajousEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(GameOfLifeEffect::new())
     })));
     log::info!("Registered effects!");
     effects
