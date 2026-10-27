@@ -19,6 +19,7 @@ pub mod lissajous;
 pub mod matrix_rain;
 pub mod metaballs;
 pub mod nyan_cat;
+pub mod party_dancers;
 pub mod plasma;
 pub mod polar_lights;
 pub mod pulse_ball;
@@ -59,6 +60,7 @@ pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
 pub use nyan_cat::NyanCatEffect;
+pub use party_dancers::PartyDancersEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
 pub use pulse_ball::PulseBallEffect;
@@ -195,6 +197,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(NyanCatEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PartyDancersEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
