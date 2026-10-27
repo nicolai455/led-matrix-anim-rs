@@ -41,6 +41,7 @@ pub mod metaballs;
 pub mod moving_heads;
 pub mod neon_heart;
 pub mod nyan_cat;
+pub mod octopus_scanner;
 pub mod outrun_drive;
 pub mod pacman_chase;
 pub mod party_dancers;
@@ -119,6 +120,7 @@ pub use metaballs::MetaballsEffect;
 pub use moving_heads::MovingHeadsEffect;
 pub use neon_heart::NeonHeartEffect;
 pub use nyan_cat::NyanCatEffect;
+pub use octopus_scanner::OctopusScannerEffect;
 pub use outrun_drive::OutrunDriveEffect;
 pub use pacman_chase::PacmanChaseEffect;
 pub use party_dancers::PartyDancersEffect;
@@ -385,6 +387,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DiscoPinwheelEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(OctopusScannerEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
