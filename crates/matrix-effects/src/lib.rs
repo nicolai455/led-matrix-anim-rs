@@ -32,6 +32,7 @@ pub mod laser_show;
 pub mod lava_lamp;
 pub mod lazy;
 pub mod lissajous;
+pub mod mario_stomp;
 pub mod matrix_rain;
 pub mod metaballs;
 pub mod neon_heart;
@@ -102,6 +103,7 @@ pub use laser_show::LaserShowEffect;
 pub use lava_lamp::LavaLampEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use lissajous::LissajousEffect;
+pub use mario_stomp::MarioStompEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
 pub use neon_heart::NeonHeartEffect;
@@ -345,6 +347,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(FlappyBirdEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(MarioStompEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
