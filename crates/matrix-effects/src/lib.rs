@@ -29,6 +29,7 @@ pub mod hazard_pulsar;
 pub mod hypno_spirals;
 pub mod julia_orbit;
 pub mod kaleidoscope;
+pub mod laser_scanner;
 pub mod laser_show;
 pub mod lava_lamp;
 pub mod lazy;
@@ -105,6 +106,7 @@ pub use hazard_pulsar::HazardPulsarEffect;
 pub use hypno_spirals::HypnoSpiralsEffect;
 pub use julia_orbit::JuliaOrbitEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
+pub use laser_scanner::LaserScannerEffect;
 pub use laser_show::LaserShowEffect;
 pub use lava_lamp::LavaLampEffect;
 pub use lazy::{EffectFactory, LazyEffect};
@@ -375,6 +377,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(MovingHeadsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LaserScannerEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
