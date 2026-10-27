@@ -20,6 +20,7 @@ pub mod lazy;
 pub mod lissajous;
 pub mod matrix_rain;
 pub mod metaballs;
+pub mod neon_heart;
 pub mod nyan_cat;
 pub mod pacman_chase;
 pub mod party_dancers;
@@ -66,6 +67,7 @@ pub use lazy::{EffectFactory, LazyEffect};
 pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
+pub use neon_heart::NeonHeartEffect;
 pub use nyan_cat::NyanCatEffect;
 pub use pacman_chase::PacmanChaseEffect;
 pub use party_dancers::PartyDancersEffect;
@@ -225,6 +227,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(BouncingSpeakersEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(NeonHeartEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
