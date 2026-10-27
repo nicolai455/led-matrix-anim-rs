@@ -34,6 +34,7 @@ pub mod solid;
 pub mod spectrogram;
 pub mod spinning_cube;
 pub mod spinning_donut;
+pub mod spinning_vinyl;
 pub mod starfield;
 pub mod strobe_blinder;
 pub mod stroboscope;
@@ -78,6 +79,7 @@ pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
 pub use spinning_cube::SpinningCubeEffect;
 pub use spinning_donut::SpinningDonutEffect;
+pub use spinning_vinyl::SpinningVinylEffect;
 pub use starfield::StarfieldEffect;
 pub use strobe_blinder::StrobeBlinderEffect;
 pub use stroboscope::StroboscopeEffect;
@@ -215,6 +217,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(StrobeBlinderEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SpinningVinylEffect::new())
     })));
     log::info!("Registered all effects!");
     effects

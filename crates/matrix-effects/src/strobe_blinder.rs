@@ -181,7 +181,7 @@ impl Effect for StrobeBlinderEffect {
     }
 
     fn reset(&mut self) {
-        self.lamp_heat = Box::new([[0.0; 4]; 4]);
+        *self.lamp_heat = [[0.0; 4]; 4];
         self.phase = 0.0;
         self.color_cycle = 0.0;
         self.flash_all = 0.0;
@@ -224,8 +224,8 @@ impl Effect for StrobeBlinderEffect {
         for ly in 0..4 {
             for lx in 0..4 {
                 let heat = &mut self.lamp_heat[ly][lx];
-                // Decay
-                *heat = (*heat - dt * cool_rate).max(0.0);
+                // Decay with filament standby preheat
+                *heat = (*heat - dt * cool_rate).max(0.15);
 
                 let trigger = match pattern_mode {
                     0 => {
@@ -301,21 +301,23 @@ impl Effect for StrobeBlinderEffect {
             }
         }
 
-        // Full blinder whiteout flash on sudden beat
-        if self.flash_all > 0.5 {
-            let f_byte = to_byte(self.flash_all * 180.0);
+        // Full blinder flash on sudden beat
+        if self.flash_all > 0.6 {
+            let f_byte = to_byte(self.flash_all * 50.0);
             for y in 0..HEIGHT {
                 for x in 0..WIDTH {
                     let cur = frame.get(x, y);
-                    frame.set(
-                        x,
-                        y,
-                        Rgb::new(
-                            cur.r.saturating_add(f_byte),
-                            cur.g.saturating_add(f_byte),
-                            cur.b.saturating_add(f_byte),
-                        ),
-                    );
+                    if cur != Rgb::BLACK {
+                        frame.set(
+                            x,
+                            y,
+                            Rgb::new(
+                                cur.r.saturating_add(f_byte),
+                                cur.g.saturating_add(f_byte),
+                                cur.b.saturating_add(f_byte),
+                            ),
+                        );
+                    }
                 }
             }
         }
