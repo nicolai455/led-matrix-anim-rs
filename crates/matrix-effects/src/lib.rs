@@ -3,6 +3,7 @@ pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
 pub mod dna_spiral;
+pub mod domain_warp;
 pub mod fire;
 pub mod fireworks;
 pub mod frames;
@@ -34,6 +35,7 @@ pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
 pub use dna_spiral::DnaSpiralEffect;
+pub use domain_warp::DomainWarpEffect;
 pub use fire::FireEffect;
 pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
@@ -149,6 +151,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PolarLightsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DomainWarpEffect::new())
     })));
     log::info!("Registered effects!");
     effects
