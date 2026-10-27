@@ -11,6 +11,7 @@ pub mod dna_spiral;
 pub mod domain_warp;
 pub mod equalizer_city;
 pub mod fire;
+pub mod fire_tornado;
 pub mod fireworks;
 pub mod frames;
 pub mod freq_bars;
@@ -61,6 +62,7 @@ pub use dna_spiral::DnaSpiralEffect;
 pub use domain_warp::DomainWarpEffect;
 pub use equalizer_city::EqualizerCityEffect;
 pub use fire::FireEffect;
+pub use fire_tornado::FireTornadoEffect;
 pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
@@ -245,6 +247,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(AudioMeshEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(FireTornadoEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
