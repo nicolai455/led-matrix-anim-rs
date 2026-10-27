@@ -24,6 +24,7 @@ pub mod frames;
 pub mod freq_bars;
 pub mod galaxy_spiral;
 pub mod game_of_life;
+pub mod hamster_dance;
 pub mod hazard_pulsar;
 pub mod hypno_spirals;
 pub mod julia_orbit;
@@ -95,6 +96,7 @@ pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
+pub use hamster_dance::HamsterDanceEffect;
 pub use hazard_pulsar::HazardPulsarEffect;
 pub use hypno_spirals::HypnoSpiralsEffect;
 pub use julia_orbit::JuliaOrbitEffect;
@@ -350,6 +352,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(MarioStompEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(HamsterDanceEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
