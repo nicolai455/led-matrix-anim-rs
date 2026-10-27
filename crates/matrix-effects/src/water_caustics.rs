@@ -226,7 +226,9 @@ impl Effect for WaterCausticsEffect {
                 };
 
                 // Approximate surface curvature / light focal focus (2nd derivative / product)
-                let caustic_val = (((w1 * w2 + w3) + 1.2) * 0.45 + drop + surface_chop + mid * 0.15).powf(2.5);
+                // Fast x^2.5 computation via x * x * sqrt(x) instead of slow transcendental powf(2.5)
+                let c_base = (((w1 * w2 + w3) + 1.2) * 0.45 + drop + surface_chop + mid * 0.15).max(0.0);
+                let caustic_val = c_base * c_base * c_base.sqrt();
 
                 let col = Self::caustic_color(pal, self.color_cycle, caustic_val, clarity);
                 frame.set(x, y, col);

@@ -238,20 +238,11 @@ impl Effect for OctopusScannerEffect {
                     let intensity = (beam_falloff * (0.7 + band_val * 0.5) + self.strobe_pulse * 0.35 + mid * 0.15)
                         .clamp(0.0, 1.0);
 
-                    let cur = frame.get(px as usize, py as usize);
                     let r_add = to_byte(col.r as f32 * intensity);
                     let g_add = to_byte(col.g as f32 * intensity);
                     let b_add = to_byte(col.b as f32 * intensity);
 
-                    frame.set(
-                        px as usize,
-                        py as usize,
-                        Rgb::new(
-                            cur.r.saturating_add(r_add),
-                            cur.g.saturating_add(g_add),
-                            cur.b.saturating_add(b_add),
-                        ),
-                    );
+                    frame.add_rgb(px as usize, py as usize, r_add, g_add, b_add);
                 }
             }
 
@@ -260,16 +251,13 @@ impl Effect for OctopusScannerEffect {
             let tip_y = (cy + sin_a * reach).round() as i32;
 
             if tip_x >= 0 && tip_x < WIDTH as i32 && tip_y >= 0 && tip_y < HEIGHT as i32 {
-                let cur = frame.get(tip_x as usize, tip_y as usize);
                 let spot_b = clamp01(0.9 + band_val * 0.5 + self.strobe_pulse * 0.5);
-                frame.set(
+                frame.add_rgb(
                     tip_x as usize,
                     tip_y as usize,
-                    Rgb::new(
-                        cur.r.saturating_add(to_byte(col.r as f32 * spot_b)),
-                        cur.g.saturating_add(to_byte(col.g as f32 * spot_b)),
-                        cur.b.saturating_add(to_byte(col.b as f32 * spot_b)),
-                    ),
+                    to_byte(col.r as f32 * spot_b),
+                    to_byte(col.g as f32 * spot_b),
+                    to_byte(col.b as f32 * spot_b),
                 );
             }
         }

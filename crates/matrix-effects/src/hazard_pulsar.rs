@@ -201,35 +201,42 @@ impl Effect for HazardPulsarEffect {
 
         let two_pi_over_3 = 2.0 * PI / 3.0;
 
+        let max_r_sq = max_r * max_r;
+        let shield_r = max_r + 2.5 + mid * 2.0;
+        let shield_min = (shield_r - 1.2).max(0.0);
+        let shield_max = shield_r + 1.2;
+        let shield_min_sq = shield_min * shield_min;
+        let shield_max_sq = shield_max * shield_max;
+
         for y in 0..HEIGHT {
             let dy = y as f32 - cy;
             for x in 0..WIDTH {
                 let dx = x as f32 - cx;
-                let r = (dx * dx + dy * dy).sqrt();
+                let d2 = dx * dx + dy * dy;
+
                 let theta = (dy.atan2(dx) - self.spin_angle).rem_euclid(2.0 * PI);
 
-                let r_norm = r / max_r;
-
-                // Center core dot
-                let in_center_dot = r < 2.0;
+                // Center core dot (r < 2.0 -> d2 < 4.0)
+                let in_center_dot = d2 < 4.0;
 
                 // Trifoil blade symmetry (3 blades spaced by 120 degrees)
                 let blade_angle = (theta % two_pi_over_3) - (two_pi_over_3 * 0.5);
                 let in_blade_pie = blade_angle.abs() < 0.55;
-                let in_blade_radial = r >= 3.6 && r <= max_r;
+                let in_blade_radial = (12.96..=max_r_sq).contains(&d2);
 
-                // Inner circle cutout slot in each blade
-                let in_slot_radial = (5.0..=7.2).contains(&r);
+                // Inner circle cutout slot in each blade (r: 5.0..=7.2 -> d2: 25.0..=51.84)
+                let in_slot_radial = (25.0..=51.84).contains(&d2);
                 let in_slot_pie = blade_angle.abs() < 0.25;
                 let in_cutout = in_slot_radial && in_slot_pie;
 
                 let is_hazard_body = in_center_dot || (in_blade_pie && in_blade_radial && !in_cutout);
 
                 // Shield aura ring at periphery
-                let shield_r = max_r + 2.5 + mid * 2.0;
-                let is_shield = show_shield && (r - shield_r).abs() < 1.2;
+                let is_shield = show_shield && (shield_min_sq..=shield_max_sq).contains(&d2);
 
                 if is_hazard_body {
+                    let r = d2.sqrt();
+                    let r_norm = r / max_r;
                     let bright = (0.85 + 0.15 * (r_norm * 4.0).sin() + self.alarm_flash * 0.4).min(1.0);
                     let mut col = Self::symbol_color(pal, self.color_cycle, bright, r_norm);
                     if self.alarm_flash > 0.4 {

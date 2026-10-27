@@ -149,16 +149,7 @@ impl LaserScannerEffect {
                 } else {
                     col
                 };
-                let cur = frame.get(px as usize, py as usize);
-                frame.set(
-                    px as usize,
-                    py as usize,
-                    Rgb::new(
-                        cur.r.saturating_add(pixel_c.r),
-                        cur.g.saturating_add(pixel_c.g),
-                        cur.b.saturating_add(pixel_c.b),
-                    ),
-                );
+                frame.blend_add(px as usize, py as usize, pixel_c);
             }
         }
     }

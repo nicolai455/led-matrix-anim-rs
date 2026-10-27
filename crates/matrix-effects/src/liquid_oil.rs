@@ -267,15 +267,17 @@ impl Effect for LiquidOilEffect {
             }
         }
 
-        // Projector glass bezel ring
+        // Projector glass bezel ring (outer border)
+        let bezel_b = to_byte(120.0 + self.strobe_pulse * 100.0);
+        let bezel_c = Rgb::new(bezel_b, bezel_b, bezel_b);
         for y in 0..HEIGHT {
             let dy = y as f32 - cy;
             for x in 0..WIDTH {
                 let dx = x as f32 - cx;
-                let r = (dx * dx + dy * dy).sqrt();
-                if (r - 15.5).abs() < 0.9 {
-                    let b = to_byte(120.0 + self.strobe_pulse * 100.0);
-                    frame.set(x, y, Rgb::new(b, b, b));
+                let r2 = dx * dx + dy * dy;
+                // Bezel ring at radius ~15.5 (14.6^2 ≈ 213, 16.4^2 ≈ 269)
+                if (213.0..=269.0).contains(&r2) {
+                    frame.set(x, y, bezel_c);
                 }
             }
         }

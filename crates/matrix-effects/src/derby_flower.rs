@@ -259,20 +259,11 @@ impl Effect for DerbyFlowerEffect {
 
                                 let intensity = clamp01(edge * (0.85 + bass * 0.35) + hot);
 
-                                let cur = frame.get(px as usize, py as usize);
                                 let r_add = to_byte(col.r as f32 * intensity);
                                 let g_add = to_byte(col.g as f32 * intensity);
                                 let b_add = to_byte(col.b as f32 * intensity);
 
-                                frame.set(
-                                    px as usize,
-                                    py as usize,
-                                    Rgb::new(
-                                        cur.r.saturating_add(r_add),
-                                        cur.g.saturating_add(g_add),
-                                        cur.b.saturating_add(b_add),
-                                    ),
-                                );
+                                frame.add_rgb(px as usize, py as usize, r_add, g_add, b_add);
                             }
                         }
                     }
