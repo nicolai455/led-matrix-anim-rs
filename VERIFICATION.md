@@ -21,7 +21,7 @@ effects, streamed frame playback, restart persistence/boot OFF, bounded queues,
 slow output isolation, settings hooks, and blackout timeout behavior.
 
 The real Mosquitto test launches disposable loopback-only services. It verifies
-21 effects, 69 parameters, 76 retained discovery entities, HTTP/MQTT commands,
+21 effects, 70 parameters, 77 retained discovery entities, HTTP/MQTT commands,
 reconnect, HA-online rediscovery, and responsiveness while the broker is down.
 The latest parent run measured a 32.74 ms maximum command/state round trip with
 the broker offline. This is a local simulator result, not a board benchmark.

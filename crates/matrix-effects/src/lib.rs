@@ -21,6 +21,7 @@ pub mod pulse_ball;
 pub mod radial_spectrum;
 pub mod rainbow;
 pub mod ripple;
+pub mod rotating_fish;
 pub mod scene_sequencer;
 pub mod solid;
 pub mod spectrogram;
@@ -56,6 +57,7 @@ pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
 pub use ripple::RippleEffect;
+pub use rotating_fish::RotatingFishEffect;
 pub use scene_sequencer::SceneSequencerEffect;
 pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
@@ -71,10 +73,10 @@ pub use text_effects::TextEffectsEffect;
 
 use matrix_core::Effect;
 
-/// Returns instances of all 21 built-in effects matching the legacy catalog,
+/// Returns instances of all 22 built-in effects matching the legacy catalog,
 /// wrapped in `LazyEffect` to defer runtime allocation until first render.
 pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
-    let mut effects: Vec<Box<dyn Effect>> = Vec::with_capacity(21);
+    let mut effects: Vec<Box<dyn Effect>> = Vec::with_capacity(22);
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(TestPatternEffect::new())
     })));
@@ -116,6 +118,10 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PulseBallEffect::new())
     })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(RotatingFishEffect::new())
+    })));
+    log::info!("Registered RotatingFish");
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(SpinningDonutEffect::new())
     })));
@@ -170,6 +176,6 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(SceneSequencerEffect::new())
     })));
-    log::info!("Registered effects!");
+    log::info!("Registered all effects!");
     effects
 }

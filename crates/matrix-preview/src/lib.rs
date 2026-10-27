@@ -84,8 +84,9 @@ impl Preview {
                                 .as_str()
                                 .map(str::to_owned)
                                 .unwrap_or_else(|| value.to_string());
-                            self.engine
-                                .apply(&format!("effect/{effect}/{param}"), &payload)?;
+                            let _ = self
+                                .engine
+                                .apply(&format!("effect/{effect}/{param}"), &payload);
                         }
                     }
                 }

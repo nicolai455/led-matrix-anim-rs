@@ -275,7 +275,7 @@ fn test_lazy_effect_constructor_drop_counters_and_activation_lifecycle() {
 #[test]
 fn test_render_on_demand_and_drop_before_new_allocation_invariant() {
     let mut effects = builtin_effects();
-    assert!(effects.len() >= 21);
+assert!(effects.len() >= 21);
 
     let mut frame = Frame::default();
     let audio = AudioSnapshot::default();

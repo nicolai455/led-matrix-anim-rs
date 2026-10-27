@@ -1,5 +1,35 @@
 [
   {
+    "id": "Frames",
+    "name": "Frames",
+    "parameters": []
+  },
+  {
+    "id": "Rainbow",
+    "name": "Rainbow",
+    "parameters": []
+  },
+  {
+    "id": "Solid",
+    "name": "Solid",
+    "parameters": []
+  },
+  {
+    "id": "TestPattern",
+    "name": "TestPattern",
+    "parameters": []
+  },
+  {
+    "id": "TextScroll",
+    "name": "TextScroll",
+    "parameters": []
+  },
+  {
+    "id": "TextStatic",
+    "name": "TextStatic",
+    "parameters": []
+  },
+  {
     "id": "audio_pulse",
     "name": "Audio Pulse",
     "parameters": [
@@ -193,11 +223,6 @@
         "default": 0.0
       }
     ]
-  },
-  {
-    "id": "Frames",
-    "name": "Frames",
-    "parameters": []
   },
   {
     "id": "freq_bars",
@@ -464,11 +489,6 @@
     ]
   },
   {
-    "id": "Rainbow",
-    "name": "Rainbow",
-    "parameters": []
-  },
-  {
     "id": "ripple",
     "name": "Ripple",
     "parameters": [
@@ -511,9 +531,64 @@
     ]
   },
   {
-    "id": "Solid",
-    "name": "Solid",
-    "parameters": []
+    "id": "rotating_fish",
+    "name": "Rotating Fish",
+    "parameters": [
+      {
+        "id": "axis",
+        "label": "Rotation axis",
+        "kind": "select",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "speed",
+        "label": "Spin speed",
+        "kind": "number",
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "default": 60.0
+      },
+      {
+        "id": "size",
+        "label": "Size",
+        "kind": "number",
+        "min": 50.0,
+        "max": 100.0,
+        "step": 1.0,
+        "default": 100.0
+      },
+      {
+        "id": "color_mode",
+        "label": "Color mode",
+        "kind": "select",
+        "min": 0.0,
+        "max": 2.0,
+        "step": 1.0,
+        "default": 0.0
+      },
+      {
+        "id": "hue",
+        "label": "Solid hue",
+        "kind": "number",
+        "min": 0.0,
+        "max": 360.0,
+        "step": 1.0,
+        "default": 35.0
+      },
+      {
+        "id": "reactivity",
+        "label": "Reactivity",
+        "kind": "number",
+        "min": 0.0,
+        "max": 200.0,
+        "step": 1.0,
+        "default": 100.0
+      }
+    ]
   },
   {
     "id": "spectrogram",
@@ -587,6 +662,15 @@
         "max": 360.0,
         "step": 1.0,
         "default": 30.0
+      },
+      {
+        "id": "wireframe",
+        "label": "Wireframe",
+        "kind": "boolean",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 1.0,
+        "default": 0.0
       }
     ]
   },
@@ -724,20 +808,5 @@
         "default": 1.0
       }
     ]
-  },
-  {
-    "id": "TestPattern",
-    "name": "TestPattern",
-    "parameters": []
-  },
-  {
-    "id": "TextStatic",
-    "name": "TextStatic",
-    "parameters": []
-  },
-  {
-    "id": "TextScroll",
-    "name": "TextScroll",
-    "parameters": []
   }
 ]

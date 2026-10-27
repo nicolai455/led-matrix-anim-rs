@@ -10,6 +10,7 @@ import subprocess
 
 root = Path(__file__).resolve().parents[1]
 env = os.environ.copy()
+env['RUSTFLAGS'] = '-C linker=/home/nicolai/.hermes/cache/scratch/rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld'
 env['CARGO_PROFILE_RELEASE_OPT_LEVEL'] = 'z'
 env['CARGO_PROFILE_RELEASE_LTO'] = 'true'
 env['CARGO_PROFILE_RELEASE_PANIC'] = 'abort'
