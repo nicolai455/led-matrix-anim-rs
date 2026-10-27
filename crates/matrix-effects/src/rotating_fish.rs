@@ -403,7 +403,7 @@ impl Effect for RotatingFishEffect {
         // Advance spin angle (in millidegrees to prevent cadence-dependent drift)
         let speed_deg = self.values[1].max(0.0) as u64;
         self.phase = (self.phase + elapsed * speed_deg) % 360_000;
-        let angle = (self.phase as f32) * 0.00001745329252;
+        let angle = (self.phase as f32) * 0.000_017_453_292;
 
         // Audio reactivity
         let reactivity = self.values[5] / 100.0;
@@ -531,6 +531,7 @@ impl Effect for RotatingFishEffect {
         let color_mode = self.values[3] as usize;
         let solid_hue = self.values[4];
 
+        #[allow(clippy::needless_range_loop)]
         for t in 0..TRIANGLE_COUNT {
             let i0 = TRIANGLES[t].v0;
             let i1 = TRIANGLES[t].v1;
