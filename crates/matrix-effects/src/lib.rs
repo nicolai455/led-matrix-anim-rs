@@ -5,6 +5,8 @@ pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
 pub mod bouncing_speakers;
+pub mod cyber_rain;
+pub mod cyber_tunnel;
 pub mod disco_ball;
 pub mod disco_floor;
 pub mod dna_spiral;
@@ -17,7 +19,9 @@ pub mod frames;
 pub mod freq_bars;
 pub mod galaxy_spiral;
 pub mod game_of_life;
+pub mod hazard_pulsar;
 pub mod hypno_spirals;
+pub mod julia_orbit;
 pub mod kaleidoscope;
 pub mod laser_show;
 pub mod lava_lamp;
@@ -35,8 +39,10 @@ pub mod polar_lights;
 pub mod pulse_ball;
 pub mod radial_spectrum;
 pub mod rainbow;
+pub mod retro_breakout;
 pub mod ripple;
 pub mod rotating_fish;
+pub mod rotozoom;
 pub mod scene_sequencer;
 pub mod solid;
 pub mod spectrogram;
@@ -47,10 +53,14 @@ pub mod spinning_vinyl;
 pub mod starfield;
 pub mod strobe_blinder;
 pub mod stroboscope;
+pub mod supernova;
 pub mod test_pattern;
 pub mod text;
 pub mod text_effects;
+pub mod ufo_abduction;
 pub mod util;
+pub mod water_caustics;
+pub mod yin_yang;
 
 pub use arcade_invaders::ArcadeInvadersEffect;
 pub use audio_mesh::AudioMeshEffect;
@@ -59,6 +69,8 @@ pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
 pub use bouncing_speakers::BouncingSpeakersEffect;
+pub use cyber_rain::CyberRainEffect;
+pub use cyber_tunnel::CyberTunnelEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
 pub use dna_spiral::DnaSpiralEffect;
@@ -71,7 +83,9 @@ pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
+pub use hazard_pulsar::HazardPulsarEffect;
 pub use hypno_spirals::HypnoSpiralsEffect;
+pub use julia_orbit::JuliaOrbitEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
 pub use laser_show::LaserShowEffect;
 pub use lava_lamp::LavaLampEffect;
@@ -89,8 +103,10 @@ pub use polar_lights::PolarLightsEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
+pub use retro_breakout::RetroBreakoutEffect;
 pub use ripple::RippleEffect;
 pub use rotating_fish::RotatingFishEffect;
+pub use rotozoom::RotozoomEffect;
 pub use scene_sequencer::SceneSequencerEffect;
 pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
@@ -101,11 +117,15 @@ pub use spinning_vinyl::SpinningVinylEffect;
 pub use starfield::StarfieldEffect;
 pub use strobe_blinder::StrobeBlinderEffect;
 pub use stroboscope::StroboscopeEffect;
+pub use supernova::SupernovaEffect;
 pub use test_pattern::TestPatternEffect;
 pub use text::{
     draw_centered_text, draw_char, draw_text, text_width, TextScrollEffect, TextStaticEffect,
 };
 pub use text_effects::TextEffectsEffect;
+pub use ufo_abduction::UfoAbductionEffect;
+pub use water_caustics::WaterCausticsEffect;
+pub use yin_yang::YinYangEffect;
 
 use matrix_core::Effect;
 
@@ -265,6 +285,36 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(SpectrumOrbEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(CyberRainEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(JuliaOrbitEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(RotozoomEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(HazardPulsarEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SupernovaEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(WaterCausticsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(RetroBreakoutEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(CyberTunnelEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(YinYangEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(UfoAbductionEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
