@@ -1,24 +1,34 @@
+pub mod arcade_invaders;
+pub mod audio_mesh;
 pub mod audio_pulse;
 pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
+pub mod bouncing_speakers;
 pub mod disco_ball;
 pub mod disco_floor;
 pub mod dna_spiral;
 pub mod domain_warp;
+pub mod equalizer_city;
 pub mod fire;
+pub mod fire_tornado;
 pub mod fireworks;
 pub mod frames;
 pub mod freq_bars;
 pub mod galaxy_spiral;
 pub mod game_of_life;
+pub mod hypno_spirals;
 pub mod kaleidoscope;
 pub mod laser_show;
+pub mod lava_lamp;
 pub mod lazy;
 pub mod lissajous;
 pub mod matrix_rain;
 pub mod metaballs;
+pub mod neon_heart;
 pub mod nyan_cat;
+pub mod outrun_drive;
+pub mod pacman_chase;
 pub mod party_dancers;
 pub mod plasma;
 pub mod polar_lights;
@@ -30,36 +40,49 @@ pub mod rotating_fish;
 pub mod scene_sequencer;
 pub mod solid;
 pub mod spectrogram;
+pub mod spectrum_orb;
 pub mod spinning_cube;
 pub mod spinning_donut;
+pub mod spinning_vinyl;
 pub mod starfield;
+pub mod strobe_blinder;
 pub mod stroboscope;
 pub mod test_pattern;
 pub mod text;
 pub mod text_effects;
 pub mod util;
 
+pub use arcade_invaders::ArcadeInvadersEffect;
+pub use audio_mesh::AudioMeshEffect;
 pub use audio_pulse::AudioPulseEffect;
 pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
+pub use bouncing_speakers::BouncingSpeakersEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
 pub use dna_spiral::DnaSpiralEffect;
 pub use domain_warp::DomainWarpEffect;
+pub use equalizer_city::EqualizerCityEffect;
 pub use fire::FireEffect;
+pub use fire_tornado::FireTornadoEffect;
 pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
+pub use hypno_spirals::HypnoSpiralsEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
 pub use laser_show::LaserShowEffect;
+pub use lava_lamp::LavaLampEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
+pub use neon_heart::NeonHeartEffect;
 pub use nyan_cat::NyanCatEffect;
+pub use outrun_drive::OutrunDriveEffect;
+pub use pacman_chase::PacmanChaseEffect;
 pub use party_dancers::PartyDancersEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
@@ -71,9 +94,12 @@ pub use rotating_fish::RotatingFishEffect;
 pub use scene_sequencer::SceneSequencerEffect;
 pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
+pub use spectrum_orb::SpectrumOrbEffect;
 pub use spinning_cube::SpinningCubeEffect;
 pub use spinning_donut::SpinningDonutEffect;
+pub use spinning_vinyl::SpinningVinylEffect;
 pub use starfield::StarfieldEffect;
+pub use strobe_blinder::StrobeBlinderEffect;
 pub use stroboscope::StroboscopeEffect;
 pub use test_pattern::TestPatternEffect;
 pub use text::{
@@ -200,6 +226,45 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PartyDancersEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PacmanChaseEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(EqualizerCityEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(StrobeBlinderEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SpinningVinylEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(BouncingSpeakersEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(NeonHeartEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LavaLampEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(ArcadeInvadersEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(AudioMeshEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(FireTornadoEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(HypnoSpiralsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(OutrunDriveEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SpectrumOrbEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
