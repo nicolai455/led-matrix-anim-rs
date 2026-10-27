@@ -43,6 +43,8 @@ fi
 
 export RUSTUP_HOME="${RUSTUP_HOME:-$DEFAULT_RUSTUP}"
 export CARGO_HOME="${CARGO_HOME:-$DEFAULT_CARGO}"
+export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-esp}"
+export LD_LIBRARY_PATH="/home/joe/.local/lib:${LD_LIBRARY_PATH:-}"
 
 # Auto-discover IDF_PATH
 if [ -z "${IDF_PATH:-}" ]; then
@@ -75,14 +77,15 @@ fi
 export PYTHON_DEPS_CHECKED=1
 export IDF_COMPONENT_MANAGER=0
 export PYTHONPATH=""
-if [ -d "$IDF_TOOLS_PATH/python_env/idf5.2_py3.13_env" ]; then
-    export IDF_PYTHON_ENV_PATH="$IDF_TOOLS_PATH/python_env/idf5.2_py3.13_env"
+local_py_env=$(find_first "${IDF_TOOLS_PATH:-}/python_env"/idf5.2_*_env "$HOME/.espressif/python_env"/idf5.2_*_env || true)
+if [ -n "$local_py_env" ] && [ -d "$local_py_env" ]; then
+    export IDF_PYTHON_ENV_PATH="$local_py_env"
 fi
 
 # Auto-discover Clang library
 if [ -z "${LIBCLANG_PATH:-}" ]; then
     LIBCLANG_PATH=$(find_first \
-        "$IDF_TOOLS_PATH/tools/esp-clang"/*/esp-clang/lib \
+        "${IDF_TOOLS_PATH:-}/tools/esp-clang"/*/esp-clang/lib \
         "$RUSTUP_HOME/toolchains/esp/xtensa-esp32-elf-clang"/*/esp-clang/lib \
         "$HOME/.rustup/toolchains/esp/xtensa-esp32-elf-clang"/*/esp-clang/lib || true)
     export LIBCLANG_PATH
@@ -91,7 +94,7 @@ fi
 # Auto-discover Xtensa GCC toolchain
 XTENSA_GCC_BIN=$(find_first \
     "$RUSTUP_HOME/toolchains/esp/xtensa-esp-elf"/*/xtensa-esp-elf/bin \
-    "$IDF_TOOLS_PATH/tools/xtensa-esp-elf"/*/xtensa-esp-elf/bin \
+    "${IDF_TOOLS_PATH:-}/tools/xtensa-esp-elf"/*/xtensa-esp-elf/bin \
     "$HOME/.rustup/toolchains/esp/xtensa-esp-elf"/*/xtensa-esp-elf/bin || true)
 
 RUST_ESP_BIN="$RUSTUP_HOME/toolchains/esp/bin"
@@ -106,19 +109,19 @@ LDPROXY_BIN_PATH=$(find_first \
 
 CMAKE_BIN_PATH=$(find_first \
     "$(type -P cmake 2>/dev/null || true)" \
-    "$IDF_TOOLS_PATH/tools/cmake"/*/bin/cmake \
+    "${IDF_TOOLS_PATH:-}/tools/cmake"/*/bin/cmake \
     /nix/store/*cmake*/bin/cmake || true)
 
 NINJA_BIN_PATH=$(find_first \
     "$(type -P ninja 2>/dev/null || true)" \
-    "$IDF_TOOLS_PATH/tools/ninja"/*/ninja \
+    "${IDF_TOOLS_PATH:-}/tools/ninja"/*/ninja \
     /nix/store/*ninja*/bin/ninja || true)
 
 ESPTOOL_PATH=$(find_first \
     "$(type -P esptool.py 2>/dev/null || true)" \
-    "$IDF_TOOLS_PATH/python_env"/*/bin/esptool.py \
+    "${IDF_TOOLS_PATH:-}/python_env"/*/bin/esptool.py \
     "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" \
-    "$IDF_PATH/components/esptool_py/esptool/esptool.py" || true)
+    "${IDF_PATH:-}/components/esptool_py/esptool/esptool.py" || true)
 
 # Prepend discovered tool dirs to PATH
 ADDITIONAL_PATHS=""
@@ -156,8 +159,8 @@ esac
 # Function to verify partition table integrity & absence of overlaps
 verify_partitions() {
     local table_file="$1"
-    local gen_tool="$IDF_PATH/components/partition_table/gen_esp32part.py"
-    if [ -f "$gen_tool" ]; then
+    local gen_tool="${IDF_PATH:-}/components/partition_table/gen_esp32part.py"
+    if [ -n "${IDF_PATH:-}" ] && [ -f "$gen_tool" ]; then
         python3 "$gen_tool" -q "$table_file" /dev/null 2>/dev/null || {
             echo "ERROR: Partition table $table_file validation failed!" >&2
             python3 "$gen_tool" "$table_file" /dev/null

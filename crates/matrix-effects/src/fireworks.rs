@@ -159,7 +159,7 @@ impl FireworksEffect {
             }
             2 => {
                 // Neon Dream
-                let h = if life > 0.5 { 0.85 } else { 0.5 };
+                let h = if life > 0.5 { core::hint::black_box(0.85f32) } else { 0.5f32 };
                 hsv_to_rgb(h, 0.95, v)
             }
             _ => {
