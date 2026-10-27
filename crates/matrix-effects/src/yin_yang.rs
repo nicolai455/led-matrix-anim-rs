@@ -212,7 +212,11 @@ impl Effect for YinYangEffect {
         let cy = 15.5f32;
         let r_sq = main_r * main_r;
         let half_r = main_r * 0.5;
+        let half_r_sq = half_r * half_r;
         let dot_r = main_r * 0.18;
+        let dot_r_sq = dot_r * dot_r;
+        let corona_min_sq = (main_r - 1.4).max(0.0).powi(2);
+        let corona_max_sq = (main_r + 1.4).powi(2);
 
         let cos_rot = self.rotation.cos();
         let sin_rot = self.rotation.sin();
@@ -238,25 +242,24 @@ impl Effect for YinYangEffect {
                     let u_eff = u + turb;
                     let v_eff = v + turb;
 
-                    // Upper sub-circle center: (0, -half_r)
-                    let d_upper = (u_eff * u_eff + (v_eff + half_r) * (v_eff + half_r)).sqrt();
-                    // Lower sub-circle center: (0, half_r)
-                    let d_lower = (u_eff * u_eff + (v_eff - half_r) * (v_eff - half_r)).sqrt();
+                    // Upper sub-circle center: (0, -half_r) squared
+                    let d_upper_sq = u_eff * u_eff + (v_eff + half_r) * (v_eff + half_r);
+                    // Lower sub-circle center: (0, half_r) squared
+                    let d_lower_sq = u_eff * u_eff + (v_eff - half_r) * (v_eff - half_r);
 
-                    // Classic Yin-Yang boolean classification:
-                    // Yang (White/Fire) on right (u > 0), plus upper half-circle, minus lower half-circle
+                    // Classic Yin-Yang boolean classification
                     let in_yang_base = u_eff > 0.0;
-                    let in_yang = if d_upper <= half_r {
+                    let in_yang = if d_upper_sq <= half_r_sq {
                         true
-                    } else if d_lower <= half_r {
+                    } else if d_lower_sq <= half_r_sq {
                         false
                     } else {
                         in_yang_base
                     };
 
                     // Circular eye dots in each half
-                    let is_yang_dot = d_lower <= dot_r;
-                    let is_yin_dot = d_upper <= dot_r;
+                    let is_yang_dot = d_lower_sq <= dot_r_sq;
+                    let is_yin_dot = d_upper_sq <= dot_r_sq;
 
                     let final_yang = if is_yang_dot {
                         true
@@ -280,9 +283,9 @@ impl Effect for YinYangEffect {
 
                     let col = Self::element_color(pal, final_yang, element_shimmer, self.color_cycle);
                     frame.set(x, y, col);
-                } else if (d2.sqrt() - main_r).abs() < 1.4 {
+                } else if (corona_min_sq..=corona_max_sq).contains(&d2) {
                     // Elemental corona rim
-                    let rim_t = (d2.sqrt() - main_r) / 1.4;
+                    let rim_t = (d2.sqrt() - main_r).abs() / 1.4;
                     let rim_c = to_byte((1.0 - rim_t) * (180.0 + self.element_pulse * 75.0));
                     frame.set(x, y, Rgb::new(rim_c, to_byte(rim_c as f32 * 0.8), to_byte(rim_c as f32 * 0.5)));
                 }

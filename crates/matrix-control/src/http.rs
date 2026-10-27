@@ -60,20 +60,20 @@ pub fn start_http_server(
                             handle_api_request(&ctx, &method, path, &body)
                         };
 
-                        let mut headers = vec![
-                            Header::from_bytes(&b"Content-Type"[..], res.content_type.as_bytes())
-                                .unwrap(),
-                            Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
-                                .unwrap(),
-                        ];
+                        let mut headers = Vec::with_capacity(3);
+                        if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], res.content_type.as_bytes()) {
+                            headers.push(h);
+                        }
+                        if let Ok(h) = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]) {
+                            headers.push(h);
+                        }
                         if res.content_type.starts_with("text/html") {
-                            headers.push(
-                                Header::from_bytes(
-                                    &b"Cache-Control"[..],
-                                    &b"no-cache, no-store, must-revalidate"[..],
-                                )
-                                .unwrap(),
-                            );
+                            if let Ok(h) = Header::from_bytes(
+                                &b"Cache-Control"[..],
+                                &b"no-cache, no-store, must-revalidate"[..],
+                            ) {
+                                headers.push(h);
+                            }
                         }
 
                         let tiny_res = Response::new(

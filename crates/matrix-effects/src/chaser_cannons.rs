@@ -277,16 +277,7 @@ impl Effect for ChaserCannonsEffect {
                                 let b = (lamp_bright + self.strobe_pulse * 0.25 + mid * 0.1).clamp(0.0, 1.0);
                                 let col = Self::blinder_color(pal, r_idx, b, self.color_cycle);
 
-                                let cur = frame.get(x, y);
-                                frame.set(
-                                    x,
-                                    y,
-                                    Rgb::new(
-                                        cur.r.saturating_add(col.r),
-                                        cur.g.saturating_add(col.g),
-                                        cur.b.saturating_add(col.b),
-                                    ),
-                                );
+                                frame.blend_add(x, y, col);
                             }
                         }
                     }

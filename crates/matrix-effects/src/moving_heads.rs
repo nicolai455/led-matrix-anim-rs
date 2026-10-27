@@ -263,20 +263,11 @@ impl Effect for MovingHeadsEffect {
                             let intensity = (falloff * depth_factor * gobo_mult * h_int + core_boost + self.strobe_pulse * 0.35)
                                 .clamp(0.0, 1.0);
 
-                            let cur = frame.get(px as usize, y);
                             let r_add = to_byte(col.r as f32 * intensity);
                             let g_add = to_byte(col.g as f32 * intensity);
                             let b_add = to_byte(col.b as f32 * intensity);
 
-                            frame.set(
-                                px as usize,
-                                y,
-                                Rgb::new(
-                                    cur.r.saturating_add(r_add),
-                                    cur.g.saturating_add(g_add),
-                                    cur.b.saturating_add(b_add),
-                                ),
-                            );
+                            frame.add_rgb(px as usize, y, r_add, g_add, b_add);
                         }
                     }
                 }
@@ -290,15 +281,12 @@ impl Effect for MovingHeadsEffect {
                 if px >= 0 && px < WIDTH as i32 {
                     let d = (dx as f32).abs() / pool_rad.max(1) as f32;
                     let bright = clamp01((1.0 - d * d) * (0.8 + bass * 0.6 + self.strobe_pulse * 0.6));
-                    let cur = frame.get(px as usize, 31);
-                    frame.set(
+                    frame.add_rgb(
                         px as usize,
                         31,
-                        Rgb::new(
-                            cur.r.saturating_add(to_byte(col.r as f32 * bright)),
-                            cur.g.saturating_add(to_byte(col.g as f32 * bright)),
-                            cur.b.saturating_add(to_byte(col.b as f32 * bright)),
-                        ),
+                        to_byte(col.r as f32 * bright),
+                        to_byte(col.g as f32 * bright),
+                        to_byte(col.b as f32 * bright),
                     );
                 }
             }

@@ -266,21 +266,12 @@ impl Effect for LaserHarpEffect {
                 let px_i = beam_x.round() as i32;
 
                 if px_i >= 0 && px_i < WIDTH as i32 {
-                    let cur = frame.get(px_i as usize, py as usize);
                     let intensity = clamp01(0.75 + pluck_int * 0.4 + self.strobe_pulse * 0.25);
                     let r_add = to_byte(col.r as f32 * intensity);
                     let g_add = to_byte(col.g as f32 * intensity);
                     let b_add = to_byte(col.b as f32 * intensity);
 
-                    frame.set(
-                        px_i as usize,
-                        py as usize,
-                        Rgb::new(
-                            cur.r.saturating_add(r_add),
-                            cur.g.saturating_add(g_add),
-                            cur.b.saturating_add(b_add),
-                        ),
-                    );
+                    frame.add_rgb(px_i as usize, py as usize, r_add, g_add, b_add);
 
                     // Pluck hand sparkle ring at mid height (py ~ 14)
                     if is_hot && py == 14 {

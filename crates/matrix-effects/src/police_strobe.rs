@@ -233,10 +233,10 @@ impl Effect for PoliceStrobeEffect {
 
                         if int > 0.02 {
                             let b = clamp01(int);
-                            // Super bright core in center of each pod
+                            // Super bright core in center of each pod (radius 4.0 -> d2 < 16.0)
                             let pod_cx = if x < 16 { 7.5f32 } else { 23.5f32 };
-                            let d = ((x as f32 - pod_cx).powi(2) + (y as f32 - 15.5).powi(2)).sqrt();
-                            let is_core = d < 4.0 && b > 0.6;
+                            let d2 = (x as f32 - pod_cx).powi(2) + (y as f32 - 15.5).powi(2);
+                            let is_core = d2 < 16.0 && b > 0.6;
 
                             let pixel_c = if is_core {
                                 Rgb::WHITE
@@ -338,6 +338,7 @@ impl Effect for PoliceStrobeEffect {
                 let blast_int = (context.audio.level * 1.5 + bass * 1.2 + self.beat_shock * 1.8).clamp(0.0, 1.0);
                 for y in 0..HEIGHT {
                     for x in 0..WIDTH {
+                        #[allow(clippy::manual_is_multiple_of)]
                         let checker = ((x / 4) + (y / 4)) % 2 == 0;
                         let col = if checker { color_a } else { color_b };
                         let b = blast_int * (0.4 + 0.6 * ((x as f32 * 0.8 + y as f32 * 0.8 - self.timer * 8.0).sin() * 0.5 + 0.5));

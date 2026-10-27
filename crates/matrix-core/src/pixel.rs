@@ -132,6 +132,23 @@ impl Frame {
             Rgb::BLACK
         }
     }
+
+    /// In-place saturating additive blending of RGB components in a single bounds-checked indexing.
+    #[inline]
+    pub fn add_rgb(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
+        if x < WIDTH && y < HEIGHT {
+            let px = &mut self.pixels[y * WIDTH + x];
+            px.r = px.r.saturating_add(r);
+            px.g = px.g.saturating_add(g);
+            px.b = px.b.saturating_add(b);
+        }
+    }
+
+    /// In-place saturating additive blending with another `Rgb` color.
+    #[inline]
+    pub fn blend_add(&mut self, x: usize, y: usize, color: Rgb) {
+        self.add_rgb(x, y, color.r, color.g, color.b);
+    }
 }
 
 #[cfg(test)]
@@ -163,9 +180,18 @@ mod tests {
         frame.set(10, 20, Rgb::new(100, 150, 200));
         assert_eq!(frame.get(10, 20), Rgb::new(100, 150, 200));
 
+        // Additive blending
+        frame.add_rgb(10, 20, 50, 150, 60);
+        assert_eq!(frame.get(10, 20), Rgb::new(150, 255, 255)); // saturating add
+
+        frame.blend_add(10, 20, Rgb::new(20, 20, 20));
+        assert_eq!(frame.get(10, 20), Rgb::new(170, 255, 255));
+
         // Out of bounds writes do not panic
         frame.set(32, 0, Rgb::WHITE);
         frame.set(0, 32, Rgb::WHITE);
+        frame.add_rgb(32, 32, 10, 10, 10);
+        frame.blend_add(32, 32, Rgb::WHITE);
         assert_eq!(frame.get(32, 0), Rgb::BLACK);
         assert_eq!(frame.get(0, 32), Rgb::BLACK);
 

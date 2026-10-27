@@ -172,7 +172,7 @@ use matrix_core::Effect;
 /// Returns instances of all 22 built-in effects matching the legacy catalog,
 /// wrapped in `LazyEffect` to defer runtime allocation until first render.
 pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
-    let mut effects: Vec<Box<dyn Effect>> = Vec::with_capacity(22);
+    let mut effects: Vec<Box<dyn Effect>> = Vec::with_capacity(64);
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(TestPatternEffect::new())
     })));
