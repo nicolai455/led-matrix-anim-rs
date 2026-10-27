@@ -12,6 +12,7 @@ pub mod dancing_banana;
 pub mod dancing_skeleton;
 pub mod disco_ball;
 pub mod disco_floor;
+pub mod disco_pinwheel;
 pub mod dna_spiral;
 pub mod doge_wow;
 pub mod domain_warp;
@@ -89,6 +90,7 @@ pub use dancing_banana::DancingBananaEffect;
 pub use dancing_skeleton::DancingSkeletonEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
+pub use disco_pinwheel::DiscoPinwheelEffect;
 pub use dna_spiral::DnaSpiralEffect;
 pub use doge_wow::DogeWowEffect;
 pub use domain_warp::DomainWarpEffect;
@@ -380,6 +382,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(LaserScannerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DiscoPinwheelEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
