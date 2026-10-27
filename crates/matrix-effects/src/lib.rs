@@ -56,6 +56,7 @@ pub mod test_pattern;
 pub mod text;
 pub mod text_effects;
 pub mod util;
+pub mod water_caustics;
 
 pub use arcade_invaders::ArcadeInvadersEffect;
 pub use audio_mesh::AudioMeshEffect;
@@ -116,6 +117,7 @@ pub use text::{
     draw_centered_text, draw_char, draw_text, text_width, TextScrollEffect, TextStaticEffect,
 };
 pub use text_effects::TextEffectsEffect;
+pub use water_caustics::WaterCausticsEffect;
 
 use matrix_core::Effect;
 
@@ -290,6 +292,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(SupernovaEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(WaterCausticsEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
