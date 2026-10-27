@@ -7,6 +7,7 @@ pub mod black_hole;
 pub mod bouncing_speakers;
 pub mod cyber_rain;
 pub mod cyber_tunnel;
+pub mod dancing_banana;
 pub mod disco_ball;
 pub mod disco_floor;
 pub mod dna_spiral;
@@ -71,6 +72,7 @@ pub use black_hole::BlackHoleEffect;
 pub use bouncing_speakers::BouncingSpeakersEffect;
 pub use cyber_rain::CyberRainEffect;
 pub use cyber_tunnel::CyberTunnelEffect;
+pub use dancing_banana::DancingBananaEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
 pub use dna_spiral::DnaSpiralEffect;
@@ -315,6 +317,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(UfoAbductionEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DancingBananaEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
