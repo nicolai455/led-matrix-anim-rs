@@ -8,6 +8,7 @@ pub mod fire;
 pub mod fireworks;
 pub mod frames;
 pub mod freq_bars;
+pub mod galaxy_spiral;
 pub mod game_of_life;
 pub mod kaleidoscope;
 pub mod lazy;
@@ -40,6 +41,7 @@ pub use fire::FireEffect;
 pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
+pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
 pub use lazy::{EffectFactory, LazyEffect};
@@ -154,6 +156,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DomainWarpEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(GalaxySpiralEffect::new())
     })));
     log::info!("Registered effects!");
     effects
