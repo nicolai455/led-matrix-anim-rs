@@ -40,6 +40,7 @@ pub mod rotating_fish;
 pub mod scene_sequencer;
 pub mod solid;
 pub mod spectrogram;
+pub mod spectrum_orb;
 pub mod spinning_cube;
 pub mod spinning_donut;
 pub mod spinning_vinyl;
@@ -93,6 +94,7 @@ pub use rotating_fish::RotatingFishEffect;
 pub use scene_sequencer::SceneSequencerEffect;
 pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
+pub use spectrum_orb::SpectrumOrbEffect;
 pub use spinning_cube::SpinningCubeEffect;
 pub use spinning_donut::SpinningDonutEffect;
 pub use spinning_vinyl::SpinningVinylEffect;
@@ -260,6 +262,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(OutrunDriveEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SpectrumOrbEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
