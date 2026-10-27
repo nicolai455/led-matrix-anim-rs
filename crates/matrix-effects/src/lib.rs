@@ -38,6 +38,7 @@ pub mod polar_lights;
 pub mod pulse_ball;
 pub mod radial_spectrum;
 pub mod rainbow;
+pub mod retro_breakout;
 pub mod ripple;
 pub mod rotating_fish;
 pub mod rotozoom;
@@ -98,6 +99,7 @@ pub use polar_lights::PolarLightsEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
+pub use retro_breakout::RetroBreakoutEffect;
 pub use ripple::RippleEffect;
 pub use rotating_fish::RotatingFishEffect;
 pub use rotozoom::RotozoomEffect;
@@ -295,6 +297,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(WaterCausticsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(RetroBreakoutEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
