@@ -2,6 +2,8 @@ pub mod audio_pulse;
 pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
+pub mod disco_ball;
+pub mod disco_floor;
 pub mod dna_spiral;
 pub mod domain_warp;
 pub mod fire;
@@ -11,10 +13,13 @@ pub mod freq_bars;
 pub mod galaxy_spiral;
 pub mod game_of_life;
 pub mod kaleidoscope;
+pub mod laser_show;
 pub mod lazy;
 pub mod lissajous;
 pub mod matrix_rain;
 pub mod metaballs;
+pub mod nyan_cat;
+pub mod party_dancers;
 pub mod plasma;
 pub mod polar_lights;
 pub mod pulse_ball;
@@ -38,6 +43,8 @@ pub use audio_pulse::AudioPulseEffect;
 pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
+pub use disco_ball::DiscoBallEffect;
+pub use disco_floor::DiscoFloorEffect;
 pub use dna_spiral::DnaSpiralEffect;
 pub use domain_warp::DomainWarpEffect;
 pub use fire::FireEffect;
@@ -47,10 +54,13 @@ pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
+pub use laser_show::LaserShowEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
+pub use nyan_cat::NyanCatEffect;
+pub use party_dancers::PartyDancersEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
 pub use pulse_ball::PulseBallEffect;
@@ -175,6 +185,21 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(SceneSequencerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DiscoBallEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LaserShowEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DiscoFloorEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(NyanCatEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PartyDancersEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
