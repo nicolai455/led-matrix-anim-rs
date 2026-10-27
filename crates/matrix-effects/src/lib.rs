@@ -6,6 +6,7 @@ pub mod disco_ball;
 pub mod disco_floor;
 pub mod dna_spiral;
 pub mod domain_warp;
+pub mod equalizer_city;
 pub mod fire;
 pub mod fireworks;
 pub mod frames;
@@ -48,6 +49,7 @@ pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
 pub use dna_spiral::DnaSpiralEffect;
 pub use domain_warp::DomainWarpEffect;
+pub use equalizer_city::EqualizerCityEffect;
 pub use fire::FireEffect;
 pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
@@ -205,6 +207,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PacmanChaseEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(EqualizerCityEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
