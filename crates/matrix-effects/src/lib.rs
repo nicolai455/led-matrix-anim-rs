@@ -29,6 +29,7 @@ pub mod starfield;
 pub mod stroboscope;
 pub mod test_pattern;
 pub mod text;
+pub mod text_effects;
 pub mod util;
 
 pub use audio_pulse::AudioPulseEffect;
@@ -64,6 +65,7 @@ pub use test_pattern::TestPatternEffect;
 pub use text::{
     draw_centered_text, draw_char, draw_text, text_width, TextScrollEffect, TextStaticEffect,
 };
+pub use text_effects::TextEffectsEffect;
 
 use matrix_core::Effect;
 
@@ -159,6 +161,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(GalaxySpiralEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(TextEffectsEffect::new())
     })));
     log::info!("Registered effects!");
     effects
