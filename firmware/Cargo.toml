@@ -27,13 +27,13 @@ esp-idf-sys = { version = "0.36", default-features = false }
 embedded-svc = { version = "0.28", default-features = false }
 
 [profile.release]
-opt-level = 2
+opt-level = "z"
 # Xtensa LLVM currently crashes when fat LTO merges serde float visitors.
-# Keep per-crate optimization and avoid that backend path.
-lto = false
+# Thin LTO avoids that backend path while enabling cross-crate inlining and dead-code stripping.
+lto = "thin"
 codegen-units = 1
 panic = "abort"
-strip = "symbols"
+strip = true
 
 # Checked f64-to-f32 microphone deserialization avoids the Xtensa
 # visitor codegen bug, allowing networking and firmware size optimization.
