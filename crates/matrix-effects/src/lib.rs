@@ -14,6 +14,7 @@ pub mod lissajous;
 pub mod matrix_rain;
 pub mod metaballs;
 pub mod plasma;
+pub mod polar_lights;
 pub mod pulse_ball;
 pub mod radial_spectrum;
 pub mod rainbow;
@@ -44,6 +45,7 @@ pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
 pub use plasma::PlasmaEffect;
+pub use polar_lights::PolarLightsEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
@@ -144,6 +146,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(GameOfLifeEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PolarLightsEffect::new())
     })));
     log::info!("Registered effects!");
     effects
