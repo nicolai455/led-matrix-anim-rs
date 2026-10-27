@@ -3,6 +3,7 @@ pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
 pub mod fire;
+pub mod fireworks;
 pub mod frames;
 pub mod freq_bars;
 pub mod kaleidoscope;
@@ -29,6 +30,7 @@ pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
 pub use fire::FireEffect;
+pub use fireworks::FireworksEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
@@ -124,6 +126,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(AudioTunnelEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(FireworksEffect::new())
     })));
     log::info!("Registered effects!");
     effects
