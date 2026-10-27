@@ -19,6 +19,7 @@ pub mod equalizer_city;
 pub mod fire;
 pub mod fire_tornado;
 pub mod fireworks;
+pub mod flappy_bird;
 pub mod frames;
 pub mod freq_bars;
 pub mod galaxy_spiral;
@@ -88,6 +89,7 @@ pub use equalizer_city::EqualizerCityEffect;
 pub use fire::FireEffect;
 pub use fire_tornado::FireTornadoEffect;
 pub use fireworks::FireworksEffect;
+pub use flappy_bird::FlappyBirdEffect;
 pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
@@ -340,6 +342,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DogeWowEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(FlappyBirdEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
