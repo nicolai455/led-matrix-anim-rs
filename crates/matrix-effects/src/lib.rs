@@ -37,6 +37,7 @@ pub mod laser_scanner;
 pub mod laser_show;
 pub mod lava_lamp;
 pub mod lazy;
+pub mod liquid_oil;
 pub mod lissajous;
 pub mod mario_stomp;
 pub mod matrix_rain;
@@ -120,6 +121,7 @@ pub use laser_scanner::LaserScannerEffect;
 pub use laser_show::LaserShowEffect;
 pub use lava_lamp::LavaLampEffect;
 pub use lazy::{EffectFactory, LazyEffect};
+pub use liquid_oil::LiquidOilEffect;
 pub use lissajous::LissajousEffect;
 pub use mario_stomp::MarioStompEffect;
 pub use matrix_rain::MatrixRainEffect;
@@ -410,6 +412,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DerbyFlowerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LiquidOilEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
