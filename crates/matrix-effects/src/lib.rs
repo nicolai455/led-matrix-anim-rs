@@ -4,6 +4,7 @@ pub mod audio_pulse;
 pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
+pub mod bongo_cat;
 pub mod bouncing_speakers;
 pub mod cyber_rain;
 pub mod cyber_tunnel;
@@ -69,6 +70,7 @@ pub use audio_pulse::AudioPulseEffect;
 pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
+pub use bongo_cat::BongoCatEffect;
 pub use bouncing_speakers::BouncingSpeakersEffect;
 pub use cyber_rain::CyberRainEffect;
 pub use cyber_tunnel::CyberTunnelEffect;
@@ -320,6 +322,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DancingBananaEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(BongoCatEffect::new())
     })));
     log::info!("Registered all effects!");
     effects

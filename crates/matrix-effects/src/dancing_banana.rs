@@ -24,7 +24,7 @@ const PARAMETERS: [ParameterDescriptor; 4] = [
         kind: ParameterKind::Number,
         min: 1.0,
         max: 6.0,
-        step: 1.0,
+        step: 0.5,
         default: 3.5,
         options: &[],
         unit: "px",
