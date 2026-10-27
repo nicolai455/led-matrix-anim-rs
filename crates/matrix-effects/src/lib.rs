@@ -17,6 +17,7 @@ pub mod frames;
 pub mod freq_bars;
 pub mod galaxy_spiral;
 pub mod game_of_life;
+pub mod hypno_spirals;
 pub mod kaleidoscope;
 pub mod laser_show;
 pub mod lava_lamp;
@@ -68,6 +69,7 @@ pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
+pub use hypno_spirals::HypnoSpiralsEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
 pub use laser_show::LaserShowEffect;
 pub use lava_lamp::LavaLampEffect;
@@ -250,6 +252,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(FireTornadoEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(HypnoSpiralsEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
