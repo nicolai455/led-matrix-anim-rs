@@ -1,3 +1,4 @@
+pub mod arcade_invaders;
 pub mod audio_pulse;
 pub mod audio_tunnel;
 pub mod audio_waveform;
@@ -46,6 +47,7 @@ pub mod text;
 pub mod text_effects;
 pub mod util;
 
+pub use arcade_invaders::ArcadeInvadersEffect;
 pub use audio_pulse::AudioPulseEffect;
 pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
@@ -235,6 +237,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(LavaLampEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(ArcadeInvadersEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
