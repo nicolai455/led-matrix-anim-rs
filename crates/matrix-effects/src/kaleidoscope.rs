@@ -5,7 +5,7 @@ use matrix_core::{
 use std::f32::consts::PI;
 
 const SYMMETRIES: &[&str] = &["4-Fold", "6-Fold", "8-Fold", "12-Fold"];
-const PALETTES: &[&str] = &["Prism", "Cyberpunk", "Emerald", "Sunset"];
+const PALETTES: &[&str] = &["Rainbow", "Cyberpunk", "Emerald", "Sunset"];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
