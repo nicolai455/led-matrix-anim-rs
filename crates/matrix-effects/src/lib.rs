@@ -21,6 +21,7 @@ pub mod pulse_ball;
 pub mod radial_spectrum;
 pub mod rainbow;
 pub mod ripple;
+pub mod scene_sequencer;
 pub mod solid;
 pub mod spectrogram;
 pub mod spinning_cube;
@@ -55,6 +56,7 @@ pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
 pub use ripple::RippleEffect;
+pub use scene_sequencer::SceneSequencerEffect;
 pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
 pub use spinning_cube::SpinningCubeEffect;
@@ -164,6 +166,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(TextEffectsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SceneSequencerEffect::new())
     })));
     log::info!("Registered effects!");
     effects
