@@ -38,6 +38,7 @@ pub mod pacman_chase;
 pub mod party_dancers;
 pub mod plasma;
 pub mod polar_lights;
+pub mod popcat;
 pub mod pulse_ball;
 pub mod radial_spectrum;
 pub mod rainbow;
@@ -104,6 +105,7 @@ pub use pacman_chase::PacmanChaseEffect;
 pub use party_dancers::PartyDancersEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
+pub use popcat::PopcatEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
@@ -325,6 +327,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(BongoCatEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PopcatEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
