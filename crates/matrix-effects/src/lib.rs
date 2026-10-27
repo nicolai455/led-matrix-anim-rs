@@ -51,6 +51,7 @@ pub mod spinning_vinyl;
 pub mod starfield;
 pub mod strobe_blinder;
 pub mod stroboscope;
+pub mod supernova;
 pub mod test_pattern;
 pub mod text;
 pub mod text_effects;
@@ -109,6 +110,7 @@ pub use spinning_vinyl::SpinningVinylEffect;
 pub use starfield::StarfieldEffect;
 pub use strobe_blinder::StrobeBlinderEffect;
 pub use stroboscope::StroboscopeEffect;
+pub use supernova::SupernovaEffect;
 pub use test_pattern::TestPatternEffect;
 pub use text::{
     draw_centered_text, draw_char, draw_text, text_width, TextScrollEffect, TextStaticEffect,
@@ -285,6 +287,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(HazardPulsarEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(SupernovaEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
