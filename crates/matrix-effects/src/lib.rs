@@ -42,6 +42,7 @@ pub mod outrun_drive;
 pub mod pacman_chase;
 pub mod party_dancers;
 pub mod party_duck;
+pub mod party_minion;
 pub mod plasma;
 pub mod polar_lights;
 pub mod popcat;
@@ -115,6 +116,7 @@ pub use outrun_drive::OutrunDriveEffect;
 pub use pacman_chase::PacmanChaseEffect;
 pub use party_dancers::PartyDancersEffect;
 pub use party_duck::PartyDuckEffect;
+pub use party_minion::PartyMinionEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
 pub use popcat::PopcatEffect;
@@ -360,6 +362,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PartyDuckEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PartyMinionEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
