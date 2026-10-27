@@ -2,6 +2,7 @@ pub mod audio_pulse;
 pub mod audio_tunnel;
 pub mod audio_waveform;
 pub mod black_hole;
+pub mod disco_ball;
 pub mod dna_spiral;
 pub mod domain_warp;
 pub mod fire;
@@ -38,6 +39,7 @@ pub use audio_pulse::AudioPulseEffect;
 pub use audio_tunnel::AudioTunnelEffect;
 pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
+pub use disco_ball::DiscoBallEffect;
 pub use dna_spiral::DnaSpiralEffect;
 pub use domain_warp::DomainWarpEffect;
 pub use fire::FireEffect;
@@ -175,6 +177,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(SceneSequencerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DiscoBallEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
