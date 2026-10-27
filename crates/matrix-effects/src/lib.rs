@@ -12,6 +12,7 @@ pub mod freq_bars;
 pub mod galaxy_spiral;
 pub mod game_of_life;
 pub mod kaleidoscope;
+pub mod laser_show;
 pub mod lazy;
 pub mod lissajous;
 pub mod matrix_rain;
@@ -49,6 +50,7 @@ pub use freq_bars::FreqBarsEffect;
 pub use galaxy_spiral::GalaxySpiralEffect;
 pub use game_of_life::GameOfLifeEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
+pub use laser_show::LaserShowEffect;
 pub use lazy::{EffectFactory, LazyEffect};
 pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
@@ -180,6 +182,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DiscoBallEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LaserShowEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
