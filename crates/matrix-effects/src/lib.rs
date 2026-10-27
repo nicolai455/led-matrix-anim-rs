@@ -11,6 +11,7 @@ pub mod cyber_rain;
 pub mod cyber_tunnel;
 pub mod dancing_banana;
 pub mod dancing_skeleton;
+pub mod derby_flower;
 pub mod disco_ball;
 pub mod disco_floor;
 pub mod disco_pinwheel;
@@ -93,6 +94,7 @@ pub use cyber_rain::CyberRainEffect;
 pub use cyber_tunnel::CyberTunnelEffect;
 pub use dancing_banana::DancingBananaEffect;
 pub use dancing_skeleton::DancingSkeletonEffect;
+pub use derby_flower::DerbyFlowerEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
 pub use disco_pinwheel::DiscoPinwheelEffect;
@@ -405,6 +407,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(LaserHarpEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DerbyFlowerEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
