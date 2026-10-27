@@ -13,3 +13,7 @@ network.json
 state.json
 firmware/network.json
 firmware/state.json
+
+# Python bytecode
+__pycache__/
+*.pyc
