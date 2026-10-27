@@ -59,6 +59,7 @@ pub mod text;
 pub mod text_effects;
 pub mod util;
 pub mod water_caustics;
+pub mod yin_yang;
 
 pub use arcade_invaders::ArcadeInvadersEffect;
 pub use audio_mesh::AudioMeshEffect;
@@ -122,6 +123,7 @@ pub use text::{
 };
 pub use text_effects::TextEffectsEffect;
 pub use water_caustics::WaterCausticsEffect;
+pub use yin_yang::YinYangEffect;
 
 use matrix_core::Effect;
 
@@ -305,6 +307,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(CyberTunnelEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(YinYangEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
