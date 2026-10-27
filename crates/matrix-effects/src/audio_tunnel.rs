@@ -4,7 +4,7 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Hyperdrive", "Neon", "Fire", "Ice"];
+const PALETTES: &[&str] = &["Hyperdrive", "Neon", "Fire", "Rainbow"];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -47,7 +47,7 @@ const PARAMETERS: [ParameterDescriptor; 5] = [
         min: 0.0,
         max: 3.0,
         step: 1.0,
-        default: 0.0,
+        default: 3.0,
         options: PALETTES,
         unit: "",
     },
@@ -70,16 +70,18 @@ pub struct AudioTunnelEffect {
     warp_boost: f32,
     smooth_bands: [f32; 16],
     smooth_level: f32,
+    color_cycle: f32,
 }
 
 impl Default for AudioTunnelEffect {
     fn default() -> Self {
         Self {
-            values: [35.0, 30.0, 8.0, 0.0, 1.0],
+            values: [35.0, 30.0, 8.0, 3.0, 1.0],
             z_offset: 0.0,
             warp_boost: 0.0,
             smooth_bands: [0.0; 16],
             smooth_level: 0.0,
+            color_cycle: 0.0,
         }
     }
 }
@@ -141,16 +143,10 @@ impl AudioTunnelEffect {
                 );
                 Rgb::new(r, g, b)
             }
-            // Ice: Deep oceanic navy with crystalline arctic cyan rings and frosty white glints
+            // Rainbow: Dynamic continuous rainbow spectrum rings and twisting ribs
             _ => {
-                let hue = (0.55 - 0.06 * rib_val + 0.08 * (1.0 - depth_t)).rem_euclid(1.0);
-                let frost = (self.warp_boost * 0.6
-                    + band_energy * 0.4
-                    + total_intensity.powi(2) * 0.3)
-                    .clamp(0.0, 0.90);
-                let sat = (0.85 - frost).clamp(0.08, 0.95);
-                let val = total_intensity;
-                hsv_to_rgb(hue, sat, val)
+                let hue = (self.color_cycle + depth_t * 0.8 + rib_val * 0.25).rem_euclid(1.0);
+                hsv_to_rgb(hue, 1.0, total_intensity)
             }
         }
     }
@@ -259,6 +255,7 @@ impl Effect for AudioTunnelEffect {
         let warp_surge = 1.0 + self.warp_boost * 2.8 + bass * 0.6;
         let speed = base_speed * warp_surge;
         self.z_offset = (self.z_offset + dt * speed).rem_euclid(1000.0);
+        self.color_cycle = (self.color_cycle + dt * 0.15).rem_euclid(1.0);
 
         let twist_factor = (twist_val / 100.0) * 0.40;
         let ring_freq = rings_val * 0.35;
@@ -362,7 +359,7 @@ mod tests {
         assert_eq!(effect.parameter("speed"), Some(35.0));
         assert_eq!(effect.parameter("twist"), Some(30.0));
         assert_eq!(effect.parameter("rings"), Some(8.0));
-        assert_eq!(effect.parameter("palette"), Some(0.0));
+        assert_eq!(effect.parameter("palette"), Some(3.0));
         assert_eq!(effect.parameter("audio_reactive"), Some(1.0));
         assert_eq!(effect.parameter("unknown"), None);
 
