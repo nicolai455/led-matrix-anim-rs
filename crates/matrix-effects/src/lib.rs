@@ -9,6 +9,7 @@ pub mod frames;
 pub mod freq_bars;
 pub mod kaleidoscope;
 pub mod lazy;
+pub mod lissajous;
 pub mod matrix_rain;
 pub mod metaballs;
 pub mod plasma;
@@ -37,6 +38,7 @@ pub use frames::{frame_animation, FramesEffect};
 pub use freq_bars::FreqBarsEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
 pub use lazy::{EffectFactory, LazyEffect};
+pub use lissajous::LissajousEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
 pub use plasma::PlasmaEffect;
@@ -134,6 +136,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DnaSpiralEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LissajousEffect::new())
     })));
     log::info!("Registered effects!");
     effects
