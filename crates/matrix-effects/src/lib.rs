@@ -6,12 +6,15 @@ pub mod audio_waveform;
 pub mod black_hole;
 pub mod bongo_cat;
 pub mod bouncing_speakers;
+pub mod chaser_cannons;
 pub mod cyber_rain;
 pub mod cyber_tunnel;
 pub mod dancing_banana;
 pub mod dancing_skeleton;
+pub mod derby_flower;
 pub mod disco_ball;
 pub mod disco_floor;
+pub mod disco_pinwheel;
 pub mod dna_spiral;
 pub mod doge_wow;
 pub mod domain_warp;
@@ -29,15 +32,21 @@ pub mod hazard_pulsar;
 pub mod hypno_spirals;
 pub mod julia_orbit;
 pub mod kaleidoscope;
+pub mod laser_harp;
+pub mod laser_scanner;
 pub mod laser_show;
 pub mod lava_lamp;
 pub mod lazy;
+pub mod liquid_oil;
 pub mod lissajous;
 pub mod mario_stomp;
 pub mod matrix_rain;
 pub mod metaballs;
+pub mod mirror_cavern;
+pub mod moving_heads;
 pub mod neon_heart;
 pub mod nyan_cat;
+pub mod octopus_scanner;
 pub mod outrun_drive;
 pub mod pacman_chase;
 pub mod party_dancers;
@@ -45,6 +54,7 @@ pub mod party_duck;
 pub mod party_minion;
 pub mod plasma;
 pub mod polar_lights;
+pub mod police_strobe;
 pub mod popcat;
 pub mod pulse_ball;
 pub mod radial_spectrum;
@@ -80,12 +90,15 @@ pub use audio_waveform::AudioWaveformEffect;
 pub use black_hole::BlackHoleEffect;
 pub use bongo_cat::BongoCatEffect;
 pub use bouncing_speakers::BouncingSpeakersEffect;
+pub use chaser_cannons::ChaserCannonsEffect;
 pub use cyber_rain::CyberRainEffect;
 pub use cyber_tunnel::CyberTunnelEffect;
 pub use dancing_banana::DancingBananaEffect;
 pub use dancing_skeleton::DancingSkeletonEffect;
+pub use derby_flower::DerbyFlowerEffect;
 pub use disco_ball::DiscoBallEffect;
 pub use disco_floor::DiscoFloorEffect;
+pub use disco_pinwheel::DiscoPinwheelEffect;
 pub use dna_spiral::DnaSpiralEffect;
 pub use doge_wow::DogeWowEffect;
 pub use domain_warp::DomainWarpEffect;
@@ -103,15 +116,21 @@ pub use hazard_pulsar::HazardPulsarEffect;
 pub use hypno_spirals::HypnoSpiralsEffect;
 pub use julia_orbit::JuliaOrbitEffect;
 pub use kaleidoscope::KaleidoscopeEffect;
+pub use laser_harp::LaserHarpEffect;
+pub use laser_scanner::LaserScannerEffect;
 pub use laser_show::LaserShowEffect;
 pub use lava_lamp::LavaLampEffect;
 pub use lazy::{EffectFactory, LazyEffect};
+pub use liquid_oil::LiquidOilEffect;
 pub use lissajous::LissajousEffect;
 pub use mario_stomp::MarioStompEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
+pub use mirror_cavern::MirrorCavernEffect;
+pub use moving_heads::MovingHeadsEffect;
 pub use neon_heart::NeonHeartEffect;
 pub use nyan_cat::NyanCatEffect;
+pub use octopus_scanner::OctopusScannerEffect;
 pub use outrun_drive::OutrunDriveEffect;
 pub use pacman_chase::PacmanChaseEffect;
 pub use party_dancers::PartyDancersEffect;
@@ -119,6 +138,7 @@ pub use party_duck::PartyDuckEffect;
 pub use party_minion::PartyMinionEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
+pub use police_strobe::PoliceStrobeEffect;
 pub use popcat::PopcatEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
@@ -365,6 +385,36 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PartyMinionEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PoliceStrobeEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(MovingHeadsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LaserScannerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DiscoPinwheelEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(OctopusScannerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(ChaserCannonsEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(MirrorCavernEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LaserHarpEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(DerbyFlowerEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(LiquidOilEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
