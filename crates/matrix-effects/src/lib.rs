@@ -45,6 +45,7 @@ pub mod party_duck;
 pub mod party_minion;
 pub mod plasma;
 pub mod polar_lights;
+pub mod police_strobe;
 pub mod popcat;
 pub mod pulse_ball;
 pub mod radial_spectrum;
@@ -119,6 +120,7 @@ pub use party_duck::PartyDuckEffect;
 pub use party_minion::PartyMinionEffect;
 pub use plasma::PlasmaEffect;
 pub use polar_lights::PolarLightsEffect;
+pub use police_strobe::PoliceStrobeEffect;
 pub use popcat::PopcatEffect;
 pub use pulse_ball::PulseBallEffect;
 pub use radial_spectrum::RadialSpectrumEffect;
@@ -365,6 +367,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PartyMinionEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(PoliceStrobeEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
