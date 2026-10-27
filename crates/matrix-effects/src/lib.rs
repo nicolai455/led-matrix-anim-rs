@@ -39,6 +39,7 @@ pub mod radial_spectrum;
 pub mod rainbow;
 pub mod ripple;
 pub mod rotating_fish;
+pub mod rotozoom;
 pub mod scene_sequencer;
 pub mod solid;
 pub mod spectrogram;
@@ -95,6 +96,7 @@ pub use radial_spectrum::RadialSpectrumEffect;
 pub use rainbow::RainbowEffect;
 pub use ripple::RippleEffect;
 pub use rotating_fish::RotatingFishEffect;
+pub use rotozoom::RotozoomEffect;
 pub use scene_sequencer::SceneSequencerEffect;
 pub use solid::SolidEffect;
 pub use spectrogram::SpectrogramEffect;
@@ -275,6 +277,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(JuliaOrbitEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(RotozoomEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
