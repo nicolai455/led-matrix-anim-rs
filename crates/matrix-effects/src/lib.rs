@@ -36,6 +36,7 @@ pub mod lissajous;
 pub mod mario_stomp;
 pub mod matrix_rain;
 pub mod metaballs;
+pub mod moving_heads;
 pub mod neon_heart;
 pub mod nyan_cat;
 pub mod outrun_drive;
@@ -111,6 +112,7 @@ pub use lissajous::LissajousEffect;
 pub use mario_stomp::MarioStompEffect;
 pub use matrix_rain::MatrixRainEffect;
 pub use metaballs::MetaballsEffect;
+pub use moving_heads::MovingHeadsEffect;
 pub use neon_heart::NeonHeartEffect;
 pub use nyan_cat::NyanCatEffect;
 pub use outrun_drive::OutrunDriveEffect;
@@ -370,6 +372,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PoliceStrobeEffect::new())
+    })));
+    effects.push(Box::new(LazyEffect::new(|| {
+        Box::new(MovingHeadsEffect::new())
     })));
     log::info!("Registered all effects!");
     effects
