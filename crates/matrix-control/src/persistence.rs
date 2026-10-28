@@ -222,10 +222,30 @@ pub fn normalize_runtime_state(val: &Value) -> Value {
     Value::Object(out)
 }
 
+/// Normalize scalars while passing the parameter object through without a Value tree.
+pub fn normalize_json(input: &str) -> Result<String, String> {
+    let mut fields: std::collections::BTreeMap<&str, &serde_json::value::RawValue> = serde_json::from_str(input).map_err(|e| format!("invalid state JSON: {e}"))?;
+    let params = fields.remove("params");
+    let effects = fields.remove("effects");
+    let params = params.or(effects);
+    let scalar = serde_json::to_value(fields).map_err(|e| e.to_string())?;
+    let mut normalized = normalize_runtime_state(&scalar);
+    let mut result = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
+    if let Some(params) = params {
+        // Validate structure in the restore path; preserve original parameter representations.
+        if params.get().starts_with('{') {
+            result.pop();
+            if normalized.as_object_mut().is_some_and(|o| !o.is_empty()) { result.push(','); }
+            result.push_str("\"params\":"); result.push_str(params.get()); result.push('}');
+        }
+    }
+    Ok(result)
+}
+
 /// Manages persistence of runtime state (survives reboots).
 pub struct StateStore {
     backend: Option<Box<dyn StorageBackend>>,
-    saved: RwLock<Option<Value>>,
+    saved: RwLock<Option<String>>,
 }
 
 impl StateStore {
@@ -241,9 +261,7 @@ impl StateStore {
             let backend = FsStorageBackend::new(p);
             let mut saved = None;
             if let Some(content) = backend.load()? {
-                let val: Value = serde_json::from_str(&content)
-                    .map_err(|e| format!("invalid state JSON: {e}"))?;
-                saved = Some(normalize_runtime_state(&val));
+                saved = Some(normalize_json(&content)?);
             }
             Ok(Self {
                 backend: Some(Box::new(backend)),
@@ -260,9 +278,7 @@ impl StateStore {
     pub fn with_backend(backend: Box<dyn StorageBackend>) -> Self {
         let mut saved = None;
         if let Ok(Some(content)) = backend.load() {
-            if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                saved = Some(normalize_runtime_state(&val));
-            }
+            saved = normalize_json(&content).ok();
         }
         Self {
             backend: Some(backend),
@@ -270,56 +286,27 @@ impl StateStore {
         }
     }
 
-    pub fn save(&self, snapshot: &Value) -> Result<(), String> {
-        let to_store = normalize_runtime_state(snapshot);
-
-        let json = serde_json::to_string_pretty(&to_store)
-            .map_err(|e| format!("serialization error: {e}"))?;
-
-        if let Some(ref b) = self.backend {
-            b.store(&json)?;
-        }
-
-        if let Ok(mut lock) = self.saved.write() {
-            *lock = Some(to_store);
-        }
-
+    pub fn save_json(&self, snapshot: &[u8]) -> Result<(), String> {
+        let text = std::str::from_utf8(snapshot).map_err(|e| e.to_string())?;
+        let json = normalize_json(text)?;
+        if let Some(ref backend) = self.backend { backend.store(&json)?; }
+        if let Ok(mut lock) = self.saved.write() { *lock = Some(json); }
         Ok(())
     }
 
-    pub fn load(&self) -> Option<Value> {
-        self.saved.read().ok().and_then(|lock| (*lock).clone())
+    pub fn save(&self, snapshot: &Value) -> Result<(), String> {
+        self.save_json(&serde_json::to_vec(snapshot).map_err(|e| e.to_string())?)
     }
 
-    /// Restores saved settings into the core Engine and guarantees display boots OFF.
+    pub fn load(&self) -> Option<Value> {
+        self.saved.read().ok().and_then(|lock| lock.as_ref().and_then(|s| serde_json::from_str(s).ok()))
+    }
+
     pub fn restore(&self, engine: &mut matrix_core::Engine) -> Result<(), String> {
-        let saved_val = match self.load() {
-            Some(v) => v,
-            None => return Ok(()),
-        };
-
-        let normalized = normalize_runtime_state(&saved_val);
-        let json_str =
-            serde_json::to_string(&normalized).map_err(|e| format!("serialization error: {e}"))?;
-
-        matrix_core::restore_runtime_state(engine, &json_str)?;
-
-        // Apply string parameters (e.g. select options) if skipped by restore_runtime_state f64 parsing
-        if let Some(params_obj) = normalized.get("params").and_then(|v| v.as_object()) {
-            for (effect_id, param_map) in params_obj {
-                if let Some(map) = param_map.as_object() {
-                    for (param_id, val) in map {
-                        if let Some(s) = val.as_str() {
-                            let _ = engine.apply(&format!("effect/{effect_id}/{param_id}"), s);
-                        }
-                    }
-                }
-            }
+        if let Ok(lock) = self.saved.read() {
+            if let Some(json) = lock.as_ref() { matrix_core::restore_runtime_state(engine, json)?; }
         }
-
-        // Hardware invariant: always boot OFF
         let _ = engine.apply("light", "{\"state\":\"OFF\"}");
-
         Ok(())
     }
 

@@ -106,6 +106,8 @@ However:
 ### Build Script (`./build_firmware.sh`)
 The build script automatically discovers toolchains from standard `~/.rustup`, `~/.cargo`, `~/.espressif`, PlatformIO, Nix store caches, or custom environment variables. It enforces partition table validation, converts ELF to flashable binary images via `esptool.py`, and validates real partition fit with zero overlap.
 
+Release builds automatically select size optimization for ESP32/ESP32-bare and speed optimization for ESP32-S3. S3 builds override Rust and application packages to optimization level 3, omit the standard library's `optimize_for_size` feature, and use ESP-IDF performance optimization. Thin LTO and Xtensa compiler workarounds remain enabled. Use this script for target-specific optimization; direct `cargo build --release` retains the size-oriented defaults.
+
 ```bash
 # Build ESP32-WROOM release image and check partition fit
 ./build_firmware.sh esp32 release

@@ -15,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+source "$SCRIPT_DIR/build_optimization.sh"
 
 # Helper to find first existing path matching patterns/globs
 find_first() {
@@ -260,7 +261,9 @@ build_target() {
     mkdir -p "$SCRIPT_DIR/target/$target_arch/$PROFILE"
     local map_suffix="${extra_features:+-$extra_features}"
     export MATRIX_LINK_MAP="$SCRIPT_DIR/target/$target_arch/$PROFILE/matrix-firmware${map_suffix}.map"
-    cargo build "${cargo_flags[@]}"
+    local optimization_flags=()
+    matrix_optimization_flags "$mcu" "$PROFILE"
+    cargo build "${cargo_flags[@]}" "${optimization_flags[@]}"
 
     local elf_path="$SCRIPT_DIR/target/$target_arch/$PROFILE/matrix-firmware"
     if [ ! -f "$elf_path" ]; then

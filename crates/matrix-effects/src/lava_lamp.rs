@@ -197,6 +197,7 @@ impl Effect for LavaLampEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -283,7 +284,7 @@ impl Effect for LavaLampEffect {
             blob.y += blob.vy * dt;
 
             // Horizontal drift constrained by bottle profile
-            let half_w = Self::bottle_half_width(blob.y) - blob.radius - 1.0;
+            let half_w = (Self::bottle_half_width(blob.y) - blob.radius - 1.0).max(0.0);
             let min_x = center_x - half_w;
             let max_x = center_x + half_w;
             blob.x = blob.x.clamp(min_x, max_x);

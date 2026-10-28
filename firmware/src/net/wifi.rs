@@ -98,6 +98,30 @@ impl WifiPolicy {
     }
 }
 
+#[cfg(any(target_os = "espidf", test))]
+struct ConnectingTimer {
+    started: std::time::Instant,
+    ready: bool,
+}
+
+#[cfg(any(target_os = "espidf", test))]
+impl ConnectingTimer {
+    fn new(now: std::time::Instant) -> Self {
+        Self {
+            started: now,
+            ready: false,
+        }
+    }
+
+    fn update(&mut self, up: bool, now: std::time::Instant) -> u64 {
+        if !up && self.ready {
+            self.started = now;
+        }
+        self.ready = up;
+        now.duration_since(self.started).as_secs()
+    }
+}
+
 pub struct WifiManager {
     shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
     worker: Option<std::thread::JoinHandle<()>>,
@@ -195,7 +219,7 @@ impl WifiManager {
                     None => WifiOperatingMode::ApOnly,
                 };
 
-                let mut connecting_start = Instant::now();
+                let mut connecting_timer = ConnectingTimer::new(Instant::now());
                 let mut sta_ready = false;
 
                 while !stop.load(Ordering::Relaxed) {
@@ -205,14 +229,13 @@ impl WifiManager {
 
                         if up && !sta_ready {
                             log::info!("Wi-Fi STA IP ready: {:?}", wifi.sta_netif().get_ip_info().ok());
-                            connecting_start = Instant::now();
                         }
 
                         if !connected {
                             let _ = wifi.connect();
                         }
 
-                        let elapsed = connecting_start.elapsed().as_secs();
+                        let elapsed = connecting_timer.update(up, Instant::now());
                         let desired_mode = policy.evaluate_mode(true, up, elapsed);
 
                         if desired_mode != current_mode {
@@ -289,6 +312,28 @@ impl Drop for WifiManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fallback_timer_tracks_each_disconnection_not_connected_uptime() {
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
+        let mut timer = ConnectingTimer::new(start);
+        let policy = WifiPolicy::default();
+        let mut mode = |up, seconds| {
+            let elapsed = timer.update(up, start + Duration::from_secs(seconds));
+            policy.evaluate_mode(true, up, elapsed)
+        };
+        assert_eq!(mode(false, 17), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(false, 18), WifiOperatingMode::MixedApSta);
+        assert_eq!(mode(true, 20), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(true, 3600), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(false, 3601), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(false, 3618), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(false, 3619), WifiOperatingMode::MixedApSta);
+        assert_eq!(mode(true, 3620), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(false, 3621), WifiOperatingMode::StaOnly);
+        assert_eq!(mode(false, 3639), WifiOperatingMode::MixedApSta);
+    }
 
     #[test]
     fn test_fallback_ap_default_configuration() {

@@ -20,6 +20,9 @@ rustflags = [
 
 [unstable]
 build-std = ["std", "panic_abort"]
+# Omit std's on-device DWARF symbolizer to fit dual OTA slots; native
+# ESP-IDF crash addresses can be decoded against the matching firmware ELF.
+build-std-features = ["backtrace-trace-only", "optimize_for_size"]
 
 [env]
 PYTHON_DEPS_CHECKED = "1"

@@ -70,6 +70,7 @@ pub struct DerbyFlowerEffect {
     tumble_b: f32,
     strobe_pulse: f32,
     direction: f32,
+    previous_beat: bool,
     color_cycle: f32,
 }
 
@@ -81,6 +82,7 @@ impl Default for DerbyFlowerEffect {
             tumble_b: 0.0,
             strobe_pulse: 0.0,
             direction: 1.0,
+            previous_beat: false,
             color_cycle: 0.0,
         }
     }
@@ -142,6 +144,7 @@ impl Effect for DerbyFlowerEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -177,6 +180,7 @@ impl Effect for DerbyFlowerEffect {
         self.tumble_b = 0.0;
         self.strobe_pulse = 0.0;
         self.direction = 1.0;
+        self.previous_beat = false;
         self.color_cycle = 0.0;
     }
 
@@ -187,7 +191,12 @@ impl Effect for DerbyFlowerEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         frame.clear(Rgb::BLACK); // Dark haze background
 
-        let dt = context.delta_seconds.clamp(0.001, 0.1);
+        // Integrate the bounded interval once, then render the final state.
+        let dt = if context.delta_seconds.is_finite() {
+            context.delta_seconds.clamp(0.0, 0.5)
+        } else {
+            0.0
+        };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
         let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
         let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
@@ -196,10 +205,14 @@ impl Effect for DerbyFlowerEffect {
 
         if beat {
             self.strobe_pulse = 1.0;
-            self.direction = -self.direction; // Sudden reverse on drop
+            if !self.previous_beat {
+                self.direction = -self.direction;
+            }
         } else {
             self.strobe_pulse = (self.strobe_pulse - dt * 4.0).max(0.0);
         }
+
+        self.previous_beat = beat;
 
         let speed = (self.values[0] / 30.0) * (1.0 + bass * 0.9);
         self.tumble_a = (self.tumble_a + dt * speed * 2.5 * self.direction) % (2.0 * PI);
@@ -288,5 +301,32 @@ impl Effect for DerbyFlowerEffect {
                 frame.set(x, 31, Rgb::new(blast, blast, blast));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod beat_regression {
+    use super::*;
+    use matrix_core::AudioSnapshot;
+
+    #[test]
+    fn held_beat_reverses_once_and_rearms() {
+        let mut effect = DerbyFlowerEffect::default();
+        let mut frame = Frame::default();
+        let mut audio = AudioSnapshot::default();
+        audio.available = true;
+        audio.beat = true;
+        let render = |effect: &mut DerbyFlowerEffect, frame: &mut Frame, audio: &AudioSnapshot| {
+            effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: 0.016, audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
+        };
+        render(&mut effect, &mut frame, &audio);
+        assert_eq!(effect.direction, -1.0);
+        render(&mut effect, &mut frame, &audio);
+        assert_eq!(effect.direction, -1.0);
+        audio.beat = false;
+        render(&mut effect, &mut frame, &audio);
+        audio.beat = true;
+        render(&mut effect, &mut frame, &audio);
+        assert_eq!(effect.direction, 1.0);
     }
 }

@@ -68,6 +68,7 @@ pub struct OctopusScannerEffect {
     values: [f32; 5],
     rotation: f32,
     direction: f32,
+    previous_beat: bool,
     strobe_pulse: f32,
     color_cycle: f32,
 }
@@ -78,6 +79,7 @@ impl Default for OctopusScannerEffect {
             values: [45.0, 13.0, 5.0, 0.0, 1.0],
             rotation: 0.0,
             direction: 1.0,
+            previous_beat: false,
             strobe_pulse: 0.0,
             color_cycle: 0.0,
         }
@@ -139,6 +141,7 @@ impl Effect for OctopusScannerEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -172,6 +175,7 @@ impl Effect for OctopusScannerEffect {
     fn reset(&mut self) {
         self.rotation = 0.0;
         self.direction = 1.0;
+        self.previous_beat = false;
         self.strobe_pulse = 0.0;
         self.color_cycle = 0.0;
     }
@@ -181,10 +185,14 @@ impl Effect for OctopusScannerEffect {
     }
 
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
-        // Dark nightclub fog
         frame.clear(Rgb::new(6, 6, 12));
 
-        let dt = context.delta_seconds.clamp(0.001, 0.1);
+        // Integrate the bounded interval once, then render the final state.
+        let dt = if context.delta_seconds.is_finite() {
+            context.delta_seconds.clamp(0.0, 0.5)
+        } else {
+            0.0
+        };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
         let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
         let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
@@ -193,10 +201,14 @@ impl Effect for OctopusScannerEffect {
 
         if beat {
             self.strobe_pulse = 1.0;
-            self.direction = -self.direction; // Direction reversal on drop!
+            if !self.previous_beat {
+                self.direction = -self.direction;
+            }
         } else {
             self.strobe_pulse = (self.strobe_pulse - dt * 4.0).max(0.0);
         }
+
+        self.previous_beat = beat;
 
         let speed = (self.values[0] / 30.0) * (1.0 + bass * 0.9);
         self.rotation = (self.rotation + dt * speed * 2.8 * self.direction) % (2.0 * PI);
@@ -285,5 +297,32 @@ impl Effect for OctopusScannerEffect {
                 frame.set(sx, sy, Rgb::new(255, 255, 150));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod beat_regression {
+    use super::*;
+    use matrix_core::AudioSnapshot;
+
+    #[test]
+    fn held_beat_reverses_once_and_rearms() {
+        let mut effect = OctopusScannerEffect::default();
+        let mut frame = Frame::default();
+        let mut audio = AudioSnapshot::default();
+        audio.available = true;
+        audio.beat = true;
+        let render = |effect: &mut OctopusScannerEffect, frame: &mut Frame, audio: &AudioSnapshot| {
+            effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: 0.016, audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
+        };
+        render(&mut effect, &mut frame, &audio);
+        assert_eq!(effect.direction, -1.0);
+        render(&mut effect, &mut frame, &audio);
+        assert_eq!(effect.direction, -1.0);
+        audio.beat = false;
+        render(&mut effect, &mut frame, &audio);
+        audio.beat = true;
+        render(&mut effect, &mut frame, &audio);
+        assert_eq!(effect.direction, 1.0);
     }
 }

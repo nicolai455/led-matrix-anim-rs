@@ -2,7 +2,7 @@ use matrix_control::api::ApiContext;
 use matrix_control::config::ConfigStore;
 use matrix_control::hub::ControlHub;
 use matrix_control::mic::MicController;
-use matrix_control::persistence::{normalize_runtime_state, StateStore};
+use matrix_control::persistence::{normalize_json, StateStore};
 use matrix_core::geometry::PanelConfig;
 use matrix_core::state::restore_runtime_state;
 use matrix_core::Engine;
@@ -42,25 +42,9 @@ fn main() {
     {
         esp_idf_svc::sys::link_patches();
         let _ = esp_idf_svc::log::EspLogger::initialize_default();
-
-        let conf = esp_idf_hal::task::thread::ThreadSpawnConfiguration {
-            name: Some(b"firmware-main\0"),
-            stack_size: 24576,
-            priority: 5,
-            inherit: false,
-            ..Default::default()
-        };
-        conf.set()
-            .expect("failed to configure firmware-main thread");
     }
 
-    let thread = std::thread::Builder::new()
-        .name("firmware-main".to_string())
-        .stack_size(24576)
-        .spawn(run_firmware)
-        .expect("failed to spawn firmware-main thread");
-
-    let _ = thread.join();
+    run_firmware();
 }
 
 #[inline(never)]
@@ -206,8 +190,8 @@ fn run_firmware() {
     }
 
     // 6. Restore persistent runtime state from NVS if present
-    if let Some(state_val) = nvs.load_saved_state() {
-        let normalized = normalize_runtime_state(&state_val).to_string();
+    if let Some(state_val) = nvs.load_saved_state_json() {
+        let normalized = normalize_json(&state_val).unwrap_or_default();
         if let Err(e) = restore_runtime_state(&mut engine, &normalized) {
             log::warn!("Runtime state restore non-fatal error: {e}");
         } else {

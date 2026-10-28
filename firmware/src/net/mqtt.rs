@@ -108,7 +108,7 @@ impl FirmwareMqtt {
                 let mut connected = false;
                 let mut refresh = true;
                 let mut last_discovery = Instant::now();
-                let mut last_state = String::new();
+                let mut last_state: Option<Arc<Vec<u8>>> = None;
                 let mut topic = String::new();
                 let mut body = Vec::new();
                 let mut connection_seen=0;
@@ -117,7 +117,7 @@ impl FirmwareMqtt {
                     if state!=connection_seen {
                         connection_seen=state;
                         connected=state&1 != 0;
-                        body.clear(); topic.clear(); last_state.clear();
+                        body.clear(); topic.clear(); last_state = None;
                         refresh=true;
                         if connected {
                             for subscription in [format!("{base}/+/set"),format!("{base}/effect/+/+/set"),"homeassistant/status".into()] {
@@ -154,7 +154,7 @@ impl FirmwareMqtt {
                                 if let Ok(payload) = std::str::from_utf8(&body) {
                                     if topic == "homeassistant/status" && payload == "online" {
                                         refresh = true;
-                                        last_state.clear();
+                                        last_state = None;
                                     } else {
                                         handle_mqtt_message(&hub, &base, &topic, payload);
                                     }
@@ -170,13 +170,13 @@ impl FirmwareMqtt {
                         continue;
                     }
                     if refresh || last_discovery.elapsed() >= Duration::from_secs(60) {
-                        let catalog = hub.catalog();
+                        let catalog = hub.catalog_json();
                         let announced = client
                             .publish(&availability, QoS::AtLeastOnce, true, b"online")
                             .is_ok();
-                        let published = matrix_control::discovery::discovery_for_each(
+                        let published = matrix_control::discovery::discovery_json_for_each(
                             &device_id,
-                            &catalog,
+                            catalog.as_slice(),
                             |(topic, payload)| client
                                 .publish(&topic, QoS::AtLeastOnce, true, payload.as_bytes())
                                 .map(|_| ()),
@@ -184,18 +184,18 @@ impl FirmwareMqtt {
                         refresh = !(announced && published);
                         last_discovery = Instant::now();
                     }
-                    let state = hub.snapshot().to_string();
-                    if state != last_state
+                    let state = hub.snapshot_json();
+                    if last_state.as_ref().is_none_or(|last| state.as_slice() != last.as_slice())
                         && client
                             .publish(
                                 &format!("{base}/state"),
                                 QoS::AtLeastOnce,
                                 true,
-                                state.as_bytes(),
+                                state.as_slice(),
                             )
                             .is_ok()
                     {
-                        last_state = state;
+                        last_state = Some(state);
                     }
                 }
                 let _ = client.publish(&availability, QoS::AtLeastOnce, true, b"offline");

@@ -319,7 +319,8 @@ const previewEncoder = new TextEncoder();
 let previewRenderer = null;
 let previewFallback = false;
 let previewLoading = false;
-let previewClockOffset = 0;
+let previewClockOffset = null;
+let lastSeenRenderTimeMs = -1;
 let previewLastTime = 0;
 let previewReady = false;
 let previewConnected = false;
@@ -333,11 +334,23 @@ function syncPreviewState() {
     const bytes = previewEncoder.encode(JSON.stringify(state));
     const capacity = previewRenderer.preview_input_capacity();
     if (bytes.length > capacity) throw new Error('State exceeds renderer capacity');
-    new Uint8Array(previewRenderer.memory.buffer, previewRenderer.preview_input(), bytes.length).set(bytes);
+    const input = previewRenderer.preview_input();
+    new Uint8Array(previewRenderer.memory.buffer, input, bytes.length).set(bytes);
     previewFallback = previewRenderer.preview_sync(bytes.length) !== 0;
     previewReady = !previewFallback;
     previewConnected = true;
-    previewClockOffset = Number(state.renderTimeMs || 0) - performance.now();
+    const serverTime = Number(state.renderTimeMs || 0);
+    if (serverTime > 0) {
+      const now = performance.now();
+      if (previewClockOffset === null || serverTime < lastSeenRenderTimeMs || Math.abs(serverTime - (now + previewClockOffset)) > 2000) {
+        previewClockOffset = serverTime - now;
+        lastSeenRenderTimeMs = serverTime;
+      } else if (serverTime > lastSeenRenderTimeMs) {
+        const targetOffset = serverTime - now;
+        previewClockOffset += (targetOffset - previewClockOffset) * 0.1;
+        lastSeenRenderTimeMs = serverTime;
+      }
+    }
     previewStatus(previewFallback
       ? 'Device frames: this effect cannot be simulated locally (higher ESP load).'
       : 'Rendered in your browser. Simulation may differ in phase or random detail from the LEDs.');
@@ -437,7 +450,7 @@ function startAudioPreviewSound() {
     const sampleRate = audioPreviewCtx.sampleRate;
     const bufferSize = 2048;
     audioPreviewNode = audioPreviewCtx.createScriptProcessor(bufferSize, 0, 1);
-    audioPreviewTime = (performance.now() + previewClockOffset) / 1000.0;
+    audioPreviewTime = (performance.now() + (previewClockOffset || 0)) / 1000.0;
     audioPreviewNode.onaudioprocess = function(e) {
       if (!audioPreviewPlaying || !previewRenderer || typeof previewRenderer.preview_audio_pcm !== 'function') return;
       const out = e.outputBuffer.getChannelData(0);
@@ -612,7 +625,10 @@ async function savePanelConfig() {
     });
     const res = await r.json();
     if (r.ok) {
-      if (res.restartRequired || res.restart === 'required') {
+      if (res.powerLimitApply === 'pending') {
+        msg.textContent = 'Saved; power limit update pending' + (res.restartRequired ? ' (reboot required for pin/layout changes)' : '');
+        msg.style.color = 'var(--yellow)';
+      } else if (res.restartRequired || res.restart === 'required') {
         msg.textContent = 'Saved! (Reboot required for pin/layout changes)';
         msg.style.color = 'var(--yellow)';
       } else {
@@ -620,7 +636,7 @@ async function savePanelConfig() {
         msg.style.color = 'var(--green)';
       }
     } else {
-      msg.textContent = 'Error: ' + (res.error || r.statusText);
+      msg.textContent = (res.powerLimitApply === 'failed' ? 'Saved, but power limit not applied: ' : 'Error: ') + (res.error || r.statusText);
       msg.style.color = 'var(--red)';
     }
   } catch (e) {

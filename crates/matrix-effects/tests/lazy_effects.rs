@@ -461,3 +461,27 @@ fn test_frames_effect_buffer_release_on_deactivate() {
     boxed_anim.render(&mut frame, &ctx);
     boxed_anim.deactivate();
 }
+
+#[test]
+fn boot_catalog_peak_allocation_is_bounded() {
+    if std::env::var_os("MATRIX_BOOT_MEMORY_CHILD").is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "boot_catalog_peak_allocation_is_bounded", "--nocapture"])
+            .env("MATRIX_BOOT_MEMORY_CHILD", "1").output().unwrap();
+        assert!(output.status.success(), "{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        print!("{}", String::from_utf8_lossy(&output.stdout));
+        return;
+    }
+    let baseline = CURRENT_ALLOCATED.load(Ordering::SeqCst);
+    let effects = builtin_effects();
+    let wrappers = CURRENT_ALLOCATED.load(Ordering::SeqCst) - baseline;
+    let engine = matrix_core::Engine::new(effects).unwrap();
+    let before = CURRENT_ALLOCATED.load(Ordering::SeqCst);
+    PEAK_ALLOCATED.store(before, Ordering::SeqCst);
+    let bytes = engine.catalog_json().unwrap();
+    let peak = PEAK_ALLOCATED.load(Ordering::SeqCst) - before;
+    let retained = CURRENT_ALLOCATED.load(Ordering::SeqCst) - before;
+    eprintln!("wrappers={wrappers} catalog_peak={peak} catalog_retained={retained} catalog_bytes={}", bytes.len());
+    assert!(peak < 75_000, "catalog serialization peak exceeds heap budget");
+    assert_eq!(serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(), engine.catalog());
+}

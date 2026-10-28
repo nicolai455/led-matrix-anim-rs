@@ -110,6 +110,10 @@ impl FirmwareNvs {
         self.set_str(KEY_PANEL_CONFIG, &json_str)
     }
 
+    pub fn load_saved_state_json(&self) -> Option<String> {
+        self.get_str(KEY_SAVED_STATE).ok().flatten()
+    }
+
     pub fn load_saved_state(&self) -> Option<Value> {
         self.get_str(KEY_SAVED_STATE)
             .ok()

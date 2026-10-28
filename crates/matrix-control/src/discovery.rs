@@ -24,6 +24,28 @@ pub fn discovery_for_each<E>(
     catalog: &Value,
     mut emit: impl FnMut((String, String)) -> Result<(), E>,
 ) -> Result<(), E> {
+    discovery_inner(device_id, catalog, true, &mut emit)
+}
+
+/// Process the catalog one effect at a time instead of materializing the full tree.
+pub fn discovery_json_for_each<E>(device_id: &str, catalog: &[u8], mut emit: impl FnMut((String, String)) -> Result<(), E>) -> Result<(), E> {
+    let Ok(effects) = serde_json::from_slice::<Vec<&serde_json::value::RawValue>>(catalog) else { return Ok(()); };
+    {
+        let names: Vec<Value> = effects.iter().filter_map(|e| {
+            #[derive(serde::Deserialize)] struct Name { name: String }
+            serde_json::from_str::<Name>(e.get()).ok().map(|n| json!({"name": n.name}))
+        }).collect();
+        discovery_inner(device_id, &Value::Array(names), true, &mut emit)?;
+    }
+    for effect in effects {
+        if let Ok(value) = serde_json::from_str::<Value>(effect.get()) {
+            discovery_inner(device_id, &Value::Array(vec![value]), false, &mut emit)?;
+        }
+    }
+    Ok(())
+}
+
+fn discovery_inner<E>(device_id: &str, catalog: &Value, base_entities: bool, emit: &mut impl FnMut((String, String)) -> Result<(), E>) -> Result<(), E> {
     let base = format!("ledmatrix/{device_id}");
     let availability_topic = format!("{base}/availability");
     let state_topic = format!("{base}/state");
@@ -34,7 +56,7 @@ pub fn discovery_for_each<E>(
         "model": "ESP32-S3 32x32"
     });
 
-    let effect_list: Vec<String> = if let Some(arr) = catalog.as_array() {
+    let effect_list: Vec<String> = if let Some(arr) = catalog.as_array().filter(|_| base_entities) {
         arr.iter()
             .filter_map(|e| e["name"].as_str().map(|s| s.to_string()))
             .collect()
@@ -42,6 +64,7 @@ pub fn discovery_for_each<E>(
         Vec::new()
     };
 
+    if base_entities {
     // 1. Light
     let light_config = json!({
         "name": "Matrix",
@@ -162,6 +185,8 @@ pub fn discovery_for_each<E>(
         format!("homeassistant/sensor/{device_id}/audio_status/config"),
         audio_status_config.to_string(),
     ))?;
+
+    }
 
     // Effect parameter entities
     if let Some(effects) = catalog.as_array() {

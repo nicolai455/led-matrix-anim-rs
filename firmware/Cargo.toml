@@ -17,7 +17,7 @@ matrix-effects = { path = "../crates/matrix-effects" }
 matrix-control = { path = "../crates/matrix-control", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-log = "0.4"
+log = { version = "0.4", features = ["release_max_level_warn"] }
 anyhow = "1.0"
 
 [target.'cfg(target_os = "espidf")'.dependencies]

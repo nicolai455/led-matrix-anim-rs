@@ -213,6 +213,7 @@ impl Effect for PacmanChaseEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {

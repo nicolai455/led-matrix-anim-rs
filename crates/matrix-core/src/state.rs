@@ -69,30 +69,26 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
         return Ok(());
     }
 
-    let val: serde_json::Value =
-        serde_json::from_str(json_str).map_err(|e| format!("invalid JSON: {}", e))?;
-    let doc = val
-        .as_object()
-        .ok_or_else(|| "expected JSON object".to_string())?;
-
-    // 1. Restore effect parameters
-    if let Some(params_obj) = doc.get("params").and_then(|v| v.as_object()) {
-        for (effect_id, param_map) in params_obj {
-            if let Some(map) = param_map.as_object() {
-                for (param_id, val) in map {
-                    let payload = if let Some(num) = val.as_f64() {
-                        Some(num.to_string())
-                    } else {
-                        val.as_str().map(str::to_owned)
-                    };
-                    if let Some(payload) = payload {
-                        let _ =
-                            engine.apply(&format!("effect/{}/{}", effect_id, param_id), &payload);
-                    }
-                }
+    // Parse large parameter sets as borrowed raw JSON; allocate only one effect at a time.
+    let mut fields: std::collections::BTreeMap<&str, &serde_json::value::RawValue> =
+        serde_json::from_str(json_str).map_err(|e| format!("invalid JSON: {e}"))?;
+    let params = fields.remove("params");
+    let effects = fields.remove("effects");
+    if let Some(params) = params.or(effects) {
+        let effects: std::collections::BTreeMap<&str, &serde_json::value::RawValue> =
+            serde_json::from_str(params.get()).unwrap_or_default();
+        for (effect_id, raw) in effects {
+            let Ok(map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(raw.get()) else { continue; };
+            for (param_id, val) in map {
+                let payload = if let Some(num) = val.as_f64() { Some(num.to_string()) }
+                    else if let Some(b) = val.as_bool() { Some(if b { "ON" } else { "OFF" }.to_owned()) }
+                    else { val.as_str().map(str::to_owned) };
+                if let Some(payload) = payload { let _ = engine.apply(&format!("effect/{effect_id}/{param_id}"), &payload); }
             }
         }
     }
+    let val = serde_json::to_value(fields).map_err(|e| e.to_string())?;
+    let doc = val.as_object().ok_or("expected JSON object")?;
 
     // 2. Restore mic settings
     if let Some(mic_val) = doc.get("mic") {

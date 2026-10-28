@@ -146,6 +146,7 @@ impl Effect for LaserHarpEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -191,7 +192,12 @@ impl Effect for LaserHarpEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         frame.clear(Rgb::new(6, 6, 14)); // Deep stage darkness
 
-        let dt = context.delta_seconds.clamp(0.001, 0.1);
+        // Integrate the bounded interval once, then render the final state.
+        let dt = if context.delta_seconds.is_finite() {
+            context.delta_seconds.clamp(0.0, 0.5)
+        } else {
+            0.0
+        };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
         let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
         let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
@@ -303,5 +309,25 @@ impl Effect for LaserHarpEffect {
             let cur = frame.get(15, 10);
             frame.set(15, 10, Rgb::new(cur.r.saturating_add(80), cur.g.saturating_add(80), cur.b.saturating_add(80)));
         }
+    }
+}
+
+
+#[cfg(test)]
+mod timing_regression {
+    use super::*;
+    use matrix_core::AudioSnapshot;
+
+    #[test]
+    fn pluck_decay_uses_elapsed_time_and_zero_delta_preserves_it() {
+        let mut effect = LaserHarpEffect::new();
+        effect.string_pluck[0] = 1.0;
+        let audio = AudioSnapshot::default();
+        let mut frame = Frame::default();
+        for dt in [0.1, 0.0, 0.1] {
+            effect.render(&mut frame, &RenderContext { now_ms: 0, delta_seconds: dt, audio: &audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
+            if dt == 0.0 { assert!((effect.string_pluck[0] - 0.5).abs() < 1e-5); }
+        }
+        assert_eq!(effect.string_pluck[0], 0.0);
     }
 }

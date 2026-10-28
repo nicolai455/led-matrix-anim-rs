@@ -48,8 +48,8 @@ pub enum SubmitOutcome {
 
 pub struct ControlHubInner {
     command_tx: SyncSender<CommandMessage>,
-    cached_snapshot: Arc<RwLock<Arc<Value>>>,
-    cached_frame: Arc<RwLock<Arc<Frame>>>,
+    cached_snapshot: Arc<RwLock<Arc<Vec<u8>>>>,
+    cached_frame: Arc<RwLock<Frame>>,
     cached_catalog: Arc<Vec<u8>>,
     shutdown: Arc<AtomicBool>,
     has_mic_hardware: bool,
@@ -90,9 +90,9 @@ impl ControlHub {
     ) -> Result<Self, String> {
         let has_mic_hardware = audio.is_some();
         let initial_catalog =
-            Arc::new(serde_json::to_vec(&engine.catalog()).map_err(|e| e.to_string())?);
-        let initial_snapshot = Arc::new(engine.snapshot());
-        let initial_frame = Arc::new(Frame::default());
+            Arc::new(engine.catalog_json().map_err(|e| e.to_string())?);
+        let initial_snapshot = Arc::new(engine.snapshot_json(&serde_json::Map::new()).map_err(|e| e.to_string())?);
+        let initial_frame = Frame::default();
 
         let (command_tx, command_rx) = mpsc::sync_channel::<CommandMessage>(32);
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -228,7 +228,7 @@ impl ControlHub {
 
                     // Cache preview frame (fast pointer swap)
                     if let Ok(mut lock) = cached_frame_for_thread.write() {
-                        *lock = Arc::new(frame.clone());
+                        *lock = frame.clone();
                     }
 
                     // FPS calculation (rolling window ~250ms)
@@ -243,12 +243,12 @@ impl ControlHub {
                         fps_frames = 0;
                     }
 
-                    // Refresh snapshot periodically (every 100ms) or immediately on state change
+                    // Refresh snapshot periodically (1 Hz / 1000ms) or immediately on state change
                     if state_changed
                         || engine.is_dirty()
-                        || last_snapshot_sync.elapsed() >= Duration::from_millis(100)
+                        || last_snapshot_sync.elapsed() >= Duration::from_millis(1000)
                     {
-                        let mut snap = engine.snapshot();
+                        let mut snap = engine.snapshot_scalar();
                         let cur_fps = fps_for_thread.read().map(|l| *l).unwrap_or(0.0);
                         let errs = output_errors_for_thread.load(Ordering::Relaxed);
                         if let Some(obj) = snap.as_object_mut() {
@@ -301,7 +301,9 @@ impl ControlHub {
                             obj.insert("treble".to_string(), json!(treble));
                         }
                         if let Ok(mut lock) = cached_snapshot_for_thread.write() {
-                            *lock = Arc::new(snap);
+                            if let Some(extra) = snap.as_object() {
+                                if let Ok(bytes) = engine.snapshot_json(extra) { *lock = Arc::new(bytes); }
+                            }
                         }
                         engine.clear_dirty();
                         last_snapshot_sync = Instant::now();
@@ -410,11 +412,27 @@ impl ControlHub {
     ///
     /// Never blocks on render or physical output.
     pub fn snapshot(&self) -> Value {
-        self.inner
-            .cached_snapshot
-            .read()
-            .map(|arc| (**arc).clone())
-            .unwrap_or_else(|_| Value::Null)
+        serde_json::from_slice(self.snapshot_json().as_slice()).unwrap_or(Value::Null)
+    }
+
+    /// Shared serialized state, without rebuilding the effect parameter tree.
+    pub fn snapshot_json(&self) -> Arc<Vec<u8>> {
+        self.inner.cached_snapshot.read().map(|v| v.clone()).unwrap_or_else(|_| Arc::new(b"null".to_vec()))
+    }
+
+    /// Deserialize only scalar fields; skip the potentially large effects object.
+    pub fn snapshot_scalar(&self) -> Value {
+        let bytes = self.snapshot_json();
+        let fields: Result<std::collections::BTreeMap<&str, &serde_json::value::RawValue>, _> = serde_json::from_slice(&bytes);
+        let mut result = serde_json::Map::new();
+        if let Ok(fields) = fields {
+            for (key, raw) in fields {
+                if key != "effects" {
+                    if let Ok(value) = serde_json::from_str(raw.get()) { result.insert(key.to_owned(), value); }
+                }
+            }
+        }
+        Value::Object(result)
     }
 
     /// Returns the static effect catalog.
@@ -435,7 +453,7 @@ impl ControlHub {
         self.inner
             .cached_frame
             .read()
-            .map(|arc| (**arc).clone())
+            .map(|frame| frame.clone())
             .unwrap_or_default()
     }
 

@@ -89,8 +89,22 @@ impl ConfigStore {
     }
 
     pub fn update_from_json(&self, val: &Value) -> Result<PanelConfig, String> {
+        self.update_from_json_with_old(val)
+            .map(|(_, updated)| updated)
+    }
+
+    pub fn update_from_json_with_old(
+        &self,
+        val: &Value,
+    ) -> Result<(PanelConfig, PanelConfig), String> {
         let object = val.as_object().ok_or("invalid config object")?;
-        let mut merged = self.to_json();
+        let mut guard = self
+            .config
+            .write()
+            .map_err(|_| "configuration lock poisoned")?;
+        let old = guard.clone();
+        let mut merged =
+            serde_json::to_value(&old).map_err(|e| format!("serialization error: {e}"))?;
         let target = merged.as_object_mut().ok_or("invalid current config")?;
         for (key, value) in object {
             if !target.contains_key(key) {
@@ -102,17 +116,14 @@ impl ConfigStore {
             serde_json::from_value(merged).map_err(|e| format!("invalid configuration: {e}"))?;
         candidate.validate()?;
         self.save(&candidate)?;
-        let old = self.get();
-        *self
-            .config
-            .write()
-            .map_err(|_| "configuration lock poisoned")? = candidate.clone();
+        *guard = candidate.clone();
+        drop(guard);
         if let Ok(listeners) = self.listeners.read() {
             for listener in listeners.iter() {
                 listener(&old, &candidate);
             }
         }
-        Ok(candidate)
+        Ok((old, candidate))
     }
 
     pub fn save(&self, config: &PanelConfig) -> Result<(), String> {

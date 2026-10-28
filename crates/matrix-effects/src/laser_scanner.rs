@@ -167,6 +167,7 @@ impl Effect for LaserScannerEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -211,7 +212,12 @@ impl Effect for LaserScannerEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         frame.clear(Rgb::BLACK); // High-contrast pitch black laser hall
 
-        let dt = context.delta_seconds.clamp(0.001, 0.1);
+        // Integrate the bounded interval once, then render the final state.
+        let dt = if context.delta_seconds.is_finite() {
+            context.delta_seconds.clamp(0.0, 0.5)
+        } else {
+            0.0
+        };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
         let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
         let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };

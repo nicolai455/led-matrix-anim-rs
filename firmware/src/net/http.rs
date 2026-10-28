@@ -95,9 +95,9 @@ impl FirmwareHttpServer {
                     );
                 }
                 let uri = req.uri().to_string();
-                if matches!(uri.as_str(), "/api/effects" | "/api/catalog") {
+                if matches!(uri.as_str(), "/api/effects" | "/api/catalog" | "/api/state") {
                     use embedded_svc::io::Write;
-                    let catalog = ctx.hub.catalog_json();
+                    let catalog = if uri == "/api/state" { ctx.hub.snapshot_json() } else { ctx.hub.catalog_json() };
                     let mut response = req.into_response(
                         200,
                         None,

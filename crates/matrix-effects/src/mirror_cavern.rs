@@ -133,6 +133,7 @@ impl Effect for MirrorCavernEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -175,7 +176,12 @@ impl Effect for MirrorCavernEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         frame.clear(Rgb::BLACK);
 
-        let dt = context.delta_seconds.clamp(0.001, 0.1);
+        // Integrate the bounded interval once, then render the final state.
+        let dt = if context.delta_seconds.is_finite() {
+            context.delta_seconds.clamp(0.0, 0.5)
+        } else {
+            0.0
+        };
         let audio_active = self.values[3] > 0.5 && context.audio.available;
         let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
         let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
@@ -267,5 +273,33 @@ impl Effect for MirrorCavernEffect {
                 frame.set(sx, sy, Rgb::WHITE);
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod timing_regression {
+    use super::*;
+    use matrix_core::AudioSnapshot;
+
+    #[test]
+    fn elapsed_time_advances_camera_and_decays_audio_with_engine_cap() {
+        let mut effect = MirrorCavernEffect::new();
+        effect.strobe_pulse = 1.0;
+        let audio = AudioSnapshot::default();
+        let mut frame = Frame::default();
+        let render = |effect: &mut MirrorCavernEffect, frame: &mut Frame, dt| {
+            effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: dt, audio: &audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
+        };
+        render(&mut effect, &mut frame, 0.2);
+        assert!((effect.cam_z - 1.38).abs() < 1e-5);
+        assert!((effect.cam_rot - 0.184).abs() < 1e-5);
+        assert!((effect.strobe_pulse - 0.3).abs() < 1e-5);
+        render(&mut effect, &mut frame, 0.0);
+        assert!((effect.cam_z - 1.38).abs() < 1e-5);
+        assert!((effect.strobe_pulse - 0.3).abs() < 1e-5);
+        render(&mut effect, &mut frame, 1.0);
+        assert!((effect.cam_z - 4.38).abs() < 1e-5);
+        assert_eq!(effect.strobe_pulse, 0.0);
     }
 }

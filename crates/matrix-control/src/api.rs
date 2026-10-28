@@ -5,12 +5,15 @@ use crate::persistence::StateStore;
 use crate::web_ui::WEB_UI;
 use matrix_core::audio::MicSettings;
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 // A static reference gives both host/API and firmware streaming paths one asset.
 // A const byte slice can be materialized twice across the crate boundary.
 pub static PREVIEW_WASM: &[u8] = include_bytes!("../assets/preview.wasm.gz");
+
+// Keep persistence and live command submission ordered across concurrent requests.
+static CONFIG_REQUEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct ApiContext {
     pub hub: ControlHub,
@@ -87,7 +90,12 @@ pub fn handle_api_request(ctx: &ApiContext, method: &str, path: &str, body: &[u8
     }
 }
 
-fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[u8]) -> HttpResponse {
+fn handle_api_request_inner(
+    ctx: &ApiContext,
+    method: &str,
+    path: &str,
+    body: &[u8],
+) -> HttpResponse {
     let method = method.to_uppercase();
 
     match (method.as_str(), path) {
@@ -96,7 +104,7 @@ fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[
             HttpResponse::ok_binary("application/gzip", PREVIEW_WASM.to_vec())
         }
         ("GET", "/api/audio") => {
-            let snapshot = ctx.hub.snapshot();
+            let snapshot = ctx.hub.snapshot_scalar();
             let mut audio = serde_json::Map::new();
             for key in [
                 "bands",
@@ -114,7 +122,7 @@ fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[
             HttpResponse::ok_json(Value::Object(audio))
         }
 
-        ("GET", "/api/state") => HttpResponse::ok_json(ctx.hub.snapshot()),
+        ("GET", "/api/state") => HttpResponse { status: 200, content_type: "application/json", body: ctx.hub.snapshot_json().as_ref().clone() },
 
         ("GET", "/api/effects") | ("GET", "/api/catalog") => HttpResponse {
             status: 200,
@@ -134,7 +142,7 @@ fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[
         }
 
         ("GET", "/api/status") => {
-            let snap = ctx.hub.snapshot();
+            let snap = ctx.hub.snapshot_scalar();
             let fallback = Value::Null;
             HttpResponse::ok_json(json!({
                 "fps": ctx.hub.fps(),
@@ -154,9 +162,14 @@ fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[
                 Ok(v) => v,
                 Err(e) => return HttpResponse::err_json(400, &format!("invalid JSON: {e}")),
             };
-            let old_cfg = ctx.config_store.get();
-            match ctx.config_store.update_from_json(&val) {
-                Ok(updated) => {
+            let _request_guard = match CONFIG_REQUEST_LOCK.lock() {
+                Ok(guard) => guard,
+                Err(_) => {
+                    return HttpResponse::err_json(503, "configuration request lock poisoned")
+                }
+            };
+            match ctx.config_store.update_from_json_with_old(&val) {
+                Ok((old_cfg, updated)) => {
                     let restart_required = old_cfg.matrix_width != updated.matrix_width
                         || old_cfg.matrix_height != updated.matrix_height
                         || old_cfg.panel_order != updated.panel_order
@@ -170,26 +183,36 @@ fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[
                         || old_cfg.parallel_output != updated.parallel_output
                         || old_cfg.panel_pins != updated.panel_pins;
 
-                    // Live power budget update to render actor
-                    let _ = ctx.hub.submit_sync(
+                    let outcome = ctx.hub.submit_sync(
                         "power_limit",
                         &updated.led_max_milliamps.to_string(),
                         Duration::from_millis(50),
                     );
-
-                    HttpResponse::ok_json(json!({
-                        "ok": true,
+                    let (status, apply, error) = match outcome {
+                        Ok(SubmitOutcome::Applied) => (200, "applied", None),
+                        Ok(SubmitOutcome::Pending) => (202, "pending", None),
+                        Err(e) => (503, "failed", Some(e)),
+                    };
+                    let body = json!({
+                        "ok": status != 503,
                         "config": updated,
+                        "powerLimitApply": apply,
+                        "error": error,
                         "restart": if restart_required { "required" } else { "none" },
                         "restartRequired": restart_required
-                    }))
+                    });
+                    HttpResponse {
+                        status,
+                        content_type: "application/json",
+                        body: serde_json::to_vec(&body).unwrap_or_default(),
+                    }
                 }
                 Err(e) => HttpResponse::err_json(400, &e),
             }
         }
 
         ("GET", "/api/mic") => {
-            let snap = ctx.hub.snapshot();
+            let snap = ctx.hub.snapshot_scalar();
             let active = snap.get("audio_source").and_then(|v| v.as_str()) == Some("Mic");
             let settings = snap
                 .get("mic")
@@ -213,8 +236,8 @@ fn handle_api_request_inner(ctx: &ApiContext, method: &str, path: &str, body: &[
         }
 
         ("POST", "/api/state/save") => {
-            let snap = ctx.hub.snapshot();
-            match ctx.state_store.save(&snap) {
+            let snap = ctx.hub.snapshot_json();
+            match ctx.state_store.save_json(&snap) {
                 Ok(_) => HttpResponse::ok_json(json!({ "ok": true })),
                 Err(e) => HttpResponse::err_json(500, &e),
             }

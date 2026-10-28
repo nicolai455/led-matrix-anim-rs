@@ -22,7 +22,7 @@ fn catalog_reads_share_immutable_metadata_instead_of_cloning_json_trees() {
     let second = hub.catalog_json();
     assert!(Arc::ptr_eq(&first, &second));
     let catalog: serde_json::Value = serde_json::from_slice(&first).unwrap();
-assert!(catalog.as_array().unwrap().len() >= 21);
+    assert!(catalog.as_array().unwrap().len() >= 21);
     hub.join();
 }
 
@@ -529,4 +529,151 @@ fn test_handle_api_request_panic_guard() {
     assert_eq!(resp.status, 404);
 
     hub.join();
+}
+
+#[test]
+fn concurrent_config_updates_preserve_both_changes() {
+    use std::sync::Condvar;
+    struct BlockingBackend {
+        state: Arc<(Mutex<(usize, bool, String)>, Condvar)>,
+    }
+    impl StorageBackend for BlockingBackend {
+        fn load(&self) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+        fn store(&self, content: &str) -> Result<(), String> {
+            let (lock, cv) = &*self.state;
+            let mut s = lock.lock().unwrap();
+            s.0 += 1;
+            if s.0 == 1 {
+                cv.notify_all();
+                while !s.1 {
+                    s = cv.wait(s).unwrap();
+                }
+            }
+            s.2 = content.to_owned();
+            Ok(())
+        }
+    }
+    let state = Arc::new((Mutex::new((0, false, String::new())), Condvar::new()));
+    let store = Arc::new(ConfigStore::with_backend(
+        Box::new(BlockingBackend {
+            state: state.clone(),
+        }),
+        None,
+    ));
+    let a = store.clone();
+    let first = thread::spawn(move || a.update_from_json(&json!({"ledBrightness":42})));
+    let (lock, cv) = &*state;
+    let mut s = lock.lock().unwrap();
+    while s.0 == 0 {
+        s = cv.wait(s).unwrap();
+    }
+    drop(s);
+    let b = store.clone();
+    let second = thread::spawn(move || b.update_from_json(&json!({"ledMaxMilliamps":5000})));
+    thread::sleep(Duration::from_millis(100));
+    let mut s = lock.lock().unwrap();
+    s.1 = true;
+    cv.notify_all();
+    drop(s);
+    first.join().unwrap().unwrap();
+    second.join().unwrap().unwrap();
+    let config = store.to_json();
+    assert_eq!(config["ledBrightness"], 42);
+    assert_eq!(config["ledMaxMilliamps"], 5000);
+    let persisted: serde_json::Value = serde_json::from_str(&lock.lock().unwrap().2).unwrap();
+    assert_eq!(persisted, config);
+    assert!(store
+        .update_from_json(&json!({"ledBrightness":"bad"}))
+        .is_err());
+    assert_eq!(store.to_json(), config);
+}
+
+#[test]
+fn failed_live_power_apply_reports_persisted_config() {
+    struct RejectPower;
+    impl LedOutput for RejectPower {
+        fn show(&mut self, _: &Frame, _: u8) -> Result<(), String> {
+            Ok(())
+        }
+        fn set_power_limit(&mut self, _: u32) -> Result<(), String> {
+            Err("power rejected".into())
+        }
+    }
+    let hub = ControlHub::spawn(test_engine(), RejectPower, None).unwrap();
+    let config_store = Arc::new(ConfigStore::new(None));
+    let ctx = ApiContext {
+        hub: hub.clone(),
+        config_store: config_store.clone(),
+        mic_controller: Arc::new(MicController::new(true)),
+        state_store: Arc::new(StateStore::with_backend(Box::new(
+            MemoryStorageBackend::default(),
+        ))),
+    };
+    let response = handle_api_request(&ctx, "POST", "/api/config", br#"{"ledMaxMilliamps":5000}"#);
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(response.status, 503);
+    assert_eq!(body["ok"], false);
+    assert_eq!(body["powerLimitApply"], "failed");
+    assert_eq!(body["config"]["ledMaxMilliamps"], 5000);
+    assert_eq!(config_store.to_json()["ledMaxMilliamps"], 5000);
+    hub.join();
+}
+
+#[test]
+fn pending_full_and_disconnected_power_apply_are_truthful() {
+    use std::sync::Condvar;
+    struct BlockOutput(Arc<(Mutex<(bool, bool)>, Condvar)>);
+    impl LedOutput for BlockOutput {
+        fn show(&mut self, _: &Frame, _: u8) -> Result<(), String> {
+            let (lock, cv) = &*self.0;
+            let mut s = lock.lock().unwrap();
+            s.0 = true;
+            cv.notify_all();
+            while !s.1 {
+                s = cv.wait(s).unwrap();
+            }
+            Ok(())
+        }
+    }
+    let signal = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    let hub = ControlHub::spawn(test_engine(), BlockOutput(signal.clone()), None).unwrap();
+    let (lock, cv) = &*signal;
+    let mut s = lock.lock().unwrap();
+    while !s.0 {
+        s = cv.wait(s).unwrap();
+    }
+    drop(s);
+    let ctx = ApiContext {
+        hub: hub.clone(),
+        config_store: Arc::new(ConfigStore::new(None)),
+        mic_controller: Arc::new(MicController::new(true)),
+        state_store: Arc::new(StateStore::with_backend(Box::new(
+            MemoryStorageBackend::default(),
+        ))),
+    };
+    let request =
+        || handle_api_request(&ctx, "POST", "/api/config", br#"{"ledMaxMilliamps":5000}"#);
+    let pending = request();
+    let body: serde_json::Value = serde_json::from_slice(&pending.body).unwrap();
+    assert_eq!(pending.status, 202);
+    assert_eq!(body["powerLimitApply"], "pending");
+    for _ in 0..31 {
+        hub.submit_async("power_limit", "5000").unwrap();
+    }
+    let full = request();
+    let body: serde_json::Value = serde_json::from_slice(&full.body).unwrap();
+    assert_eq!(full.status, 503);
+    assert_eq!(body["powerLimitApply"], "failed");
+    assert!(body["error"].as_str().unwrap().contains("full"));
+    let mut s = lock.lock().unwrap();
+    s.1 = true;
+    cv.notify_all();
+    drop(s);
+    hub.join();
+    let disconnected = request();
+    let body: serde_json::Value = serde_json::from_slice(&disconnected.body).unwrap();
+    assert_eq!(disconnected.status, 503);
+    assert!(body["error"].as_str().unwrap().contains("stopped"));
 }

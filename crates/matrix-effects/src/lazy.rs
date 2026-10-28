@@ -10,7 +10,7 @@ pub struct LazyEffect {
     factory: EffectFactory,
     id: &'static str,
     name: &'static str,
-    parameters: Vec<ParameterDescriptor>,
+    parameters: std::borrow::Cow<'static, [ParameterDescriptor]>,
     params: Vec<(&'static str, f32)>,
     inner: Option<Box<dyn Effect>>,
 }
@@ -23,12 +23,10 @@ impl LazyEffect {
         let tmp = factory();
         let id = tmp.id();
         let name = tmp.name();
-        let parameters = tmp.parameters().to_vec();
-        let mut params = Vec::with_capacity(parameters.len());
-        for p in &parameters {
-            let val = tmp.parameter(p.id).unwrap_or(p.default);
-            params.push((p.id, val));
-        }
+        let parameters = match tmp.static_parameters() {
+            Some(parameters) => std::borrow::Cow::Borrowed(parameters),
+            None => std::borrow::Cow::Owned(tmp.parameters().to_vec()),
+        };
         drop(tmp);
 
         Self {
@@ -36,7 +34,7 @@ impl LazyEffect {
             id,
             name,
             parameters,
-            params,
+            params: Vec::new(),
             inner: None,
         }
     }
@@ -75,8 +73,10 @@ impl Effect for LazyEffect {
     fn parameter(&self, id: &str) -> Option<f32> {
         if let Some(inner) = self.inner.as_ref() {
             inner.parameter(id)
+        } else if let Some((_, v)) = self.params.iter().find(|(k, _)| *k == id) {
+            Some(*v)
         } else {
-            self.params.iter().find(|(k, _)| *k == id).map(|(_, v)| *v)
+            self.parameters.iter().find(|p| p.id == id).map(|p| p.default)
         }
     }
 
@@ -94,6 +94,8 @@ impl Effect for LazyEffect {
 
         if let Some(entry) = self.params.iter_mut().find(|(k, _)| *k == id) {
             entry.1 = value;
+        } else if let Some(desc) = self.parameters.iter().find(|p| p.id == id) {
+            self.params.push((desc.id, value));
         }
         Ok(())
     }

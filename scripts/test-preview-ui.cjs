@@ -195,3 +195,24 @@ test('synthetic audio enables listen button and wasm updates visualizer bands', 
   `);
   assert.equal(h.element('audioSoundBtn').style.display, 'none');
 });
+
+test('first sync survives WASM memory growth during input initialization', () => {
+  const h = harness();
+  h.run(`previewRenderer = { memory: new WebAssembly.Memory({initial: 1}),
+    preview_input_capacity: () => 16384,
+    preview_input() { this.memory.grow(1); return 8192; }, preview_sync: () => 0 };
+    state = {renderTimeMs: 0}; syncPreviewState();`);
+  assert.equal(h.run('previewReady'), true);
+});
+
+test('config UI distinguishes pending and persisted-but-failed power updates', async () => {
+  for (const [ok, response, expected] of [
+    [true, {powerLimitApply: 'pending'}, /pending/i],
+    [false, {powerLimitApply: 'failed', error: 'queue full'}, /Saved, but power limit not applied/i],
+  ]) {
+    const h = harness();
+    h.sandbox.fetch = async () => ({ok, json: async () => response});
+    await h.run('savePanelConfig()');
+    assert.match(h.element('cfgStatusMsg').textContent, expected);
+  }
+});

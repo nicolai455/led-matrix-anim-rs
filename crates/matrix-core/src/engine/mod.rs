@@ -630,42 +630,13 @@ impl Engine {
 
     /// Full state snapshot matching legacy JSON schema.
     pub fn snapshot(&self) -> serde_json::Value {
+        serde_json::from_slice(&self.snapshot_json(&serde_json::Map::new()).expect("serialize state"))
+            .expect("internally serialized state")
+    }
+
+    /// Small state without the effect parameter tree, for telemetry consumers.
+    pub fn snapshot_scalar(&self) -> serde_json::Value {
         let current_effect = &self.effects[self.current_effect_idx];
-        let mut effects_map = serde_json::Map::new();
-
-        for effect in &self.effects {
-            let mut params_map = serde_json::Map::new();
-            for param in effect.parameters() {
-                if let Some(val) = effect.parameter(param.id) {
-                    match param.kind {
-                        ParameterKind::Boolean => {
-                            params_map.insert(
-                                param.id.to_string(),
-                                json!(if val != 0.0 { "ON" } else { "OFF" }),
-                            );
-                        }
-                        ParameterKind::Select => {
-                            let idx = val as usize;
-                            if idx < param.options.len() {
-                                params_map.insert(param.id.to_string(), json!(param.options[idx]));
-                            } else {
-                                params_map.insert(param.id.to_string(), json!(val));
-                            }
-                        }
-                        ParameterKind::Number => {
-                            params_map.insert(param.id.to_string(), json!(val));
-                        }
-                    }
-                }
-            }
-            if !params_map.is_empty() {
-                effects_map.insert(
-                    effect.id().to_string(),
-                    serde_json::Value::Object(params_map),
-                );
-            }
-        }
-
         let audio_src = match self.audio_mode {
             AudioMode::Off => "Off",
             AudioMode::Synthetic => "Synthetic",
@@ -709,45 +680,125 @@ impl Engine {
                 "agc": self.mic_settings.agc,
                 "rightChannel": self.mic_settings.right_channel
             },
-            "effects": effects_map
+            "effects": null
         })
+    }
+
+    /// Serialize state and effect parameters directly without constructing a Value tree.
+    pub fn snapshot_json(&self, extra: &serde_json::Map<String, serde_json::Value>) -> Result<Vec<u8>, serde_json::Error> {
+        use serde::ser::{SerializeMap, Serializer};
+        struct Params<'a>(&'a dyn Effect);
+        impl Serialize for Params<'_> {
+            fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                let mut map = s.serialize_map(None)?;
+                for p in self.0.parameters() {
+                    if let Some(v) = self.0.parameter(p.id) {
+                        match p.kind {
+                            ParameterKind::Boolean => map.serialize_entry(p.id, if v != 0.0 { "ON" } else { "OFF" })?,
+                            ParameterKind::Select if (v as usize) < p.options.len() => map.serialize_entry(p.id, p.options[v as usize])?,
+                            _ => map.serialize_entry(p.id, &v)?,
+                        }
+                    }
+                }
+                map.end()
+            }
+        }
+        struct Effects<'a>(&'a Engine);
+        impl Serialize for Effects<'_> {
+            fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                let mut map = s.serialize_map(None)?;
+                for effect in &self.0.effects {
+                    if effect.parameters().iter().any(|p| effect.parameter(p.id).is_some()) {
+                        map.serialize_entry(effect.id(), &Params(effect.as_ref()))?;
+                    }
+                }
+                map.end()
+            }
+        }
+        struct Snapshot<'a>(&'a Engine, &'a serde_json::Map<String, serde_json::Value>);
+        impl Serialize for Snapshot<'_> {
+            fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                let scalar = self.0.snapshot_scalar();
+                let mut map = s.serialize_map(None)?;
+                for (key, value) in scalar.as_object().expect("scalar object") {
+                    if key != "effects" && !self.1.contains_key(key) { map.serialize_entry(key, value)?; }
+                }
+                for (key, value) in self.1 { if key != "effects" { map.serialize_entry(key, value)?; } }
+                map.serialize_entry("effects", &Effects(self.0))?;
+                map.end()
+            }
+        }
+        let snapshot = Snapshot(self, extra);
+        // Preallocate estimated capacity to avoid multiple reallocations and avoid
+        // running a redundant second serialization pass.
+        let mut bytes = Vec::with_capacity(9216);
+        serde_json::to_writer(&mut bytes, &snapshot)?;
+        Ok(bytes)
+    }
+
+    /// Serialize directly without materializing the much larger JSON value tree.
+    pub fn catalog_json(&self) -> Result<Vec<u8>, serde_json::Error> {
+        // Size once to avoid transient doubling during Vec growth on constrained heaps.
+        struct Counter(usize);
+        impl std::io::Write for Counter {
+            fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+                self.0 += data.len();
+                Ok(data.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+        }
+        let catalog = Catalog(&self.effects);
+        let mut counter = Counter(0);
+        serde_json::to_writer(&mut counter, &catalog)?;
+        let mut bytes = Vec::with_capacity(counter.0);
+        serde_json::to_writer(&mut bytes, &catalog)?;
+        Ok(bytes)
     }
 
     /// Effect catalog matching legacy metadata format for discovery & Web UI.
     pub fn catalog(&self) -> serde_json::Value {
-        let list: Vec<serde_json::Value> = self
-            .effects
-            .iter()
-            .map(|effect| {
-                let params: Vec<serde_json::Value> = effect
-                    .parameters()
-                    .iter()
-                    .map(|p| {
-                        let current_val = effect.parameter(p.id).unwrap_or(p.default);
-                        json!({
-                            "id": p.id,
-                            "label": p.label,
-                            "kind": p.kind,
-                            "min": p.min,
-                            "max": p.max,
-                            "step": p.step,
-                            "default": p.default,
-                            "options": p.options,
-                            "unit": p.unit,
-                            "value": current_val
-                        })
-                    })
-                    .collect();
+        // Keep the legacy Value API while sharing the streaming serializer.
+        serde_json::from_slice(&self.catalog_json().expect("catalog serialization"))
+            .expect("serialized catalog is valid JSON")
+    }
+}
 
-                json!({
-                    "id": effect.id(),
-                    "name": effect.name(),
-                    "parameters": params
-                })
-            })
-            .collect();
+// Borrow the catalog metadata and stream it directly into the serialized output.
+struct Catalog<'a>(&'a [Box<dyn Effect>]);
+struct CatalogEffect<'a>(&'a dyn Effect);
+struct CatalogParameters<'a>(&'a dyn Effect);
 
-        serde_json::Value::Array(list)
+impl Serialize for Catalog<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for effect in self.0 { seq.serialize_element(&CatalogEffect(effect.as_ref()))?; }
+        seq.end()
+    }
+}
+impl Serialize for CatalogEffect<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut item = serializer.serialize_struct("Effect", 3)?;
+        item.serialize_field("id", self.0.id())?;
+        item.serialize_field("name", self.0.name())?;
+        item.serialize_field("parameters", &CatalogParameters(self.0))?;
+        item.end()
+    }
+}
+impl Serialize for CatalogParameters<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        #[derive(Serialize)]
+        struct Parameter<'a> {
+            #[serde(flatten)] descriptor: &'a crate::effect::ParameterDescriptor,
+            value: f32,
+        }
+        let mut seq = serializer.serialize_seq(Some(self.0.parameters().len()))?;
+        for p in self.0.parameters() {
+            seq.serialize_element(&Parameter { descriptor: p, value: self.0.parameter(p.id).unwrap_or(p.default) })?;
+        }
+        seq.end()
     }
 }
 

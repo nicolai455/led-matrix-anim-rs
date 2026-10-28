@@ -159,7 +159,8 @@ impl FireworksEffect {
             }
             2 => {
                 // Neon Dream
-                let h = if life > 0.5 { core::hint::black_box(0.85f32) } else { 0.5f32 };
+                // Keep both constants opaque to avoid Xtensa LLVM constant-pool failures.
+                let h = if life > 0.5 { core::hint::black_box(0.85f32) } else { core::hint::black_box(0.5f32) };
                 hsv_to_rgb(h, 0.95, v)
             }
             _ => {
@@ -224,6 +225,7 @@ impl Effect for FireworksEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
