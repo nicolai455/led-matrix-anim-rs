@@ -160,13 +160,15 @@ impl I2sMicAudioInput {
             std_cfg.slot_cfg.ws_pol = false;
             std_cfg.slot_cfg.bit_shift = true;
 
-            // Pin assignments from BoardPins.h:
-            // SD = 32, WS = 15, SCK = 14
+            let Some(pins) = crate::pins::get_default_profile().mic_pins else {
+                esp_idf_sys::i2s_del_channel(rx_handle);
+                return None;
+            };
             std_cfg.gpio_cfg.mclk = esp_idf_sys::gpio_num_t_GPIO_NUM_NC;
-            std_cfg.gpio_cfg.bclk = esp_idf_sys::gpio_num_t_GPIO_NUM_14;
-            std_cfg.gpio_cfg.ws = esp_idf_sys::gpio_num_t_GPIO_NUM_15;
+            std_cfg.gpio_cfg.bclk = pins.sck as esp_idf_sys::gpio_num_t;
+            std_cfg.gpio_cfg.ws = pins.ws as esp_idf_sys::gpio_num_t;
             std_cfg.gpio_cfg.dout = esp_idf_sys::gpio_num_t_GPIO_NUM_NC;
-            std_cfg.gpio_cfg.din = esp_idf_sys::gpio_num_t_GPIO_NUM_32;
+            std_cfg.gpio_cfg.din = pins.sd as esp_idf_sys::gpio_num_t;
 
             let init_err = esp_idf_sys::i2s_channel_init_std_mode(rx_handle, &std_cfg);
             if init_err != esp_idf_sys::ESP_OK {

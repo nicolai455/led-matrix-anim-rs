@@ -6,6 +6,9 @@ publish = false
 
 [workspace]
 
+[[package.metadata.esp-idf-sys.extra_components]]
+component_dirs = ["components/parallel_lcd"]
+
 [features]
 default = []
 esp32s3 = []

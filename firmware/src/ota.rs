@@ -208,6 +208,9 @@ impl OtaManager {
             }
 
             let update_partition = esp_idf_sys::esp_ota_get_next_update_partition(std::ptr::null());
+            // A repaired recovery image must exercise real output once, not
+            // remain in inactive safe mode and inevitably fail validation.
+            crate::recovery::arm_ota_trial((*update_partition).address)?;
             let set_err = esp_idf_sys::esp_ota_set_boot_partition(update_partition);
             if set_err != esp_idf_sys::ESP_OK {
                 self.resume();
@@ -238,6 +241,8 @@ impl OtaManager {
         log::info!("OTA: scheduling restart in 1 second...");
         std::thread::spawn(|| {
             std::thread::sleep(Duration::from_millis(1000));
+            #[cfg(target_os = "espidf")]
+            let _ = crate::recovery::planned();
             #[cfg(target_os = "espidf")]
             unsafe {
                 esp_idf_sys::esp_restart();

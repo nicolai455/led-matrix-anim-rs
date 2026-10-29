@@ -14,3 +14,4 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 
 # Bound static RX pool while retaining six AMPDU receive slots.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

@@ -58,7 +58,11 @@ pub const PROFILE_ESP32_S3: BoardProfile = BoardProfile {
     panel_pins: [8, 3, 10, 9], // GPIO 10 replaces invalid input-only GPIO 46
     data_pin: 8,
     button_pin: Some(0),
-    mic_pins: None, // Can be configured when microphone is wired
+    mic_pins: Some(MicPins {
+        sd: 16,
+        ws: 15,
+        sck: 41,
+    }),
 };
 
 /// Validates whether a given GPIO number is a valid output pin on the target architecture.

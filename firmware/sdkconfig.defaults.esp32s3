@@ -15,5 +15,8 @@ CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
 
+# Refill LED data even while flash cache is unavailable.
+CONFIG_RMT_ISR_IRAM_SAFE=y
+
 # The board's native USB port carries both flashing and boot diagnostics.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

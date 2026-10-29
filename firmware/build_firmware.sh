@@ -45,7 +45,11 @@ fi
 export RUSTUP_HOME="${RUSTUP_HOME:-$DEFAULT_RUSTUP}"
 export CARGO_HOME="${CARGO_HOME:-$DEFAULT_CARGO}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-esp}"
-export LD_LIBRARY_PATH="/home/joe/.local/lib:${LD_LIBRARY_PATH:-}"
+if [ -d "/nix/store/1x09s5x9lwjfzv85ag87ipd8d6msv0zq-libxml2-2.13.9/lib" ]; then
+    export LD_LIBRARY_PATH="/nix/store/1x09s5x9lwjfzv85ag87ipd8d6msv0zq-libxml2-2.13.9/lib:/nix/store/gxawp0qrrpcvwmimww76dfkwldljmx7m-ld-library-path/share/nix-ld/lib:${LD_LIBRARY_PATH:-}"
+else
+    export LD_LIBRARY_PATH="/home/joe/.local/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 # Auto-discover IDF_PATH
 if [ -z "${IDF_PATH:-}" ]; then
@@ -240,6 +244,9 @@ build_target() {
 
     if [ -n "$extra_features" ]; then
         cargo_flags+=("--features" "$extra_features")
+    fi
+    if [ -n "${MATRIX_EXTRA_FEATURES:-}" ]; then
+        cargo_flags+=("--features" "$MATRIX_EXTRA_FEATURES")
     fi
 
     echo "===================================================================="

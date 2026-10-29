@@ -1,5 +1,6 @@
 use matrix_core::audio::MicSettings;
 use matrix_core::{AudioMode, AudioSnapshot, Engine, Frame, PanelConfig};
+use matrix_core::engine::DetachedSnapshot;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, SyncSender};
@@ -46,6 +47,46 @@ pub enum SubmitOutcome {
     Pending,
 }
 
+#[cfg(test)]
+fn publish_snapshot_with<E>(cache: &RwLock<Arc<Vec<u8>>>, build: impl FnOnce() -> Result<Vec<u8>, E>) {
+    if let Ok(bytes) = build() {
+        let bytes = Arc::new(bytes);
+        if let Ok(mut lock) = cache.write() {
+            *lock = bytes;
+        }
+    }
+}
+
+type Replies = Vec<(SyncSender<Result<(), String>>, Result<(), String>)>;
+struct Telemetry {
+    state: Arc<DetachedSnapshot>, audio: AudioSnapshot, mode: AudioMode,
+    history: std::collections::VecDeque<(u64, [u8; 16])>, fps: f32, errors: u32,
+    uptime: u64, has_mic: bool, metrics: Option<(f32, f32)>, now_ms: u64, replies: Replies,
+}
+fn publish_telemetry(cache: &RwLock<Arc<Vec<u8>>>, item: Telemetry) {
+    let result = (|| -> Result<(), String> {
+        let mut snap = serde_json::to_value(&*item.state).map_err(|e| e.to_string())?;
+        let obj = snap.as_object_mut().ok_or("invalid snapshot")?;
+        obj.insert("fps".into(), json!(item.fps)); obj.insert("outputErrors".into(), json!(item.errors));
+        obj.insert("uptime".into(), json!(item.uptime)); obj.insert("hasMic".into(), json!(item.has_mic));
+        if let Some((raw, gain)) = item.metrics { obj.insert("micRawDbfs".into(), json!(raw)); obj.insert("micGainDb".into(), json!(gain)); }
+        obj.insert("bands".into(), json!(item.audio.bands)); obj.insert("level".into(), json!(item.audio.level));
+        obj.insert("peak".into(), json!(item.audio.peak)); obj.insert("beat".into(), json!(item.audio.beat));
+        obj.insert("renderTimeMs".into(), json!(item.now_ms));
+        if item.mode == AudioMode::External {
+            obj.insert("audioHistory".into(), json!(item.history));
+            let waveform: Vec<i8> = item.audio.waveform.iter().map(|v| (v.clamp(-1.0, 1.0) * 127.0).round() as i8).collect();
+            obj.insert("waveform".into(), json!(waveform));
+        }
+        obj.insert("bass".into(), json!(item.audio.bands[0..4].iter().sum::<f32>() / 4.0));
+        obj.insert("mid".into(), json!(item.audio.bands[4..10].iter().sum::<f32>() / 6.0));
+        obj.insert("treble".into(), json!(item.audio.bands[10..16].iter().sum::<f32>() / 6.0));
+        let bytes = serde_json::to_vec(&snap).map_err(|e| e.to_string())?;
+        *cache.write().map_err(|_| "snapshot cache poisoned".to_string())? = Arc::new(bytes); Ok(())
+    })();
+    for (reply, command_result) in item.replies { let _ = reply.try_send(command_result.and_then(|()| result.clone())); }
+}
+
 pub struct ControlHubInner {
     command_tx: SyncSender<CommandMessage>,
     cached_snapshot: Arc<RwLock<Arc<Vec<u8>>>>,
@@ -57,6 +98,8 @@ pub struct ControlHubInner {
     live_metrics: Arc<RwLock<Option<(f32, f32)>>>,
     fps: Arc<RwLock<f32>>,
     output_errors: Arc<AtomicU32>,
+    render_progress: Arc<AtomicU32>,
+    output_successes: Arc<AtomicU32>,
     last_output_error: Arc<RwLock<Option<String>>>,
     start_time: Instant,
 }
@@ -98,11 +141,18 @@ impl ControlHub {
         let shutdown = Arc::new(AtomicBool::new(false));
 
         let cached_snapshot = Arc::new(RwLock::new(initial_snapshot));
+        let (telemetry_tx, telemetry_rx) = mpsc::sync_channel::<Telemetry>(2);
+        let worker_cache = cached_snapshot.clone();
+        std::thread::Builder::new().name("telemetry-worker".into()).stack_size(16384)
+            .spawn(move || { while let Ok(item) = telemetry_rx.recv() { publish_telemetry(&worker_cache, item); } })
+            .map_err(|e| format!("failed to spawn telemetry worker: {e}"))?;
         let cached_frame = Arc::new(RwLock::new(initial_frame));
         let thread_handle = Arc::new(Mutex::new(None));
         let live_metrics = Arc::new(RwLock::new(None));
         let fps = Arc::new(RwLock::new(0.0));
         let output_errors = Arc::new(AtomicU32::new(0));
+        let render_progress = Arc::new(AtomicU32::new(0));
+        let output_successes = Arc::new(AtomicU32::new(0));
         let last_output_error = Arc::new(RwLock::new(None));
         let start_time = Instant::now();
 
@@ -117,16 +167,18 @@ impl ControlHub {
             live_metrics: live_metrics.clone(),
             fps: fps.clone(),
             output_errors: output_errors.clone(),
+            render_progress: render_progress.clone(),
+            output_successes: output_successes.clone(),
             last_output_error: last_output_error.clone(),
             start_time,
         });
 
-        let cached_snapshot_for_thread = cached_snapshot;
         let cached_frame_for_thread = cached_frame;
         let shutdown_for_thread = shutdown;
         let live_metrics_for_thread = live_metrics;
         let fps_for_thread = fps;
         let output_errors_for_thread = output_errors;
+        let output_successes_for_thread = output_successes;
         let last_output_error_for_thread = last_output_error;
 
         #[cfg(target_os = "espidf")]
@@ -148,11 +200,26 @@ impl ControlHub {
 
                 let mut fps_window_start = Instant::now();
                 let mut fps_frames: u32 = 0;
+                let mut audio_history = std::collections::VecDeque::with_capacity(16);
+                let mut last_audio_sample_ms = 0u64;
 
+                let mut replies = Vec::with_capacity(16);
+                let mut state = Arc::new(engine.capture_snapshot());
+                let mut published_state = state.clone();
+                let mut pending: Option<Telemetry> = None;
                 while !shutdown_for_thread.load(Ordering::Relaxed) {
                     // 1. Drain up to finite batch of commands (e.g. 16)
                     let mut state_changed = false;
-                    for _ in 0..16 {
+                    if let Some(item) = pending.take() {
+                        match telemetry_tx.try_send(item) {
+                            Ok(()) => {},
+                            Err(mpsc::TrySendError::Full(item)) => pending = Some(item),
+                            Err(mpsc::TrySendError::Disconnected(item)) => {
+                                for (reply, _) in item.replies { let _ = reply.try_send(Err("telemetry worker stopped".into())); } break;
+                            }
+                        }
+                    }
+                    for _ in 0..if pending.is_some() { 0 } else { 16 } {
                         match command_rx.try_recv() {
                             Ok(cmd) => {
                                 let res = if cmd.kind == "power_limit" {
@@ -172,7 +239,7 @@ impl ControlHub {
                                     engine.apply(&cmd.kind, &cmd.payload)
                                 };
                                 if let Some(reply_tx) = cmd.reply {
-                                    let _ = reply_tx.try_send(res.clone());
+                                    replies.push((reply_tx, res.clone()));
                                 }
                                 if res.is_ok() {
                                     state_changed = true;
@@ -213,6 +280,20 @@ impl ControlHub {
                         }
                     };
 
+                    if engine.audio_mode() == AudioMode::External {
+                        if now_ms.saturating_sub(last_audio_sample_ms) >= 50 {
+                            if audio_history.len() == 16 {
+                                audio_history.pop_front();
+                            }
+                            let bands = audio_snap.bands.map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8);
+                            audio_history.push_back((now_ms, bands));
+                            last_audio_sample_ms = now_ms;
+                        }
+                    } else {
+                        audio_history.clear();
+                    }
+
+                    let previous_audio_status = engine.audio_status();
                     // 3. Render frame
                     let frame = if engine.is_on() {
                         engine.render(now_ms, &audio_snap)
@@ -226,8 +307,8 @@ impl ControlHub {
                         0
                     };
 
-                    // Cache preview frame (fast pointer swap)
-                    if let Ok(mut lock) = cached_frame_for_thread.write() {
+                    // Publish the fixed-size frame without waiting on a preview reader.
+                    if let Ok(mut lock) = cached_frame_for_thread.try_write() {
                         *lock = frame.clone();
                     }
 
@@ -243,76 +324,28 @@ impl ControlHub {
                         fps_frames = 0;
                     }
 
-                    // Refresh snapshot periodically (1 Hz / 1000ms) or immediately on state change
-                    if state_changed
-                        || engine.is_dirty()
-                        || last_snapshot_sync.elapsed() >= Duration::from_millis(1000)
-                    {
-                        let mut snap = engine.snapshot_scalar();
-                        let cur_fps = fps_for_thread.read().map(|l| *l).unwrap_or(0.0);
-                        let errs = output_errors_for_thread.load(Ordering::Relaxed);
-                        if let Some(obj) = snap.as_object_mut() {
-                            obj.insert("fps".to_string(), json!(cur_fps));
-                            obj.insert("outputErrors".to_string(), json!(errs));
-                            obj.insert("uptime".to_string(), json!(start_time.elapsed().as_secs()));
-                            obj.insert("hasMic".to_string(), json!(has_mic_hardware));
-                            if let Ok(lock) = live_metrics_for_thread.read() {
-                                if let Some((raw, gain)) = *lock {
-                                    obj.insert("micRawDbfs".to_string(), json!(raw));
-                                    obj.insert("micGainDb".to_string(), json!(gain));
-                                }
-                            }
-                            obj.insert("bands".to_string(), json!(audio_snap.bands.to_vec()));
-                            obj.insert("level".to_string(), json!(audio_snap.level));
-                            obj.insert("peak".to_string(), json!(audio_snap.peak));
-                            obj.insert("beat".to_string(), json!(audio_snap.beat));
-                            obj.insert("renderTimeMs".to_string(), json!(now_ms));
-                            // Only external audio needs transport; synthetic audio is
-                            // generated in the browser. Quantize to keep telemetry small.
-                            if engine.audio_mode() == AudioMode::External {
-                                let waveform: Vec<i8> = audio_snap
-                                    .waveform
-                                    .iter()
-                                    .map(|v| (v.clamp(-1.0, 1.0) * 127.0).round() as i8)
-                                    .collect();
-                                obj.insert("waveform".to_string(), json!(waveform));
-                            }
-                            let bass = (audio_snap.bands[0]
-                                + audio_snap.bands[1]
-                                + audio_snap.bands[2]
-                                + audio_snap.bands[3])
-                                / 4.0;
-                            let mid = (audio_snap.bands[4]
-                                + audio_snap.bands[5]
-                                + audio_snap.bands[6]
-                                + audio_snap.bands[7]
-                                + audio_snap.bands[8]
-                                + audio_snap.bands[9])
-                                / 6.0;
-                            let treble = (audio_snap.bands[10]
-                                + audio_snap.bands[11]
-                                + audio_snap.bands[12]
-                                + audio_snap.bands[13]
-                                + audio_snap.bands[14]
-                                + audio_snap.bands[15])
-                                / 6.0;
-                            obj.insert("bass".to_string(), json!(bass));
-                            obj.insert("mid".to_string(), json!(mid));
-                            obj.insert("treble".to_string(), json!(treble));
-                        }
-                        if let Ok(mut lock) = cached_snapshot_for_thread.write() {
-                            if let Some(extra) = snap.as_object() {
-                                if let Ok(bytes) = engine.snapshot_json(extra) { *lock = Arc::new(bytes); }
+                    let snapshot_interval = if engine.audio_mode() == AudioMode::External { Duration::from_millis(200) } else { Duration::from_millis(1000) };
+                    if engine.is_dirty() || state_changed || engine.audio_status() != previous_audio_status { state = Arc::new(engine.capture_snapshot()); engine.clear_dirty(); }
+                    if pending.is_none() && (!Arc::ptr_eq(&state, &published_state) || !replies.is_empty() || last_snapshot_sync.elapsed() >= snapshot_interval) {
+                        let item = Telemetry { state: state.clone(), audio: audio_snap.clone(), mode: engine.audio_mode(),
+                            history: audio_history.clone(), fps: fps_for_thread.read().map(|l| *l).unwrap_or(0.0),
+                            errors: output_errors_for_thread.load(Ordering::Relaxed), uptime: start_time.elapsed().as_secs(),
+                            has_mic: has_mic_hardware, metrics: live_metrics_for_thread.read().ok().and_then(|m| *m),
+                            now_ms, replies: std::mem::take(&mut replies) };
+                        match telemetry_tx.try_send(item) {
+                            Ok(()) => { published_state = state.clone(); last_snapshot_sync = Instant::now(); },
+                            Err(mpsc::TrySendError::Full(item)) => { if !item.replies.is_empty() { pending = Some(item); } },
+                            Err(mpsc::TrySendError::Disconnected(item)) => {
+                                for (reply, _) in item.replies { let _ = reply.try_send(Err("telemetry worker stopped".into())); } break;
                             }
                         }
-                        engine.clear_dirty();
-                        last_snapshot_sync = Instant::now();
                     }
 
+                    render_progress.fetch_add(1, Ordering::Relaxed);
                     // 4. Physical blocking output is frame backpressure!
                     // Notice: no lock is held across show().
                     match output.show(&frame, brightness) {
-                        Ok(()) => {}
+                        Ok(()) => { output_successes_for_thread.fetch_add(1, Ordering::Relaxed); }
                         Err(e) => {
                             output_errors_for_thread.fetch_add(1, Ordering::Relaxed);
                             if let Ok(mut lock) = last_output_error_for_thread.write() {
@@ -336,6 +369,13 @@ impl ControlHub {
         }
 
         Ok(ControlHub { inner })
+    }
+
+    /// Successful physical output calls and errors, for startup validation.
+    pub fn render_progress(&self) -> u32 { self.inner.render_progress.load(Ordering::Relaxed) }
+
+    pub fn output_progress(&self) -> (u32, u32) {
+        (self.inner.output_successes.load(Ordering::Relaxed), self.inner.output_errors.load(Ordering::Relaxed))
     }
 
     /// Submits a command asynchronously with nonblocking queue acceptance.
@@ -450,11 +490,7 @@ impl ControlHub {
     ///
     /// Never blocks on physical output.
     pub fn frame(&self) -> Frame {
-        self.inner
-            .cached_frame
-            .read()
-            .map(|frame| frame.clone())
-            .unwrap_or_default()
+        self.inner.cached_frame.read().map(|frame| frame.clone()).unwrap_or_default()
     }
 
     /// Current measured rendering frame rate.
@@ -519,5 +555,89 @@ impl ControlHub {
                 let _ = handle.join();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod snapshot_publish_tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    #[test]
+    fn detached_snapshot_is_immutable_and_matches_engine_schema() {
+        let mut engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
+        let detached = engine.capture_snapshot();
+        let before = engine.snapshot();
+        engine.apply("light", r#"{"brightness":17}"#).unwrap();
+        assert_eq!(serde_json::to_value(&detached).unwrap(), before);
+        assert_ne!(serde_json::to_value(&detached).unwrap(), engine.snapshot());
+    }
+
+    #[test]
+    fn synchronous_command_publishes_snapshot_before_reply() {
+        let engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
+        struct Sink;
+        impl LedOutput for Sink {
+            fn show(&mut self, _: &Frame, _: u8) -> Result<(), String> { Ok(()) }
+        }
+        let hub = ControlHub::spawn(engine, Sink, None).unwrap();
+        for brightness in [17, 213, 48, 192] {
+            hub.submit_sync("light", &format!(r#"{{"brightness":{brightness}}}"#), Duration::from_secs(1)).unwrap();
+            assert_eq!(hub.snapshot()["brightness"], brightness);
+        }
+        hub.join();
+    }
+
+    #[test]
+    fn saturated_worker_does_not_block_output_or_lose_replies() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct CountingSink(Arc<AtomicUsize>);
+        impl LedOutput for CountingSink {
+            fn show(&mut self, _: &Frame, _: u8) -> Result<(), String> {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                std::thread::sleep(Duration::from_millis(1));
+                Ok(())
+            }
+        }
+        let frames = Arc::new(AtomicUsize::new(0));
+        let hub = ControlHub::spawn(Engine::new(matrix_effects::builtin_effects()).unwrap(), CountingSink(frames.clone()), None).unwrap();
+        let guard = hub.inner.cached_snapshot.write().unwrap();
+        let mut receivers = Vec::new();
+        for n in 0..24 {
+            let (tx, rx) = mpsc::sync_channel(1);
+            hub.inner.command_tx.send(CommandMessage { kind: "light".into(), payload: format!(r#"{{"brightness":{n}}}"#), reply: Some(tx) }).unwrap();
+            receivers.push(rx);
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        let count = frames.load(Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(frames.load(Ordering::Relaxed) > count, "output stalled behind cache worker");
+        assert!(receivers.iter().all(|rx| rx.try_recv().is_err()), "reply before publication");
+        drop(guard);
+        for rx in receivers { assert_eq!(rx.recv_timeout(Duration::from_secs(3)).unwrap(), Ok(())); }
+        assert_eq!(hub.snapshot()["brightness"], 23);
+        hub.join();
+    }
+
+    #[test]
+    fn readers_are_not_blocked_while_snapshot_is_built() {
+        let cache = Arc::new(RwLock::new(Arc::new(b"old".to_vec())));
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let writer_cache = cache.clone();
+        let writer = std::thread::spawn(move || {
+            publish_snapshot_with(&writer_cache, || {
+                entered_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok::<_, ()>(b"new".to_vec())
+            });
+        });
+        entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        let old = cache.try_read().expect("serialization held snapshot lock").clone();
+        assert_eq!(&**old, b"old");
+        release_tx.send(()).unwrap();
+        writer.join().unwrap();
+        assert_eq!(&**cache.read().unwrap(), b"new");
+        assert_eq!(&**old, b"old");
     }
 }

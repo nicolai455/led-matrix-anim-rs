@@ -74,19 +74,28 @@ test('hidden tabs skip state polling and local paint', async () => {
   assert.deepEqual(h.requests, []);
   assert.equal(h.paints.length, 0);
 });
-test('external audio requests compact telemetry only in visible browser mode', async () => {
+test('mic telemetry uses the single state poll without duplicate audio requests', async () => {
   const h = harness();
-  h.sandbox.fetch = async url => { h.requests.push(url); return {ok:true, json:async()=>({level:0.7})}; };
-  h.run("state = {audio_source:'Mic'}");
-  await h.run('audioPreviewLoop()');
-  assert.deepEqual(h.requests, ['/api/audio']);
+  h.sandbox.fetch = async url => { h.requests.push(url); return {ok:true, json:async()=>({audio_source:'Mic', level:0.7})}; };
+  await h.run('loop()');
+  assert.deepEqual(h.requests, ['/api/state']);
   assert.equal(h.run('state.level'), 0.7);
-  h.sandbox.document.hidden = true;
-  await h.run('audioPreviewLoop()');
-  h.sandbox.document.hidden = false;
-  h.element('previewMode').value = 'off';
-  await h.run('audioPreviewLoop()');
-  assert.deepEqual(h.requests, ['/api/audio']);
+});
+test('mic meter targets newest sample immediately and decays without HTTP', () => {
+  const h = harness();
+  h.sandbox.document.querySelectorAll = () => [];
+  h.run(`state = {audio_source:'Mic'};
+    queueMicHistory({audio_source:'Mic', audioHistory:[[0,Array(16).fill(0)],[50,Array(16).fill(255)]]});`);
+  assert.equal(h.run('micTargetBands[0]'), 1);
+  h.run('animateMicBands(micReceivedAt + 16)');
+  const first = h.run('micDisplayedBands[0]');
+  assert.ok(first > 0);
+  for (let i = 2; i < 10; i++) h.run(`animateMicBands(micReceivedAt + ${i * 16})`);
+  const peak = h.run('micDisplayedBands[0]');
+  assert.ok(peak > first);
+  for (let i = 10; i < 100; i++) h.run(`animateMicBands(micReceivedAt + ${i * 16})`);
+  assert.ok(h.run('micDisplayedBands[0]') < peak / 10);
+  assert.deepEqual(h.requests, []);
 });
 test('WASM failure stays local instead of silently adding ESP traffic', async () => {
   const h = harness();

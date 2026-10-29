@@ -1,5 +1,26 @@
 # Matrix Firmware (ESP32 and ESP32-S3)
 
+### OTA startup validation and deployment
+
+The build enables `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`. This setting does not
+change the bootloader already installed on a device: an application-only OTA
+cannot upgrade it. Install a compatible rollback-enabled bootloader by serial,
+using an explicitly authorized and verified deployment procedure, before relying
+on automatic rollback; preserve the partition table, NVS, and filesystem. A
+build setting or an OTA image state alone does not prove the installed bootloader
+supports rollback.
+
+For a pending image, startup requires the initial dark output transfer, the
+render actor, a started local Wi-Fi driver and HTTP server, and continuously
+advancing successful output for at least five seconds. No panel is turned on
+for the test. Station association, internet and MQTT are not prerequisites.
+Validation has a 30-second deadline. An unhealthy pending image is rolled back
+if an eligible prior image exists; otherwise it remains unconfirmed in safe
+recovery, with output pause attempted and errors logged. Confirmation and
+rollback API failures are logged and never treated as success. Crash/reset
+rollback depends on the installed bootloader. Actual device behavior, recovery,
+and physical output require hardware verification.
+
 Real ESP-IDF std Rust firmware for the 32x32 WS2812B LED Matrix, supporting ESP32-WROOM (standard and bare profiles) and ESP32-S3 (N16R8).
 
 ## Architecture & Responsibilities
@@ -51,10 +72,11 @@ However:
 
 ## Key Technical Adaptations
 
-1. **RMT Memory & Streaming Encoder**:
-   - WS2812B requires 24 pulses per LED. Across 4 panels (1024 LEDs total = 256 LEDs/panel), precomputing symbols would require `256 * 24 * 4 * 4 bytes = 98,304 bytes` (96 KB) of DMA RAM. On a WROOM with ~65KB free heap, this crashes or causes allocation failure.
-   - We use ESP-IDF 5's streaming bytes encoder (`rmt_new_bytes_encoder`). Only raw GRB byte buffers (256 * 3 = 768 bytes per panel) are buffered; symbols are converted dynamically into small RMT hardware FIFO blocks.
-   - Parallel mode starts transmission concurrently across all 4 RMT channels (`rmt_transmit`), then waits for all channels to complete (`rmt_tx_wait_all_done`), providing true parallel transmission and hardware frame backpressure.
+1. **Rust RMT Hardware Output**:
+   - Four concurrent ESP-IDF streaming bytes encoders transmit GRB without FastLED or unchanged-frame suppression.
+   - Initialization is pinned to core 1, with priority-3 refill interrupts. S3 enables the IRAM-safe RMT handler; payloads are explicitly allocated in internal RAM so cache-off reads cannot access PSRAM.
+   - A one-second completion timeout resets the device rather than reusing a buffer still borrowed by hardware or falsely acknowledging OTA blackout. Normal completion retains the 300 µs low latch interval.
+   - These are driver hardening measures, not a hardware-verified flicker fix. Test with a static low-brightness pattern, compare closed-UI and active-polling behavior, and verify that OFF clears every pixel. Geometry/pin configuration is unchanged.
 
 2. **Device Identity & Efuse MAC**:
    - Formatted as `format!("matrix_{:012x}", mac_u64)` using the little-endian 64-bit integer representation from `esp_efuse_mac_get_default()`.
@@ -94,6 +116,14 @@ However:
    - Dedicated event queue and worker thread prevents deadlocks inside ESP-IDF MQTT callback.
    - Assembles multi-chunk / fragmented MQTT payloads before dispatch.
    - Configures LWT availability topic (`offline`) and publishes birth status (`online`).
+
+## Recovery supervisor
+
+An independent progress guard restarts stalled render/output work after five seconds (acknowledged OTA output pauses are exempt). A 60-second startup guard covers initialization after the NVS journal is armed. Three consecutive unplanned/incomplete runs latch recovery mode on the next boot. Recovery skips LED/microphone peripheral initialization while retaining network recovery; it cannot clear LEDs already latched before reset.
+
+Control POST requests require `X-Matrix-Control: 1`; browser Origin must match Host when present. This prevents cross-origin forms/fetches, not unauthorized LAN clients. Recovery OTA grants the repaired image one normal-output startup trial without discarding failure history.
+
+Read `GET /api/recovery` for state. Use `POST /api/recovery/retry` to clear the latch and restart normal initialization; ordinary `POST /api/reboot` preserves it. Unplanned power cuts conservatively count toward the threshold. Failures before NVS initialization cannot be journaled. Physical fault-injection testing remains required; see `../RESILIENCE_PROGRESS.md` for commissioning gates.
 
 ## Building & Partition Verification
 

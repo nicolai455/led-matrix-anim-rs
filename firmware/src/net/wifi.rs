@@ -145,7 +145,10 @@ impl WifiManager {
         let policy = WifiPolicy::default();
         policy.ap_config.validate()?;
 
-        let mut wifi = EspWifi::new(modem, sysloop, Some(nvs)).map_err(|e| e.to_string())?;
+        // Keep the system event loop alive for default Wi-Fi handlers and HTTP.
+        let event_loop_guard = sysloop;
+        let mut wifi = EspWifi::new(modem, event_loop_guard.clone(), Some(nvs))
+            .map_err(|e| format!("EspWifi::new: {e}"))?;
 
         let ap_conf = AccessPointConfiguration {
             ssid: policy
@@ -191,8 +194,9 @@ impl WifiManager {
             _ => (Configuration::AccessPoint(ap_conf.clone()), None),
         };
 
-        wifi.set_configuration(&init_mode).map_err(|e| e.to_string())?;
-        wifi.start().map_err(|e| e.to_string())?;
+        wifi.set_configuration(&init_mode)
+            .map_err(|e| format!("set_configuration: {e}"))?;
+        wifi.start().map_err(|e| format!("start: {e}"))?;
 
         let power = unsafe {
             esp_idf_svc::sys::esp_wifi_set_ps(esp_idf_svc::sys::wifi_ps_type_t_WIFI_PS_NONE)
@@ -214,6 +218,7 @@ impl WifiManager {
             .name("wifi-manager".into())
             .stack_size(4096)
             .spawn(move || {
+                let _event_loop_guard = event_loop_guard;
                 let mut current_mode = match client_conf {
                     Some(_) => WifiOperatingMode::StaOnly,
                     None => WifiOperatingMode::ApOnly,

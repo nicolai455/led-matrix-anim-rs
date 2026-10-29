@@ -32,6 +32,20 @@ pub struct Engine {
     dirty: bool,
 }
 
+/// Detached owned state; captures effect parameters without JSON construction.
+#[derive(Clone, Serialize)]
+pub struct DetachedSnapshot {
+    state: &'static str, brightness: u8, color_mode: &'static str, color: Rgb,
+    effect: &'static str, effect_id: &'static str, text: String, speed: u32,
+    cycle: &'static str, rssi: i32, audio_source: &'static str,
+    audio_status: &'static str, mic: MicSettings,
+    effects: std::collections::BTreeMap<&'static str, std::collections::BTreeMap<&'static str, DetachedParameter>>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(untagged)]
+enum DetachedParameter { Text(&'static str), Number(f32) }
+
 impl Engine {
     /// Creates a new Engine with the given effect catalog.
     /// Engine always boots OFF.
@@ -626,6 +640,33 @@ impl Engine {
         self.effects[effect_idx].set_parameter(param_id, parsed_value)?;
         self.dirty = true;
         Ok(())
+    }
+
+    pub fn capture_snapshot(&self) -> DetachedSnapshot {
+        let mut effects = std::collections::BTreeMap::new();
+        for effect in &self.effects {
+            let mut params = std::collections::BTreeMap::new();
+            for p in effect.parameters() {
+                if let Some(v) = effect.parameter(p.id) {
+                    let value = match p.kind {
+                        ParameterKind::Boolean => DetachedParameter::Text(if v != 0.0 { "ON" } else { "OFF" }),
+                        ParameterKind::Select if (v as usize) < p.options.len() => DetachedParameter::Text(p.options[v as usize]),
+                        _ => DetachedParameter::Number(v),
+                    };
+                    params.insert(p.id, value);
+                }
+            }
+            if !params.is_empty() { effects.insert(effect.id(), params); }
+        }
+        let effect = &self.effects[self.current_effect_idx];
+        DetachedSnapshot {
+            state: if self.on { "ON" } else { "OFF" }, brightness: self.brightness,
+            color_mode: "rgb", color: self.color, effect: effect.name(), effect_id: effect.id(),
+            text: self.text.clone(), speed: self.speed,
+            cycle: if self.auto_cycle_ms > 0 { "ON" } else { "OFF" }, rssi: self.rssi,
+            audio_source: match self.audio_mode { AudioMode::Off => "Off", AudioMode::Synthetic => "Synthetic", AudioMode::External => "Mic" },
+            audio_status: self.audio_status(), mic: self.mic_settings.clone(), effects,
+        }
     }
 
     /// Full state snapshot matching legacy JSON schema.

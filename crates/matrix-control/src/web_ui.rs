@@ -299,6 +299,7 @@ select option, .param-select option { background:var(--card); color:var(--text);
   <div class="btn-row">
     <button class="btn btn-primary" onclick="saveState()">Save to Flash</button>
     <button class="btn btn-danger" onclick="clearState()">Clear Saved</button>
+    <button class="btn" id="restartBtn" onclick="restartDevice()">Restart Device</button>
   </div>
 </div>
 
@@ -394,7 +395,45 @@ function changePreviewMode() {
   }
 }
 
+let micPlaybackHistory = [];
+let micDisplayedBands = Array(16).fill(0);
+let micTargetBands = Array(16).fill(0);
+let micReceivedAt = 0;
+let micPaintAt = 0;
+function queueMicHistory(s) {
+  if (s.audio_source !== 'Mic') {
+    micPlaybackHistory = [];
+    micDisplayedBands.fill(0);
+    micTargetBands.fill(0);
+    micPaintAt = 0;
+    return;
+  }
+  const history = Array.isArray(s.audioHistory) ? s.audioHistory : [];
+  const latest = history.filter(x => Array.isArray(x) && Array.isArray(x[1]) && x[1].length === 16).pop();
+  const bands = latest ? latest[1].map(v => v / 255) : s.bands;
+  if (!Array.isArray(bands) || bands.length !== 16) return;
+  micTargetBands = bands.map(v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0);
+  micPlaybackHistory = [micTargetBands];
+  micReceivedAt = performance.now();
+}
+function animateMicBands(now) {
+  if (document.hidden || state.audio_source !== 'Mic' || !micPlaybackHistory.length) {
+    micPaintAt = 0;
+    return;
+  }
+  const dt = micPaintAt ? Math.max(0, Math.min(100, now - micPaintAt)) : 16;
+  micPaintAt = now;
+  const decay = Math.exp(-Math.max(0, now - micReceivedAt - 120) / 250);
+  const blend = 1 - Math.exp(-dt / 40);
+  const cols = document.querySelectorAll('.band-col');
+  for (let i = 0; i < 16; i++) {
+    micDisplayedBands[i] += (micTargetBands[i] * decay - micDisplayedBands[i]) * blend;
+    if (cols[i]) cols[i].style.height = (micDisplayedBands[i] * 100) + '%';
+  }
+}
+
 function animatePreview(now) {
+  animateMicBands(now);
   if (!document.hidden && previewMode() === 'browser' && previewReady && previewConnected) {
     try {
       previewLastTime = Math.max(previewLastTime, now + previewClockOffset, 0);
@@ -485,6 +524,21 @@ function stopAudioPreviewSound() {
     btn.textContent = '🔊 Listen to Synth';
     btn.style.borderColor = '';
     btn.style.color = '';
+  }
+}
+
+async function restartDevice() {
+  if (!confirm('Restart device now? Unsaved runtime changes may be lost.')) return;
+  const button = document.getElementById('restartBtn');
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/reboot', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
+    if (!response.ok) throw new Error('Restart rejected');
+    showToast('Restarting device… Reconnecting shortly.');
+    setTimeout(() => window.location.reload(), 8000);
+  } catch (error) {
+    button.disabled = false;
+    showToast('Restart failed: ' + error.message);
   }
 }
 
@@ -725,7 +779,7 @@ function updateUI() {
   }
 
   // Update visualizer bands
-  if (state.bands && state.bands.length === 16) {
+  if (state.bands && state.bands.length === 16 && !micPlaybackHistory.length) {
     const cols = document.querySelectorAll('.band-col');
     for (let i = 0; i < 16 && i < cols.length; i++) {
       const h = Math.min(100, Math.max(0, state.bands[i] * 100));
@@ -886,15 +940,7 @@ async function previewLoop() {
   setTimeout(previewLoop, document.hidden ? 2000 : 200);
 }
 
-async function audioPreviewLoop() {
-  if (!document.hidden && previewMode() === 'browser' && state.audio_source === 'Mic') {
-    try {
-      Object.assign(state, await fetchJSON('/api/audio'));
-      syncPreviewState();
-    } catch (e) {} // Keep controls usable if audio telemetry is temporarily unavailable.
-  }
-  setTimeout(audioPreviewLoop, document.hidden ? 2000 : 100);
-}
+// Audio arrives with state; there is no separate audio polling loop.
 
 async function loop() {
   if (document.hidden) {
@@ -904,6 +950,7 @@ async function loop() {
   try {
     const s = await fetchJSON('/api/state');
     state = s;
+    queueMicHistory(s);
     previewConnected = true;
     syncPreviewState();
     document.getElementById('statusDot').classList.add('connected');
@@ -923,7 +970,6 @@ async function init() {
   loadPreviewRenderer();
   requestAnimationFrame(animatePreview);
   previewLoop();
-  audioPreviewLoop();
   try {
     let effects = await fetchJSON('/api/effects');
     if (effects && effects.effects) effects = effects.effects;

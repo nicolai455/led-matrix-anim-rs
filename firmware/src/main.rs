@@ -84,6 +84,8 @@ fn load_panel_config(
 #[inline(never)]
 fn run_firmware() {
     #[cfg(target_os = "espidf")]
+    let boot_health = matrix_firmware::boot_guard::start();
+    #[cfg(target_os = "espidf")]
     unsafe {
         let stack_watermark = esp_idf_sys::uxTaskGetStackHighWaterMark(std::ptr::null_mut());
         let free_heap = esp_idf_sys::esp_get_free_heap_size();
@@ -128,6 +130,12 @@ fn run_firmware() {
             panic!("NVS initialization failure");
         }
     };
+
+    #[cfg(target_os = "espidf")]
+    let safe_mode =
+        matrix_firmware::recovery::begin(nvs.clone()).expect("Cannot persist recovery journal");
+    #[cfg(not(target_os = "espidf"))]
+    let safe_mode = false;
 
     // 3. Load or initialize panel configuration
     log::info!("Boot step 3: loading panel config...");
@@ -205,13 +213,20 @@ fn run_firmware() {
 
     // 7. Initialize LED Output
     let output_settings = OutputSettings::from_panel_config(&panel_config);
-    let mut rmt_output = RmtLedOutput::new(output_settings, panel_config.clone());
-    if let Err(error) = rmt_output.blank() {
-        panic!("Cannot establish safe dark output: {error}");
-    }
+    let rmt_output = if safe_mode {
+        matrix_firmware::recovery::RecoveryOutput::Inactive(
+            matrix_firmware::output::OutputQuiesce::inactive(),
+        )
+    } else {
+        let mut hardware = RmtLedOutput::new(output_settings, panel_config.clone());
+        if let Err(error) = hardware.blank() {
+            panic!("Cannot establish safe dark output: {error}");
+        }
+        matrix_firmware::recovery::RecoveryOutput::Hardware(hardware)
+    };
 
     // 8. Initialize Microphone
-    let has_mic = profile.mic_pins.is_some();
+    let has_mic = !safe_mode && profile.mic_pins.is_some();
     let initial_mic = nvs
         .load_mic_settings()
         .unwrap_or_else(|| engine.mic_settings().clone());
@@ -227,7 +242,7 @@ fn run_firmware() {
     let state_store = Arc::new(StateStore::with_backend(nvs.state_backend()));
 
     // 10. Spawn ControlHub render actor thread
-    let output_quiesce_flag = rmt_output.get_quiesce_handle();
+    let output_quiesce_flag = rmt_output.control();
     let audio_input: Option<Box<dyn matrix_control::AudioInput>> = if has_mic {
         Some(Box::new(mic_input))
     } else {
@@ -240,6 +255,26 @@ fn run_firmware() {
             panic!("ControlHub spawn failure");
         }
     };
+
+    #[cfg(target_os = "espidf")]
+    {
+        let mut health = boot_health.lock().expect("boot health lock poisoned");
+        health.hub = Some(hub.clone());
+        health.output = Some(output_quiesce_flag.clone());
+        if health.failed.load(std::sync::atomic::Ordering::Acquire) {
+            drop(health);
+            if let Err(e) = output_quiesce_flag.pause(Duration::from_secs(2)) {
+                log::error!("Safe output pause failed: {e}");
+            }
+            loop {
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        }
+    }
+
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::recovery::supervise(hub.clone(), output_quiesce_flag.clone(), safe_mode)
+        .expect("Cannot start progress guard");
 
     let api_ctx = Arc::new(ApiContext {
         hub: hub.clone(),
@@ -351,6 +386,16 @@ fn run_firmware() {
                 }
             }
         });
+
+    #[cfg(target_os = "espidf")]
+    {
+        boot_health.lock().expect("boot health lock poisoned").ready =
+            _wifi.is_some() && _http_server.is_some();
+    }
+    #[cfg(target_os = "espidf")]
+    if _wifi.is_some() && _http_server.is_some() {
+        matrix_firmware::recovery::startup_ready();
+    }
 
     // Retain lifetimes forever: prevent main thread from exiting and dropping resources
     log::info!("Firmware main bootstrap complete. Entering supervisor loop.");

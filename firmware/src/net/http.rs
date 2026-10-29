@@ -43,6 +43,12 @@ impl FirmwareHttpServer {
 
         let mut server = EspHttpServer::new(&config).map_err(|e| e.to_string())?;
 
+        server
+            .fn_handler("/api/recovery", Method::Get, move |req| {
+                send_response(req, HttpResponse::ok_json(crate::recovery::status()))
+            })
+            .map_err(|e| e.to_string())?;
+
         // 1. Root /
         server
             .fn_handler("/", Method::Get, move |req| {
@@ -97,7 +103,11 @@ impl FirmwareHttpServer {
                 let uri = req.uri().to_string();
                 if matches!(uri.as_str(), "/api/effects" | "/api/catalog" | "/api/state") {
                     use embedded_svc::io::Write;
-                    let catalog = if uri == "/api/state" { ctx.hub.snapshot_json() } else { ctx.hub.catalog_json() };
+                    let catalog = if uri == "/api/state" {
+                        ctx.hub.snapshot_json()
+                    } else {
+                        ctx.hub.catalog_json()
+                    };
                     let mut response = req.into_response(
                         200,
                         None,
@@ -113,6 +123,56 @@ impl FirmwareHttpServer {
                 }
                 let resp = handle_api_request(&ctx, "GET", &uri, &[]);
                 send_response(req, resp)
+            })
+            .map_err(|e| e.to_string())?;
+
+        server
+            .fn_handler("/api/recovery/retry", Method::Post, move |req| {
+                if !crate::request_guard::trusted_control(
+                    req.header("Origin"),
+                    req.header("Host"),
+                    req.header("X-Matrix-Control"),
+                ) {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(403, "Untrusted control request"),
+                    );
+                }
+                match crate::recovery::retry() {
+                    Ok(()) => {
+                        let result = send_response(
+                            req,
+                            HttpResponse::ok_json(serde_json::json!({"ok":true,"restart":true})),
+                        );
+                        OtaManager::schedule_restart();
+                        result
+                    }
+                    Err(error) => send_response(req, HttpResponse::err_json(503, &error)),
+                }
+            })
+            .map_err(|e| e.to_string())?;
+
+        // Recovery must not depend on the render actor or its command queue.
+        // Register before the wildcard /api/* POST handler.
+        server
+            .fn_handler("/api/reboot", Method::Post, move |req| {
+                if !crate::request_guard::trusted_control(
+                    req.header("Origin"),
+                    req.header("Host"),
+                    req.header("X-Matrix-Control"),
+                ) {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(403, "Untrusted control request"),
+                    );
+                }
+
+                let result = send_response(
+                    req,
+                    HttpResponse::ok_json(serde_json::json!({"ok": true, "restart": true})),
+                );
+                OtaManager::schedule_restart();
+                result
             })
             .map_err(|e| e.to_string())?;
 

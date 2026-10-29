@@ -9,6 +9,55 @@ use std::sync::Arc;
 pub const PANEL_PIXELS: usize = PIXELS / NUM_PANELS; // 256
 pub const BYTES_PER_PANEL: usize = PANEL_PIXELS * 3; // 768 bytes
 pub const TOTAL_BYTES: usize = PIXELS * 3; // 3072 bytes
+#[cfg(target_os = "espidf")]
+const RMT_COMPLETION_TIMEOUT_MS: i32 = 1000;
+
+/// The IRAM-safe encoder reads this payload with the flash cache disabled.
+/// Allocate internal RAM explicitly: ordinary malloc may fall back to PSRAM.
+#[cfg(target_os = "espidf")]
+struct InternalBuffer(std::ptr::NonNull<u8>);
+
+#[cfg(target_os = "espidf")]
+impl InternalBuffer {
+    fn new() -> Self {
+        let ptr = unsafe {
+            esp_idf_sys::heap_caps_calloc(
+                TOTAL_BYTES,
+                1,
+                esp_idf_sys::MALLOC_CAP_INTERNAL | esp_idf_sys::MALLOC_CAP_8BIT,
+            )
+        };
+        Self(std::ptr::NonNull::new(ptr.cast()).expect("No internal RAM for RMT payload"))
+    }
+}
+
+#[cfg(target_os = "espidf")]
+impl std::ops::Deref for InternalBuffer {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        // SAFETY: owns a live, zero-initialized TOTAL_BYTES allocation.
+        unsafe { std::slice::from_raw_parts(self.0.as_ptr(), TOTAL_BYTES) }
+    }
+}
+
+#[cfg(target_os = "espidf")]
+impl std::ops::DerefMut for InternalBuffer {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        // SAFETY: unique ownership; transfers complete before buffer reuse.
+        unsafe { std::slice::from_raw_parts_mut(self.0.as_ptr(), TOTAL_BYTES) }
+    }
+}
+
+#[cfg(target_os = "espidf")]
+impl Drop for InternalBuffer {
+    fn drop(&mut self) {
+        unsafe { esp_idf_sys::heap_caps_free(self.0.as_ptr().cast()) }
+    }
+}
+
+#[cfg(target_os = "espidf")]
+// SAFETY: uniquely owned and only accessed by one render task at a time.
+unsafe impl Send for InternalBuffer {}
 
 /// Configuration for LED output power and geometry.
 #[derive(Clone, Debug)]
@@ -48,11 +97,19 @@ impl OutputSettings {
 pub struct OutputQuiesce {
     requested: Arc<AtomicBool>,
     confirmed: Arc<AtomicBool>,
+    inactive: bool,
 }
 
 impl OutputQuiesce {
+    pub fn is_requested(&self) -> bool {
+        self.requested.load(Ordering::Acquire)
+    }
+
     pub fn pause(&self, timeout: std::time::Duration) -> Result<(), String> {
         self.requested.store(true, Ordering::Release);
+        if self.inactive {
+            return Ok(());
+        }
         let deadline = std::time::Instant::now() + timeout;
         while !self.confirmed.load(Ordering::Acquire) {
             if std::time::Instant::now() >= deadline {
@@ -64,9 +121,39 @@ impl OutputQuiesce {
         Ok(())
     }
 
+    pub fn inactive() -> Self {
+        Self {
+            requested: Arc::new(AtomicBool::new(false)),
+            confirmed: Arc::new(AtomicBool::new(true)),
+            inactive: true,
+        }
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.requested.load(Ordering::Acquire) && self.confirmed.load(Ordering::Acquire)
+    }
+
     pub fn resume(&self) {
         self.confirmed.store(false, Ordering::Release);
         self.requested.store(false, Ordering::Release);
+    }
+}
+
+#[cfg(all(target_os = "espidf", esp32s3))]
+extern "C" {
+    fn parallel_lcd_create(pins: *const i32, lane_bytes: usize) -> *mut std::ffi::c_void;
+    fn parallel_lcd_send(ctx: *mut std::ffi::c_void, lanes: *const u8, lane_bytes: usize) -> i32;
+    fn parallel_lcd_destroy(ctx: *mut std::ffi::c_void);
+}
+
+#[cfg(all(target_os = "espidf", esp32s3))]
+struct ParallelLcd(std::ptr::NonNull<std::ffi::c_void>);
+#[cfg(all(target_os = "espidf", esp32s3))]
+unsafe impl Send for ParallelLcd {}
+#[cfg(all(target_os = "espidf", esp32s3))]
+impl Drop for ParallelLcd {
+    fn drop(&mut self) {
+        unsafe { parallel_lcd_destroy(self.0.as_ptr()) }
     }
 }
 
@@ -75,9 +162,14 @@ pub struct RmtLedOutput {
     panel_config: PanelConfig,
     quiesced: OutputQuiesce,
     // One heap buffer serves either four parallel panels or a single chain.
+    #[cfg(not(target_os = "espidf"))]
     buffer: Box<[u8]>,
     #[cfg(target_os = "espidf")]
+    buffer: InternalBuffer,
+    #[cfg(target_os = "espidf")]
     hardware: Option<HardwareRmt>,
+    #[cfg(all(target_os = "espidf", esp32s3))]
+    lcd: Option<ParallelLcd>,
 }
 
 #[cfg(target_os = "espidf")]
@@ -115,16 +207,60 @@ impl RmtLedOutput {
     pub fn new(settings: OutputSettings, panel_config: PanelConfig) -> Self {
         let quiesced = OutputQuiesce::default();
 
+        #[cfg(all(target_os = "espidf", esp32s3))]
+        let lcd = if settings.parallel_output {
+            let pins = settings.panel_pins.map(i32::from);
+            let ptr = unsafe { parallel_lcd_create(pins.as_ptr(), BYTES_PER_PANEL) };
+            let result = std::ptr::NonNull::new(ptr).map(ParallelLcd);
+            if result.is_none() {
+                log::error!("Failed to initialize parallel LCD/GDMA output");
+            }
+            result
+        } else {
+            None
+        };
+
         #[cfg(target_os = "espidf")]
-        let hardware = Self::init_hardware(&settings);
+        let hardware = {
+            let use_rmt = !cfg!(esp32s3) || !settings.parallel_output;
+            if !use_rmt {
+                None
+            } else {
+                // ESP-IDF allocates peripheral interrupts on the calling core.
+                // Boot/main runs on core 0 alongside Wi-Fi; priority alone cannot
+                // protect the short refill deadline from its critical sections.
+                use esp_idf_hal::task::thread::ThreadSpawnConfiguration;
+                let previous = ThreadSpawnConfiguration::get().unwrap_or_default();
+                ThreadSpawnConfiguration {
+                    pin_to_core: Some(esp_idf_hal::cpu::Core::Core1),
+                    ..ThreadSpawnConfiguration::default()
+                }
+                .set()
+                .expect("Cannot pin RMT initialization");
+                let settings = settings.clone();
+                let init = std::thread::Builder::new()
+                    .name("rmt-init".into())
+                    .stack_size(8192)
+                    .spawn(move || Self::init_hardware(&settings));
+                previous.set().expect("Cannot restore thread configuration");
+                init.expect("Cannot spawn RMT initialization")
+                    .join()
+                    .expect("RMT initialization panicked")
+            }
+        };
 
         Self {
             settings,
             panel_config,
             quiesced,
+            #[cfg(not(target_os = "espidf"))]
             buffer: vec![0u8; TOTAL_BYTES].into_boxed_slice(),
             #[cfg(target_os = "espidf")]
+            buffer: InternalBuffer::new(),
+            #[cfg(target_os = "espidf")]
             hardware,
+            #[cfg(all(target_os = "espidf", esp32s3))]
+            lcd,
         }
     }
 
@@ -188,6 +324,8 @@ impl RmtLedOutput {
                 tx_chan_config.resolution_hz = 10_000_000; // 10MHz, 1 tick = 100ns
                 tx_chan_config.mem_block_symbols = if is_s3 { 48 } else { 64 };
                 tx_chan_config.trans_queue_depth = 4;
+                // The small refill windows must preempt normal peripheral IRQs.
+                tx_chan_config.intr_priority = 3;
 
                 let mut chan: esp_idf_sys::rmt_channel_handle_t = std::ptr::null_mut();
                 let err = esp_idf_sys::rmt_new_tx_channel(&tx_chan_config, &mut chan);
@@ -262,6 +400,18 @@ impl RmtLedOutput {
 
         #[cfg(target_os = "espidf")]
         {
+            #[cfg(esp32s3)]
+            if self.settings.parallel_output {
+                let lcd = self.lcd.as_ref().ok_or("LCD/GDMA hardware unavailable")?;
+                let result = unsafe {
+                    parallel_lcd_send(lcd.0.as_ptr(), self.buffer.as_ptr(), BYTES_PER_PANEL)
+                };
+                return if result == esp_idf_sys::ESP_OK {
+                    Ok(())
+                } else {
+                    Err(format!("LCD/GDMA transfer failed: {result}"))
+                };
+            }
             let hw = self.hardware.as_ref().ok_or("RMT hardware unavailable")?;
             let count = if self.settings.parallel_output {
                 NUM_PANELS
@@ -297,11 +447,16 @@ impl RmtLedOutput {
                 // Always drain every started transaction, even after another
                 // channel fails: the driver still borrows our frame buffers.
                 for i in 0..started {
-                    let error = esp_idf_sys::rmt_tx_wait_all_done(hw.channels[i], -1);
+                    let error = esp_idf_sys::rmt_tx_wait_all_done(
+                        hw.channels[i],
+                        RMT_COMPLETION_TIMEOUT_MS,
+                    );
                     if error != esp_idf_sys::ESP_OK {
-                        failure.get_or_insert_with(|| {
-                            format!("RMT channel {i} completion failed: {error}")
-                        });
+                        // The driver may still read this and other started
+                        // payloads. Never return, free, or overwrite them, and
+                        // never acknowledge an OTA blackout after a timeout.
+                        log::error!("RMT channel {i} completion stalled ({error}); resetting");
+                        esp_idf_sys::esp_restart();
                     }
                 }
                 esp_idf_sys::esp_rom_delay_us(300);

@@ -1,9 +1,14 @@
+pub mod boot_validation;
+#[cfg(target_os = "espidf")]
+pub mod boot_guard;
 pub mod device_id;
 pub mod mic;
 pub mod net;
 pub mod network_config;
 pub mod nvs_store;
 pub mod ota;
+pub mod recovery;
+pub mod request_guard;
 pub mod output;
 pub mod pins;
 
