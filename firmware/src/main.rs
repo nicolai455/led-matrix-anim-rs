@@ -137,6 +137,8 @@ fn run_firmware() {
     #[cfg(not(target_os = "espidf"))]
     let safe_mode = false;
 
+    log::warn!("Boot recovery state: safe_mode={safe_mode}");
+
     // 3. Load or initialize panel configuration
     log::info!("Boot step 3: loading panel config...");
     let panel_config = load_panel_config(&nvs, &profile);
@@ -360,7 +362,7 @@ fn run_firmware() {
 
     let _http_server = match FirmwareHttpServer::start(api_ctx, Arc::clone(&ota_manager)) {
         Ok(s) => {
-            log::info!("HTTP server operational on port 80");
+            log::warn!("HTTP server operational on port 80");
             Some(s)
         }
         Err(e) => {
@@ -369,6 +371,8 @@ fn run_firmware() {
         }
     };
 
+    #[cfg(target_os = "espidf")]
+    log::warn!("Boot services: wifi={} http={}; initializing optional MQTT", _wifi.is_some(), _http_server.is_some());
     let _mqtt = network
         .filter(|c| !c.mqtt_host.is_empty())
         .and_then(|config| {

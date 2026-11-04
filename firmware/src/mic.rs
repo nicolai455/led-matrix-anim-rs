@@ -20,6 +20,9 @@ struct CaptureShared {
     quiesced_confirmed: AtomicBool,
     shutdown: AtomicBool,
     reconfigure_channel: AtomicBool,
+    /// Set while the engine consumes mic audio. When false, the worker
+    /// releases the I2S channel so no DMA/interrupt load remains.
+    capture_enabled: AtomicBool,
 }
 
 /// I2S Microphone input adapter implementing `matrix_control::AudioInput`.
@@ -78,6 +81,7 @@ impl I2sMicAudioInput {
             quiesced_confirmed: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
             reconfigure_channel: AtomicBool::new(false),
+            capture_enabled: AtomicBool::new(false),
         });
 
         let worker_handle = if available {
@@ -195,8 +199,11 @@ impl I2sMicAudioInput {
             .map(|s| s.right_channel)
             .unwrap_or(false);
 
+        // The channel is created lazily once capture is enabled.
         #[cfg(target_os = "espidf")]
-        let mut rx_chan = Self::init_hardware_channel(right_channel_active);
+        let mut rx_chan: Option<esp_idf_sys::i2s_chan_handle_t> = None;
+        #[cfg(target_os = "espidf")]
+        let mut init_attempted = false;
 
         #[cfg(target_os = "espidf")]
         let mut raw_buf = [0i32; MIC_BLOCK_SAMPLES];
@@ -228,6 +235,48 @@ impl I2sMicAudioInput {
                 }
                 shared.quiesced_confirmed.store(false, Ordering::SeqCst);
                 continue;
+            }
+
+            if !shared.capture_enabled.load(Ordering::Acquire) {
+                #[cfg(target_os = "espidf")]
+                {
+                    if let Some(chan) = rx_chan.take() {
+                        unsafe {
+                            let _ = esp_idf_sys::i2s_channel_disable(chan);
+                            let _ = esp_idf_sys::i2s_del_channel(chan);
+                        }
+                        log::info!("Microphone capture stopped; I2S channel released");
+                        dsp = MicDsp::new();
+                    }
+                    init_attempted = false;
+                }
+                if let Ok(mut lock) = shared.latest_snapshot.write() {
+                    *lock = AudioSnapshot::default();
+                }
+                if let Ok(mut lock) = shared.latest_metrics.write() {
+                    *lock = None;
+                }
+                if let Ok(mut lock) = shared.last_block_ms.write() {
+                    *lock = None;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+                continue;
+            }
+
+            #[cfg(target_os = "espidf")]
+            if rx_chan.is_none() && !init_attempted {
+                // One attempt per enable transition avoids log spam on a missing mic.
+                init_attempted = true;
+                right_channel_active = shared
+                    .settings
+                    .read()
+                    .map(|s| s.right_channel)
+                    .unwrap_or(false);
+                shared.reconfigure_channel.store(false, Ordering::SeqCst);
+                rx_chan = Self::init_hardware_channel(right_channel_active);
+                if rx_chan.is_some() {
+                    log::info!("Microphone capture started");
+                }
             }
 
             // Check dynamic right_channel reconfiguration
@@ -327,7 +376,10 @@ impl Drop for I2sMicAudioInput {
 
 impl AudioInput for I2sMicAudioInput {
     fn snapshot(&mut self, _now_ms: u64) -> AudioSnapshot {
-        if !self.available || self.shared.quiesce_requested.load(Ordering::Relaxed) {
+        if !self.available
+            || !self.shared.capture_enabled.load(Ordering::Acquire)
+            || self.shared.quiesce_requested.load(Ordering::Relaxed)
+        {
             return AudioSnapshot::default();
         }
         let age = self
@@ -349,7 +401,16 @@ impl AudioInput for I2sMicAudioInput {
     }
 
     fn live_metrics(&self) -> Option<(f32, f32)> {
+        if !self.shared.capture_enabled.load(Ordering::Acquire) {
+            return None;
+        }
         self.shared.latest_metrics.read().ok().and_then(|m| *m)
+    }
+
+    fn set_active(&mut self, active: bool) {
+        if self.available {
+            self.shared.capture_enabled.store(active, Ordering::Release);
+        }
     }
 
     fn configure(&mut self, settings: &MicSettings) {

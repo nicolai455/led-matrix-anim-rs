@@ -60,6 +60,28 @@ fn trial_for_new_partition_cannot_bypass_old_image_recovery() {
 }
 
 #[test]
+fn serial_pending_image_gets_only_one_trial_per_image_identity() {
+    let mut j = Journal::default();
+    j.safe_mode = true;
+    j.failures = 5;
+    j.begin_image(Some(0x420000), true, "image-a");
+    assert!(!j.safe_mode);
+    assert!(j.failures >= 5);
+    j.begin_image(Some(0x420000), true, "image-a");
+    assert!(j.safe_mode);
+    j.begin_image(Some(0x420000), true, "image-b");
+    assert!(!j.safe_mode);
+}
+
+#[test]
+fn ordinary_boot_never_bypasses_recovery_for_new_image_identity() {
+    let mut j = Journal::default();
+    j.safe_mode = true;
+    j.begin_image(Some(0x20000), false, "fallback");
+    assert!(j.safe_mode);
+}
+
+#[test]
 fn watchdog_requires_render_and_output_but_tolerates_intentional_pause() {
     let mut w = Watchdog::new(0, 0, 0);
     assert!(!w.stalled(1000, 1, 1, false));

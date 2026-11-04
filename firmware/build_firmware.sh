@@ -46,7 +46,7 @@ export RUSTUP_HOME="${RUSTUP_HOME:-$DEFAULT_RUSTUP}"
 export CARGO_HOME="${CARGO_HOME:-$DEFAULT_CARGO}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-esp}"
 if [ -d "/nix/store/1x09s5x9lwjfzv85ag87ipd8d6msv0zq-libxml2-2.13.9/lib" ]; then
-    export LD_LIBRARY_PATH="/nix/store/1x09s5x9lwjfzv85ag87ipd8d6msv0zq-libxml2-2.13.9/lib:/nix/store/gxawp0qrrpcvwmimww76dfkwldljmx7m-ld-library-path/share/nix-ld/lib:${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="/nix/store/dqj57l1prad38vjrad4bs9d977i4q5zm-gcc-15.3.0-lib/lib:/nix/store/ld3jwvl2190557phm7x1hgvzmsnx8bcy-zlib-1.3.2/lib:/nix/store/1x09s5x9lwjfzv85ag87ipd8d6msv0zq-libxml2-2.13.9/lib:${LD_LIBRARY_PATH:-}"
 else
     export LD_LIBRARY_PATH="/home/joe/.local/lib:${LD_LIBRARY_PATH:-}"
 fi

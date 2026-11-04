@@ -56,6 +56,16 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
                     last_output = output;
                 }
                 let (frames, errors) = hub.as_ref().map(|h| h.output_progress()).unwrap_or((0, 0));
+                // These must survive release_max_level_warn: otherwise a
+                // rejected trial leaves no explanation in its serial capture.
+                if previous == 0 || started.elapsed().as_secs() % 5 == 0 {
+                    log::warn!(
+                        "OTA trial health: age={}s ready={} failed={} hub={} output={} paused={} frames={} previous={} errors={}",
+                        started.elapsed().as_secs(), ready, failed, hub.is_some(),
+                        last_output.is_some(), last_output.as_ref().is_some_and(|o| o.is_requested()),
+                        frames, previous, errors,
+                    );
+                }
                 let progressing = frames != previous;
                 previous = frames;
                 if ready && progressing && errors == 0 {
@@ -84,6 +94,10 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
                 };
                 match decision {
                     Decision::Confirm => {
+                        if let Err(error) = crate::recovery::validated() {
+                            log::warn!("Cannot persist healthy trial state yet: {error}");
+                            continue;
+                        }
                         let rc = unsafe { esp_idf_sys::esp_ota_mark_app_valid_cancel_rollback() };
                         if rc == esp_idf_sys::ESP_OK {
                             log::warn!("Pending OTA confirmed after sustained output health");

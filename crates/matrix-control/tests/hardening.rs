@@ -165,21 +165,31 @@ impl LedOutput for ErrorOutput {
 struct MockAudioInput {
     snapshots_taken: Arc<AtomicUsize>,
     config_calls: Arc<Mutex<Vec<MicSettings>>>,
+    active_calls: Arc<Mutex<Vec<bool>>>,
     metrics: Option<(f32, f32)>,
 }
 
 impl MockAudioInput {
-    fn new() -> (Self, Arc<AtomicUsize>, Arc<Mutex<Vec<MicSettings>>>) {
+    #[allow(clippy::type_complexity)]
+    fn new() -> (
+        Self,
+        Arc<AtomicUsize>,
+        Arc<Mutex<Vec<MicSettings>>>,
+        Arc<Mutex<Vec<bool>>>,
+    ) {
         let snapshots_taken = Arc::new(AtomicUsize::new(0));
         let config_calls = Arc::new(Mutex::new(Vec::new()));
+        let active_calls = Arc::new(Mutex::new(Vec::new()));
         (
             Self {
                 snapshots_taken: snapshots_taken.clone(),
                 config_calls: config_calls.clone(),
+                active_calls: active_calls.clone(),
                 metrics: Some((-24.5, 30.0)),
             },
             snapshots_taken,
             config_calls,
+            active_calls,
         )
     }
 }
@@ -208,6 +218,12 @@ impl AudioInput for MockAudioInput {
     fn configure(&mut self, settings: &MicSettings) {
         if let Ok(mut lock) = self.config_calls.lock() {
             lock.push(settings.clone());
+        }
+    }
+
+    fn set_active(&mut self, active: bool) {
+        if let Ok(mut lock) = self.active_calls.lock() {
+            lock.push(active);
         }
     }
 }
@@ -292,7 +308,7 @@ fn test_command_queue_bounds_and_honest_pending_outcome() {
 
 #[test]
 fn test_audio_mode_precedence_and_mic_settings_delivery() {
-    let (mock_audio, snapshots_taken, config_calls) = MockAudioInput::new();
+    let (mock_audio, snapshots_taken, config_calls, active_calls) = MockAudioInput::new();
     let engine = test_engine();
 
     // Verify default engine audio mode is Off
@@ -316,6 +332,10 @@ fn test_audio_mode_precedence_and_mic_settings_delivery() {
         snapshots_off, 0,
         "AudioMode::Off must not sample external input"
     );
+    assert!(
+        active_calls.lock().unwrap().is_empty(),
+        "capture must not be activated while audio mode is Off"
+    );
 
     // Switch to External (Mic) audio mode
     let outcome = hub
@@ -329,6 +349,7 @@ fn test_audio_mode_precedence_and_mic_settings_delivery() {
         snapshots_on > 0,
         "AudioMode::External must actively sample external audio input"
     );
+    assert_eq!(*active_calls.lock().unwrap(), vec![true]);
 
     // Update mic settings via command
     let initial_call_count = config_calls.lock().unwrap().len();
@@ -350,6 +371,19 @@ fn test_audio_mode_precedence_and_mic_settings_delivery() {
         assert_eq!(latest.gain_db, 45.0);
         assert_eq!(latest.squelch_db, -40.0);
     }
+
+    // Switching back to Off must release capture hardware and stop sampling.
+    hub.submit_sync("audio_source", "Off", Duration::from_millis(100))
+        .expect("submit audio off");
+    thread::sleep(Duration::from_millis(50));
+    assert_eq!(*active_calls.lock().unwrap(), vec![true, false]);
+    let after_off = snapshots_taken.load(Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(50));
+    assert_eq!(
+        snapshots_taken.load(Ordering::SeqCst),
+        after_off,
+        "AudioMode::Off must stop sampling external input"
+    );
 
     hub.join();
 }

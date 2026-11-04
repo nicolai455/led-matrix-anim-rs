@@ -33,6 +33,10 @@ pub trait AudioInput: Send + 'static {
 
     /// Hook called when microphone DSP parameters change.
     fn configure(&mut self, _settings: &MicSettings) {}
+
+    /// Hook called when the engine starts or stops consuming this input.
+    /// Implementations should release capture hardware while inactive.
+    fn set_active(&mut self, _active: bool) {}
 }
 
 pub struct CommandMessage {
@@ -202,6 +206,7 @@ impl ControlHub {
                 let mut fps_frames: u32 = 0;
                 let mut audio_history = std::collections::VecDeque::with_capacity(16);
                 let mut last_audio_sample_ms = 0u64;
+                let mut capture_active = false;
 
                 let mut replies = Vec::with_capacity(16);
                 let mut state = Arc::new(engine.capture_snapshot());
@@ -258,6 +263,16 @@ impl ControlHub {
                         if current_mic != &last_mic_settings {
                             input.configure(current_mic);
                             last_mic_settings = current_mic.clone();
+                        }
+                        let want_capture = engine.audio_mode() == AudioMode::External;
+                        if want_capture != capture_active {
+                            input.set_active(want_capture);
+                            capture_active = want_capture;
+                            if !want_capture {
+                                if let Ok(mut lock) = live_metrics_for_thread.write() {
+                                    *lock = None;
+                                }
+                            }
                         }
                         if let Some(metrics) = input.live_metrics() {
                             if let Ok(mut lock) = live_metrics_for_thread.write() {

@@ -8,6 +8,8 @@ pub struct Journal {
     pub trial: bool,
     #[serde(default)]
     pub trial_partition: Option<u32>,
+    #[serde(default)]
+    pub last_pending_image: String,
     pub in_progress: bool,
     pub safe_mode: bool,
     pub reason: String,
@@ -29,6 +31,16 @@ impl Journal {
         self.trial = false;
         self.trial_partition = None;
         self.in_progress = true;
+    }
+    /// A serial-installed pending image has no OTA journal handoff. Grant one
+    /// startup attempt per image identity, durably recorded before hardware init.
+    /// Failed retries of the same image must still enter recovery.
+    pub fn begin_image(&mut self, partition: Option<u32>, pending: bool, identity: &str) {
+        self.begin_partition(partition);
+        if pending && !identity.is_empty() && self.last_pending_image != identity {
+            self.last_pending_image = identity.to_owned();
+            self.safe_mode = false;
+        }
     }
     pub fn healthy(&mut self) {
         self.failures = 0;
@@ -135,7 +147,23 @@ mod runtime {
         if partition.is_null() {
             return Err("Running partition unavailable".into());
         }
-        journal.begin_partition(Some(unsafe { (*partition).address }));
+        let mut state = esp_idf_sys::esp_ota_img_states_t_ESP_OTA_IMG_UNDEFINED;
+        let rc = unsafe { esp_idf_sys::esp_ota_get_state_partition(partition, &mut state) };
+        if rc != esp_idf_sys::ESP_OK && rc != esp_idf_sys::ESP_ERR_NOT_FOUND {
+            return Err(format!("Cannot read startup OTA state: {rc}"));
+        }
+        let descriptor = unsafe { esp_idf_sys::esp_app_get_description().as_ref() }
+            .ok_or("Application descriptor unavailable")?;
+        let identity = descriptor
+            .app_elf_sha256
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>();
+        journal.begin_image(
+            Some(unsafe { (*partition).address }),
+            state == esp_idf_sys::esp_ota_img_states_t_ESP_OTA_IMG_PENDING_VERIFY,
+            &identity,
+        );
         persist(&nvs, &journal)?;
         let safe = journal.safe_mode;
         STATE
@@ -167,6 +195,9 @@ mod runtime {
             j.arm_trial();
             j.trial_partition = Some(partition);
         })
+    }
+    pub fn validated() -> Result<(), String> {
+        change(|j| j.healthy())
     }
     pub fn planned() -> Result<(), String> {
         change(|j| j.planned())

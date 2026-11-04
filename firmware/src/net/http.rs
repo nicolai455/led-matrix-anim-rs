@@ -41,7 +41,15 @@ impl FirmwareHttpServer {
             ..Default::default()
         };
 
-        let mut server = EspHttpServer::new(&config).map_err(|e| e.to_string())?;
+        let mut server = EspHttpServer::new(&config).map_err(|e| {
+            let caps = esp_idf_sys::MALLOC_CAP_INTERNAL | esp_idf_sys::MALLOC_CAP_8BIT;
+            let (free, largest, minimum) = unsafe {
+                (esp_idf_sys::heap_caps_get_free_size(caps),
+                 esp_idf_sys::heap_caps_get_largest_free_block(caps),
+                 esp_idf_sys::heap_caps_get_minimum_free_size(caps))
+            };
+            format!("{e}; HTTP stack={} internal free={free} largest={largest} minimum={minimum}", config.stack_size)
+        })?;
 
         server
             .fn_handler("/api/recovery", Method::Get, move |req| {
