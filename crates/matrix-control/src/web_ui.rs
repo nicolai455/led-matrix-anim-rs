@@ -290,6 +290,10 @@ select option, .param-select option { background:var(--card); color:var(--text);
     <div>Uptime: <strong id="diagUptime">--</strong></div>
     <div>Output Errors: <strong id="diagErrors">0</strong></div>
     <div>Last Error: <strong id="diagLastError">None</strong></div>
+    <div>Firmware: <strong id="firmwareVersion">--</strong></div>
+    <div>OTA state: <strong id="firmwareOtaState">--</strong></div>
+    <div>Partition: <strong id="firmwarePartition">--</strong></div>
+    <div style="grid-column:1 / -1; overflow-wrap:anywhere">ELF SHA-256: <strong id="firmwareHash">--</strong></div>
   </div>
 </details>
 
@@ -558,6 +562,23 @@ async function fetchJSON(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(r.statusText);
   return await r.json();
+}
+
+async function loadFirmwareInfo() {
+  const set = (id, value) => { document.getElementById(id).textContent = value; };
+  try {
+    const info = await fetchJSON('/api/firmware');
+    set('firmwareVersion', info.version || 'Unknown');
+    set('firmwareHash', info.elfSha256 || '--');
+    const address = Number.isInteger(info.partitionAddress) ? ' (0x' + info.partitionAddress.toString(16) + ')' : '';
+    set('firmwarePartition', (info.partition || 'Unknown') + address);
+    set('firmwareOtaState', info.otaState || 'Unknown');
+  } catch (e) {
+    set('firmwareVersion', 'Unavailable');
+    set('firmwareHash', '--');
+    set('firmwarePartition', '--');
+    set('firmwareOtaState', '--');
+  }
 }
 
 async function postCommand(kind, payload) {
@@ -970,6 +991,9 @@ async function init() {
   loadPreviewRenderer();
   requestAnimationFrame(animatePreview);
   previewLoop();
+  document.getElementById('diagCard').addEventListener('toggle', () => {
+    if (document.getElementById('diagCard').open) loadFirmwareInfo();
+  });
   try {
     let effects = await fetchJSON('/api/effects');
     if (effects && effects.effects) effects = effects.effects;
