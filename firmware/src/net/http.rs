@@ -57,6 +57,16 @@ impl FirmwareHttpServer {
             })
             .map_err(|e| e.to_string())?;
 
+        server
+            .fn_handler("/api/firmware", Method::Get, move |req| {
+                let response = match crate::firmware_info::running() {
+                    Ok(info) => HttpResponse::ok_json(crate::firmware_info::firmware_info_json(&info)),
+                    Err(error) => HttpResponse::err_json(500, &error),
+                };
+                send_response(req, response)
+            })
+            .map_err(|e| e.to_string())?;
+
         // 1. Root /
         server
             .fn_handler("/", Method::Get, move |req| {

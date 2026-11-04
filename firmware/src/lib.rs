@@ -2,6 +2,7 @@ pub mod boot_validation;
 #[cfg(target_os = "espidf")]
 pub mod boot_guard;
 pub mod device_id;
+pub mod firmware_info;
 pub mod mic;
 pub mod net;
 pub mod network_config;

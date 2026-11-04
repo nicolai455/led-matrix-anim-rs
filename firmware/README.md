@@ -111,6 +111,7 @@ However:
    - Server configured with `uri_match_wildcard: true`.
    - Dispatches `GET /`, wildcard `GET /api/*`, and wildcard `POST /api/*` with bounded reads (4KB cap) to `matrix_control::api::handle_api_request`.
    - Streaming OTA endpoint at `POST /update`.
+   - `GET /api/firmware` reports the running app version, `elfSha256` (SHA-256 of the ELF, not the .bin), partition label/address and `otaState` (`null` if no OTA state is recorded). Compare `elfSha256` with `sha256sum firmware/target/xtensa-esp32s3-espidf/release/matrix-firmware`; `valid` indicates that ESP-IDF has confirmed the running image.
 
 8. **MQTT & Home Assistant Discovery**:
    - Dedicated event queue and worker thread prevents deadlocks inside ESP-IDF MQTT callback.
