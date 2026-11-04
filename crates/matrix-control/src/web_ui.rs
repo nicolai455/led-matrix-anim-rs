@@ -427,8 +427,10 @@ function animateMicBands(now) {
   }
   const dt = micPaintAt ? Math.max(0, Math.min(100, now - micPaintAt)) : 16;
   micPaintAt = now;
-  const decay = Math.exp(-Math.max(0, now - micReceivedAt - 120) / 250);
-  const blend = 1 - Math.exp(-dt / 40);
+  // Only fade after updates have genuinely gone stale.
+  const decay = Math.exp(-Math.max(0, now - micReceivedAt - 1000) / 250);
+  // Audio updates arrive about every 200 ms; smooth between those updates.
+  const blend = 1 - Math.exp(-dt / 100);
   const cols = document.querySelectorAll('.band-col');
   for (let i = 0; i < 16; i++) {
     micDisplayedBands[i] += (micTargetBands[i] * decay - micDisplayedBands[i]) * blend;
@@ -983,8 +985,8 @@ async function loop() {
     document.getElementById('statusText').textContent = 'Offline';
     document.getElementById('fpsDisplay').textContent = '-- FPS';
   }
-  // Local animations stay smooth independently of telemetry/network latency.
-  setTimeout(loop, 500);
+  // Match the device's audio telemetry cadence without overlapping requests.
+  setTimeout(loop, state.audio_source === 'Mic' ? 200 : 500);
 }
 
 async function init() {
