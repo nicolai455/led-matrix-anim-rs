@@ -25,6 +25,24 @@ fn bounded_completion_preserves_borrowed_buffer_safety() {
 }
 
 #[test]
+fn s3_parallel_output_uses_dma_waveform_not_cpu_refilled_rmt() {
+    // With correct grounding, four RMT channels still flashed white; the
+    // LCD/GDMA path was clean on all panels.
+    assert!(OUTPUT.contains("let use_rmt = !cfg!(esp32s3) || !settings.parallel_output;"));
+    assert!(OUTPUT.contains("parallel_lcd_create(pins.as_ptr(), BYTES_PER_PANEL)"));
+    assert!(OUTPUT.contains("parallel_lcd_send(lcd.0.as_ptr(), self.buffer.as_ptr(), BYTES_PER_PANEL)"));
+    assert!(!OUTPUT.contains("#[allow(dead_code)]\nstruct ParallelLcd"));
+}
+
+#[test]
+fn output_is_paced_below_full_cpu_frame_rate() {
+    assert!(OUTPUT.contains("pub const MAX_OUTPUT_FPS: u64 = 40;"));
+    let pace = OUTPUT.find("checked_duration_since").expect("frame pacing");
+    let send = OUTPUT.rfind("self.transmit_current_buffers()").unwrap();
+    assert!(pace < send, "pacing must run before every shown frame");
+}
+
+#[test]
 fn keep_concurrent_output_and_existing_core_affinity() {
     assert!(OUTPUT.contains("for i in 0..started"));
     assert!(OUTPUT.contains("pin_to_core: Some(esp_idf_hal::cpu::Core::Core1)"));

@@ -5,6 +5,7 @@
 #include "lcd_waveform.h"
 #include "driver/gpio.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 #include "esp_private/gdma.h"
 #include "esp_private/periph_ctrl.h"
 #include "esp_rom_gpio.h"
@@ -62,7 +63,7 @@ void parallel_lcd_destroy(void *ctx) {
 }
 
 void *parallel_lcd_create(const int *pins, size_t lane_bytes) {
-    if (!pins || !lane_bytes || lane_bytes > (SIZE_MAX - LCD_RESET_SAMPLES) / 32) return NULL;
+    if (!pins || !lane_bytes || lane_bytes > (SIZE_MAX - LCD_RESET_SAMPLES) / LCD_SAMPLES_PER_BYTE) return NULL;
     for (int i = 0; i < 4; i++) {
         if (!GPIO_IS_VALID_OUTPUT_GPIO(pins[i])) return NULL;
         for (int j = 0; j < i; j++) if (pins[i] == pins[j]) return NULL;
@@ -70,11 +71,21 @@ void *parallel_lcd_create(const int *pins, size_t lane_bytes) {
     parallel_lcd_t *p = calloc(1, sizeof(*p));
     if (!p) return NULL;
     p->id = -1;
-    p->wave_len = lane_bytes * 32 + LCD_RESET_SAMPLES;
+    p->wave_len = lane_bytes * LCD_SAMPLES_PER_BYTE + LCD_RESET_SAMPLES;
     p->node_count = (p->wave_len + DMA_DESCRIPTOR_BUFFER_MAX_SIZE - 1) / DMA_DESCRIPTOR_BUFFER_MAX_SIZE;
     p->wave = heap_caps_calloc(1, p->wave_len, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     p->nodes = heap_caps_calloc(p->node_count, sizeof(*p->nodes), MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-    if (!p->wave || !p->nodes) goto fail;
+    if (!p->wave || !p->nodes) {
+        ESP_LOGE("parallel_lcd", "DMA allocation failed: waveform=%u descriptors=%u internal_free=%u largest_dma=%u",
+                 (unsigned)p->wave_len, (unsigned)(p->node_count * sizeof(dma_descriptor_t)),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
+        goto fail;
+    }
+    ESP_LOGW("parallel_lcd", "sample_hz=%u waveform=%u internal_free=%u largest_internal=%u",
+             LCD_SAMPLE_HZ, (unsigned)p->wave_len,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     for (size_t i = 0; i + 1 < p->node_count; i++) p->nodes[i].next = &p->nodes[i + 1];
     p->id = lcd_com_register_device(0, p);
     if (p->id < 0) goto fail;
@@ -86,7 +97,8 @@ void *parallel_lcd_create(const int *pins, size_t lane_bytes) {
     lcd_ll_enable_clock(p->hal.dev, true);
     lcd_ll_select_clk_src(p->hal.dev, LCD_CLK_SRC_PLL160M);
     lcd_ll_set_group_clock_coeff(p->hal.dev, 2, 0, 0);
-    lcd_ll_set_pixel_clock_prescale(p->hal.dev, 25); // 160 MHz / 2 / 25 = 3.2 MHz
+    _Static_assert(80000000u % LCD_SAMPLE_HZ == 0, "LCD sample clock must divide PLL160M/2");
+    lcd_ll_set_pixel_clock_prescale(p->hal.dev, 80000000u / LCD_SAMPLE_HZ);
     lcd_ll_enable_rgb_mode(p->hal.dev, false);
     lcd_ll_set_data_width(p->hal.dev, 8);
     lcd_ll_enable_output_always_on(p->hal.dev, true);
@@ -119,7 +131,7 @@ fail:
 
 int parallel_lcd_send(void *ctx, const uint8_t *lanes, size_t lane_bytes) {
     parallel_lcd_t *p = ctx;
-    if (!p || !lanes || lane_bytes != (p->wave_len - LCD_RESET_SAMPLES) / 32) return ESP_ERR_INVALID_ARG;
+    if (!p || !lanes || lane_bytes != (p->wave_len - LCD_RESET_SAMPLES) / LCD_SAMPLES_PER_BYTE) return ESP_ERR_INVALID_ARG;
     if (p->aborted) return ESP_ERR_INVALID_STATE; // require reinitialization after an incomplete frame
     if (!lcd_encode(p->wave, p->wave_len, lanes, lane_bytes)) return ESP_FAIL;
     if (p->pm && esp_pm_lock_acquire(p->pm) != ESP_OK) return ESP_FAIL;
@@ -133,7 +145,9 @@ int parallel_lcd_send(void *ctx, const uint8_t *lanes, size_t lane_bytes) {
         esp_rom_delay_us(1);
         lcd_ll_start(p->hal.dev);
         int64_t deadline = esp_timer_get_time() + 1000000;
-        while (!(lcd_ll_get_interrupt_status(p->hal.dev) & LCD_LL_EVENT_TRANS_DONE)) {
+        // No CPU interrupt is installed/enabled: the LL status helper reads the
+        // masked INT_ST register, which stays zero. Poll the raw completion event.
+        while (!(p->hal.dev->lc_dma_int_raw.val & LCD_LL_EVENT_TRANS_DONE)) {
             if (esp_timer_get_time() >= deadline) { err = ESP_ERR_TIMEOUT; break; }
             vTaskDelay(1);
         }

@@ -11,6 +11,11 @@ pub const BYTES_PER_PANEL: usize = PANEL_PIXELS * 3; // 768 bytes
 pub const TOTAL_BYTES: usize = PIXELS * 3; // 3072 bytes
 #[cfg(target_os = "espidf")]
 const RMT_COMPLETION_TIMEOUT_MS: i32 = 1000;
+/// Frame cap: the LCD/GDMA output was verified clean on all panels at 40 FPS.
+pub const MAX_OUTPUT_FPS: u64 = 40;
+#[cfg(target_os = "espidf")]
+const FRAME_PERIOD: std::time::Duration =
+    std::time::Duration::from_micros(1_000_000 / MAX_OUTPUT_FPS);
 
 /// The IRAM-safe encoder reads this payload with the flash cache disabled.
 /// Allocate internal RAM explicitly: ordinary malloc may fall back to PSRAM.
@@ -168,8 +173,13 @@ pub struct RmtLedOutput {
     buffer: InternalBuffer,
     #[cfg(target_os = "espidf")]
     hardware: Option<HardwareRmt>,
+    // S3 parallel output: DMA streams a pre-expanded waveform, so no CPU
+    // refill deadline exists during a frame. Four RMT channels flashed white
+    // even with correct grounding.
     #[cfg(all(target_os = "espidf", esp32s3))]
     lcd: Option<ParallelLcd>,
+    #[cfg(target_os = "espidf")]
+    next_frame: std::time::Instant,
 }
 
 #[cfg(target_os = "espidf")]
@@ -261,6 +271,8 @@ impl RmtLedOutput {
             hardware,
             #[cfg(all(target_os = "espidf", esp32s3))]
             lcd,
+            #[cfg(target_os = "espidf")]
+            next_frame: std::time::Instant::now(),
         }
     }
 
@@ -316,6 +328,12 @@ impl RmtLedOutput {
                     }
                     return None;
                 }
+
+                // Maximize GPIO drive strength for clean edge rates through series resistance
+                esp_idf_sys::gpio_set_drive_capability(
+                    pin as i32,
+                    esp_idf_sys::gpio_drive_cap_t_GPIO_DRIVE_CAP_3,
+                );
 
                 // Initialize RMT TX channel
                 let mut tx_chan_config: esp_idf_sys::rmt_tx_channel_config_t = std::mem::zeroed();
@@ -539,6 +557,13 @@ impl LedOutput for RmtLedOutput {
                     }
                 }
             }
+
+            // Pace every shown frame, including OFF's black frames.
+            let now = std::time::Instant::now();
+            if let Some(wait) = self.next_frame.checked_duration_since(now) {
+                std::thread::sleep(wait);
+            }
+            self.next_frame = self.next_frame.max(now) + FRAME_PERIOD;
 
             self.transmit_current_buffers()
         }
