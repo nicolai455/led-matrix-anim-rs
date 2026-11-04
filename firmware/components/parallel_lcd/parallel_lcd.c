@@ -25,7 +25,53 @@
 // Private IDF platform registry prevents conflict with the public LCD driver.
 extern int lcd_com_register_device(int type, void *object);
 extern void lcd_com_remove_device(int type, int id);
-extern void lcd_com_mount_dma_data(dma_descriptor_t *, const void *, size_t);
+// BEGIN HOST-TESTED DMA HELPERS
+// Keep descriptor buffers word-aligned and reuse one zero block for the latch.
+#define LCD_RESET_BLOCK_SIZE 256u
+#define LCD_DMA_DATA_BLOCK_SIZE (DMA_DESCRIPTOR_BUFFER_MAX_SIZE & ~3u)
+
+static size_t lcd_dma_node_count(size_t data_len) {
+    return data_len / LCD_DMA_DATA_BLOCK_SIZE + (data_len % LCD_DMA_DATA_BLOCK_SIZE != 0)
+         + LCD_RESET_SAMPLES / LCD_RESET_BLOCK_SIZE
+         + (LCD_RESET_SAMPLES % LCD_RESET_BLOCK_SIZE != 0);
+}
+
+static void lcd_encode_data(uint8_t *out, const uint8_t *lanes, size_t lane_bytes) {
+    size_t pos = 0;
+    for (size_t byte = 0; byte < lane_bytes; byte++) {
+        for (int bit = 7; bit >= 0; bit--) {
+            uint8_t ones = 0;
+            for (size_t lane = 0; lane < 4; lane++)
+                ones |= ((lanes[lane * lane_bytes + byte] >> bit) & 1u) << lane;
+            for (unsigned tick = 0; tick < LCD_SAMPLES_PER_BIT; tick++)
+                out[pos++] = tick < LCD_ZERO_HIGH_SAMPLES ? 15u
+                           : tick < LCD_ONE_HIGH_SAMPLES ? ones : 0u;
+        }
+    }
+}
+
+static void lcd_mount_dma(dma_descriptor_t *nodes, size_t count, uint8_t *wave, size_t data_len) {
+    size_t offset = 0, remaining_reset = LCD_RESET_SAMPLES;
+    for (size_t i = 0; i < count; i++) {
+        size_t len;
+        if (offset < data_len) {
+            len = data_len - offset;
+            if (len > LCD_DMA_DATA_BLOCK_SIZE) len = LCD_DMA_DATA_BLOCK_SIZE;
+            nodes[i].buffer = wave + offset;
+            offset += len;
+        } else {
+            len = remaining_reset < LCD_RESET_BLOCK_SIZE ? remaining_reset : LCD_RESET_BLOCK_SIZE;
+            nodes[i].buffer = wave + data_len;
+            remaining_reset -= len;
+        }
+        nodes[i].dw0.size = len;
+        nodes[i].dw0.length = len;
+        nodes[i].dw0.owner = DMA_DESCRIPTOR_BUFFER_OWNER_DMA;
+        nodes[i].dw0.suc_eof = i + 1 == count;
+        nodes[i].next = i + 1 == count ? NULL : &nodes[i + 1];
+    }
+}
+// END HOST-TESTED DMA HELPERS
 
 typedef struct {
     lcd_hal_context_t hal;
@@ -71,8 +117,9 @@ void *parallel_lcd_create(const int *pins, size_t lane_bytes) {
     parallel_lcd_t *p = calloc(1, sizeof(*p));
     if (!p) return NULL;
     p->id = -1;
-    p->wave_len = lane_bytes * LCD_SAMPLES_PER_BYTE + LCD_RESET_SAMPLES;
-    p->node_count = (p->wave_len + DMA_DESCRIPTOR_BUFFER_MAX_SIZE - 1) / DMA_DESCRIPTOR_BUFFER_MAX_SIZE;
+    p->wave_len = lane_bytes * LCD_SAMPLES_PER_BYTE + LCD_RESET_BLOCK_SIZE;
+    p->node_count = lcd_dma_node_count(p->wave_len - LCD_RESET_BLOCK_SIZE);
+    if (p->node_count > SIZE_MAX / sizeof(*p->nodes)) goto fail;
     p->wave = heap_caps_calloc(1, p->wave_len, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     p->nodes = heap_caps_calloc(p->node_count, sizeof(*p->nodes), MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     if (!p->wave || !p->nodes) {
@@ -86,7 +133,7 @@ void *parallel_lcd_create(const int *pins, size_t lane_bytes) {
              LCD_SAMPLE_HZ, (unsigned)p->wave_len,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-    for (size_t i = 0; i + 1 < p->node_count; i++) p->nodes[i].next = &p->nodes[i + 1];
+
     p->id = lcd_com_register_device(0, p);
     if (p->id < 0) goto fail;
     PERIPH_RCC_ACQUIRE_ATOMIC(lcd_periph_signals.panels[p->id].module, ref_count) {
@@ -134,15 +181,15 @@ fail:
 
 int parallel_lcd_send(void *ctx, const uint8_t *lanes, size_t lane_bytes) {
     parallel_lcd_t *p = ctx;
-    if (!p || !lanes || lane_bytes != (p->wave_len - LCD_RESET_SAMPLES) / LCD_SAMPLES_PER_BYTE) return ESP_ERR_INVALID_ARG;
+    if (!p || !lanes || lane_bytes != (p->wave_len - LCD_RESET_BLOCK_SIZE) / LCD_SAMPLES_PER_BYTE) return ESP_ERR_INVALID_ARG;
     if (p->aborted) return ESP_ERR_INVALID_STATE; // require reinitialization after an incomplete frame
-    if (!lcd_encode(p->wave, p->wave_len, lanes, lane_bytes)) return ESP_FAIL;
+    lcd_encode_data(p->wave, lanes, lane_bytes);
     if (p->pm && esp_pm_lock_acquire(p->pm) != ESP_OK) return ESP_FAIL;
     lcd_ll_stop(p->hal.dev);
     gdma_reset(p->dma);
     lcd_ll_fifo_reset(p->hal.dev);
     lcd_ll_clear_interrupt_status(p->hal.dev, UINT32_MAX);
-    lcd_com_mount_dma_data(p->nodes, p->wave, p->wave_len);
+    lcd_mount_dma(p->nodes, p->node_count, p->wave, p->wave_len - LCD_RESET_BLOCK_SIZE);
     esp_err_t err = gdma_start(p->dma, (intptr_t)p->nodes);
     if (err == ESP_OK) {
         esp_rom_delay_us(1);

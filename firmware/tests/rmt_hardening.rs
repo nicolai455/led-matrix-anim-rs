@@ -35,11 +35,10 @@ fn s3_parallel_output_uses_dma_waveform_not_cpu_refilled_rmt() {
 }
 
 #[test]
-fn output_is_paced_below_full_cpu_frame_rate() {
-    assert!(OUTPUT.contains("pub const MAX_OUTPUT_FPS: u64 = 40;"));
-    let pace = OUTPUT.find("checked_duration_since").expect("frame pacing");
-    let send = OUTPUT.rfind("self.transmit_current_buffers()").unwrap();
-    assert!(pace < send, "pacing must run before every shown frame");
+fn output_is_not_artificially_frame_limited() {
+    assert!(!OUTPUT.contains("MAX_OUTPUT_FPS"));
+    assert!(!OUTPUT.contains("checked_duration_since"));
+    assert!(!OUTPUT.contains("next_frame"));
 }
 
 #[test]
