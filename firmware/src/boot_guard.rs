@@ -1,5 +1,5 @@
 //! Pending OTA startup validation (runs independently of initialization).
-use crate::boot_validation::{decide, Decision, Observation};
+use crate::boot_validation::{decide, Decision, HealthWindow, Observation};
 use crate::output::OutputQuiesce;
 use matrix_control::hub::ControlHub;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -41,8 +41,9 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
         .stack_size(8192)
         .spawn(move || {
             let started = Instant::now();
-            let mut healthy_since = None;
+            let mut window = HealthWindow::default();
             let mut previous = 0;
+            let mut previous_errors = 0;
             let mut last_output = None;
             loop {
                 std::thread::sleep(Duration::from_secs(1));
@@ -67,18 +68,11 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
                     );
                 }
                 let progressing = frames != previous;
+                let new_errors = errors.wrapping_sub(previous_errors);
                 previous = frames;
-                if ready && progressing && errors == 0 {
-                    if healthy_since.is_none() {
-                        healthy_since = Some(Instant::now());
-                    }
-                } else {
-                    healthy_since = None;
-                }
-                let healthy_ms = healthy_since
-                    .map(|t| t.elapsed().as_millis() as u64)
-                    .unwrap_or(0);
+                previous_errors = errors;
                 let elapsed_ms = started.elapsed().as_millis() as u64;
+                let healthy_ms = window.observe(elapsed_ms, ready, failed, frames, errors);
                 let decision = if elapsed_ms >= 30_000 {
                     Decision::Fail
                 } else {
@@ -88,7 +82,7 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
                         ready,
                         failed,
                         frames,
-                        errors,
+                        errors: new_errors,
                         progressing,
                     })
                 };

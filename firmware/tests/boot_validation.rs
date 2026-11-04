@@ -44,6 +44,32 @@ fn only_pending_healthy_sustained_progress_is_confirmed() {
 }
 
 #[test]
+fn transient_output_error_requires_a_fresh_healthy_window() {
+    use matrix_firmware::boot_validation::HealthWindow;
+    let mut window = HealthWindow::default();
+    assert_eq!(window.observe(1000, true, false, 5, 0), 0);
+    assert_eq!(window.observe(2000, true, false, 10, 1), 0);
+    assert_eq!(window.observe(3000, true, false, 15, 1), 0);
+    assert_eq!(window.observe(7999, true, false, 20, 1), 4999);
+    assert_eq!(window.observe(8000, true, false, 25, 1), 5000);
+}
+
+#[test]
+fn unhealthy_samples_restart_the_window() {
+    use matrix_firmware::boot_validation::HealthWindow;
+    let mut w = HealthWindow::default();
+    assert_eq!(w.observe(1000, true, false, 1, 0), 0);
+    assert_eq!(w.observe(5000, true, false, 5, 0), 4000);
+    assert_eq!(w.observe(6000, true, false, 5, 0), 0);
+    assert_eq!(w.observe(7000, true, false, 6, 0), 0);
+    assert_eq!(w.observe(8000, false, false, 7, 0), 0);
+    assert_eq!(w.observe(9000, true, false, 8, 0), 0);
+    assert_eq!(w.observe(10000, true, true, 9, 0), 0);
+    assert_eq!(w.observe(11000, true, false, 10, 0), 0);
+    assert_eq!(w.observe(16000, true, false, 15, 0), 5000);
+}
+
+#[test]
 fn deadline_takes_precedence_over_late_health() {
     let o = observation();
     assert_eq!(
