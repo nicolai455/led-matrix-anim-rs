@@ -55,8 +55,8 @@ pub const PROFILE_ESP32_BARE: BoardProfile = BoardProfile {
 /// Panel 2 data is assigned to GPIO 10 (valid high-speed output pin not used by Octal PSRAM/Flash).
 pub const PROFILE_ESP32_S3: BoardProfile = BoardProfile {
     name: "ESP32-S3 N16R8",
-    panel_pins: [8, 3, 10, 9], // GPIO 10 replaces invalid input-only GPIO 46
-    data_pin: 8,
+    panel_pins: [17, 4, 10, 9], // GPIO 17 replaces 8, GPIO 4 replaces 3, GPIO 10 replaces strapping pin 46
+    data_pin: 17,
     button_pin: Some(0),
     mic_pins: Some(MicPins {
         sd: 16,

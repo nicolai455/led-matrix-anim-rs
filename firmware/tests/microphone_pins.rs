@@ -10,7 +10,7 @@ fn microphone_profiles_keep_s3_off_memory_pins() {
             sck: 41
         })
     );
-    assert_eq!(PROFILE_ESP32_S3.panel_pins, [8, 3, 10, 9]);
+    assert_eq!(PROFILE_ESP32_S3.panel_pins, [17, 4, 10, 9]);
     assert_eq!(
         PROFILE_ESP32_WROOM.mic_pins,
         Some(MicPins {

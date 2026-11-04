@@ -88,6 +88,8 @@ impl I2sMicAudioInput {
             let shared_worker = Arc::clone(&shared);
             std::thread::Builder::new()
                 .name("i2s_mic".to_string())
+                // DSP state and sample blocks live on the heap; a larger stack
+                // starved the HTTP server of internal RAM next to the LCD buffer.
                 .stack_size(16384)
                 .spawn(move || {
                     Self::capture_worker_loop(shared_worker);
@@ -136,9 +138,10 @@ impl I2sMicAudioInput {
     fn init_hardware_channel(right_channel: bool) -> Option<esp_idf_sys::i2s_chan_handle_t> {
         unsafe {
             let mut chan_cfg: esp_idf_sys::i2s_chan_config_t = std::mem::zeroed();
-            chan_cfg.id = esp_idf_sys::i2s_port_t_I2S_NUM_0;
+            chan_cfg.id = esp_idf_sys::i2s_port_t_I2S_NUM_AUTO;
             chan_cfg.role = esp_idf_sys::i2s_role_t_I2S_ROLE_MASTER;
-            chan_cfg.dma_desc_num = 2;
+            // 4 x 128 frames (2 KiB internal DMA RAM) suffice for effects.
+            chan_cfg.dma_desc_num = 4;
             chan_cfg.dma_frame_num = 128;
             chan_cfg.auto_clear = false;
 
@@ -168,6 +171,16 @@ impl I2sMicAudioInput {
                 esp_idf_sys::i2s_del_channel(rx_handle);
                 return None;
             };
+            #[cfg(esp32s3)]
+            {
+                std_cfg.slot_cfg.left_align = true;
+                std_cfg.slot_cfg.big_endian = false;
+                std_cfg.slot_cfg.bit_order_lsb = false;
+            }
+            #[cfg(not(esp32s3))]
+            {
+                std_cfg.slot_cfg.msb_right = false;
+            }
             std_cfg.gpio_cfg.mclk = esp_idf_sys::gpio_num_t_GPIO_NUM_NC;
             std_cfg.gpio_cfg.bclk = pins.sck as esp_idf_sys::gpio_num_t;
             std_cfg.gpio_cfg.ws = pins.ws as esp_idf_sys::gpio_num_t;
@@ -188,7 +201,7 @@ impl I2sMicAudioInput {
 
     fn capture_worker_loop(shared: Arc<CaptureShared>) {
         #[cfg(target_os = "espidf")]
-        let mut dsp = MicDsp::new();
+        let mut dsp = Box::new(MicDsp::new());
         #[cfg(target_os = "espidf")]
         let start_time = std::time::Instant::now();
 
@@ -206,9 +219,9 @@ impl I2sMicAudioInput {
         let mut init_attempted = false;
 
         #[cfg(target_os = "espidf")]
-        let mut raw_buf = [0i32; MIC_BLOCK_SAMPLES];
+        let mut raw_buf = vec![0i32; MIC_BLOCK_SAMPLES].into_boxed_slice();
         #[cfg(target_os = "espidf")]
-        let mut samples = [0.0f32; MIC_BLOCK_SAMPLES];
+        let mut samples = vec![0.0f32; MIC_BLOCK_SAMPLES].into_boxed_slice();
 
         while !shared.shutdown.load(Ordering::Relaxed) {
             // Check quiesce request (e.g. for OTA)
@@ -246,7 +259,7 @@ impl I2sMicAudioInput {
                             let _ = esp_idf_sys::i2s_del_channel(chan);
                         }
                         log::info!("Microphone capture stopped; I2S channel released");
-                        dsp = MicDsp::new();
+                        dsp = Box::new(MicDsp::new());
                     }
                     init_attempted = false;
                 }
@@ -309,7 +322,7 @@ impl I2sMicAudioInput {
                             raw_buf.as_mut_ptr() as *mut std::ffi::c_void,
                             raw_buf.len() * 4,
                             &mut bytes_read,
-                            50, // 50ms read timeout
+                            100, // 100ms read timeout
                         )
                     };
 

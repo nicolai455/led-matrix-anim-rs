@@ -107,7 +107,10 @@ void *parallel_lcd_create(const int *pins, size_t lane_bytes) {
     lcd_ll_set_phase_cycles(p->hal.dev, 0, 0, 1);
     lcd_ll_set_blank_cycles(p->hal.dev, 1, 1);
     lcd_ll_enable_interrupt(p->hal.dev, LCD_LL_EVENT_TRANS_DONE, false);
-    gdma_channel_alloc_config_t config = { .direction = GDMA_CHANNEL_DIRECTION_TX };
+    gdma_channel_alloc_config_t config = {
+        .direction = GDMA_CHANNEL_DIRECTION_TX,
+        .flags = { .reserve_sibling = 1 },
+    };
     if (gdma_new_channel(&config, &p->dma) != ESP_OK) goto fail;
     if (gdma_connect(p->dma, GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_LCD, 0)) != ESP_OK) goto fail;
     p->connected = true;
