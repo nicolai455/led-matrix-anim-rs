@@ -12,27 +12,68 @@ pub const TOTAL_BYTES: usize = PIXELS * 3; // 3072 bytes
 #[cfg(target_os = "espidf")]
 const RMT_COMPLETION_TIMEOUT_MS: i32 = 1000;
 
-/// The IRAM-safe encoder reads this payload with the flash cache disabled.
-/// Allocate internal RAM explicitly: ordinary malloc may fall back to PSRAM.
-#[cfg(target_os = "espidf")]
-struct InternalBuffer(std::ptr::NonNull<u8>);
+#[cfg(test)]
+mod placement_tests {
+    use super::prefer_psram;
+    use std::cell::Cell;
 
-#[cfg(target_os = "espidf")]
-impl InternalBuffer {
-    fn new() -> Self {
-        let ptr = unsafe {
-            esp_idf_sys::heap_caps_calloc(
-                TOTAL_BYTES,
-                1,
-                esp_idf_sys::MALLOC_CAP_INTERNAL | esp_idf_sys::MALLOC_CAP_8BIT,
+    #[test]
+    fn psram_is_only_attempted_for_lcd_and_falls_back_on_failure() {
+        let attempts = Cell::new(0);
+        let make = |allowed, available: bool| {
+            prefer_psram(
+                allowed,
+                || {
+                    attempts.set(attempts.get() + 1);
+                    available.then_some("psram")
+                },
+                || "internal",
             )
         };
-        Self(std::ptr::NonNull::new(ptr.cast()).expect("No internal RAM for RMT payload"))
+        assert_eq!(make(false, true), "internal");
+        assert_eq!(attempts.get(), 0);
+        assert_eq!(make(true, true), "psram");
+        assert_eq!(make(true, false), "internal");
+        assert_eq!(attempts.get(), 2);
+    }
+}
+
+#[cfg(any(target_os = "espidf", test))]
+fn prefer_psram<T>(
+    allowed: bool,
+    external: impl FnOnce() -> Option<T>,
+    internal: impl FnOnce() -> T,
+) -> T {
+    if allowed {
+        if let Some(buffer) = external() {
+            return buffer;
+        }
+    }
+    internal()
+}
+
+/// RMT's IRAM-safe encoder needs internal RAM. LCD reads its source only from
+/// task context, encoding it into a separate internal DMA waveform first.
+#[cfg(target_os = "espidf")]
+struct OutputBuffer(std::ptr::NonNull<u8>);
+
+#[cfg(target_os = "espidf")]
+impl OutputBuffer {
+    fn new(lcd_source: bool) -> Self {
+        let alloc = |caps| unsafe {
+            std::ptr::NonNull::new(esp_idf_sys::heap_caps_calloc(TOTAL_BYTES, 1, caps).cast())
+        };
+        Self(prefer_psram(
+            lcd_source,
+            || alloc(esp_idf_sys::MALLOC_CAP_SPIRAM | esp_idf_sys::MALLOC_CAP_8BIT),
+            || alloc(esp_idf_sys::MALLOC_CAP_INTERNAL | esp_idf_sys::MALLOC_CAP_8BIT)
+                .expect("No internal RAM for LED payload"),
+        ))
     }
 }
 
 #[cfg(target_os = "espidf")]
-impl std::ops::Deref for InternalBuffer {
+impl std::ops::Deref for OutputBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         // SAFETY: owns a live, zero-initialized TOTAL_BYTES allocation.
@@ -41,7 +82,7 @@ impl std::ops::Deref for InternalBuffer {
 }
 
 #[cfg(target_os = "espidf")]
-impl std::ops::DerefMut for InternalBuffer {
+impl std::ops::DerefMut for OutputBuffer {
     fn deref_mut(&mut self) -> &mut [u8] {
         // SAFETY: unique ownership; transfers complete before buffer reuse.
         unsafe { std::slice::from_raw_parts_mut(self.0.as_ptr(), TOTAL_BYTES) }
@@ -49,7 +90,7 @@ impl std::ops::DerefMut for InternalBuffer {
 }
 
 #[cfg(target_os = "espidf")]
-impl Drop for InternalBuffer {
+impl Drop for OutputBuffer {
     fn drop(&mut self) {
         unsafe { esp_idf_sys::heap_caps_free(self.0.as_ptr().cast()) }
     }
@@ -57,7 +98,7 @@ impl Drop for InternalBuffer {
 
 #[cfg(target_os = "espidf")]
 // SAFETY: uniquely owned and only accessed by one render task at a time.
-unsafe impl Send for InternalBuffer {}
+unsafe impl Send for OutputBuffer {}
 
 /// Configuration for LED output power and geometry.
 #[derive(Clone, Debug)]
@@ -196,7 +237,7 @@ pub struct RmtLedOutput {
     #[cfg(not(target_os = "espidf"))]
     buffer: Box<[u8]>,
     #[cfg(target_os = "espidf")]
-    buffer: InternalBuffer,
+    buffer: OutputBuffer,
     #[cfg(target_os = "espidf")]
     hardware: Option<HardwareRmt>,
     // S3 parallel output: DMA streams a pre-expanded waveform, so no CPU
@@ -283,6 +324,10 @@ impl RmtLedOutput {
             }
         };
 
+        // Only S3 parallel LCD uses the CPU-only source; all RMT paths must
+        // remain accessible when the flash/PSRAM cache is disabled.
+        #[cfg(target_os = "espidf")]
+        let buffer = OutputBuffer::new(cfg!(esp32s3) && settings.parallel_output);
         Self {
             settings,
             panel_config,
@@ -290,7 +335,7 @@ impl RmtLedOutput {
             #[cfg(not(target_os = "espidf"))]
             buffer: vec![0u8; TOTAL_BYTES].into_boxed_slice(),
             #[cfg(target_os = "espidf")]
-            buffer: InternalBuffer::new(),
+            buffer,
             #[cfg(target_os = "espidf")]
             hardware,
             #[cfg(all(target_os = "espidf", esp32s3))]

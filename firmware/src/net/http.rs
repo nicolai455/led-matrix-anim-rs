@@ -11,15 +11,66 @@ pub struct FirmwareHttpServer {
     _server: esp_idf_svc::http::server::EspHttpServer<'static>,
 }
 
+/// Conservative admission heuristic for allocating API requests, not an OOM
+/// guarantee or a measured networking reservation. The internal floor is the
+/// maximum buffered API body. The 1 KiB DMA floor is an uncalibrated, small
+/// emergency reserve, not a measured DMA allocation requirement. These floors
+/// are not claims that any allocation will actually succeed. Capability regions
+/// can overlap and must never be summed. PSRAM cannot substitute for internal/DMA memory.
+/// Cached state/catalog GETs, status, recovery, static assets, reboot and
+/// streaming OTA bypass this policy so recovery remains possible.
+/// Rejected API requests return HTTP 503 with a retryable memory-pressure error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HttpHeapPressure {
+    pub internal_free: usize,
+    pub internal_largest: usize,
+    pub dma_free: usize,
+    pub dma_largest: usize,
+}
+
+pub const DMA_PRESSURE_FLOOR_BYTES: usize = 1024;
+
+pub fn shed_dynamic_api(heap: HttpHeapPressure) -> bool {
+    heap.internal_free < MAX_API_BODY_BYTES
+        || heap.internal_largest < MAX_API_BODY_BYTES
+        || heap.dma_free < DMA_PRESSURE_FLOOR_BYTES
+        || heap.dma_largest < DMA_PRESSURE_FLOOR_BYTES
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApiAdmission {
+    Allow,
+    Shed,
+}
+
+/// Cached GETs stream existing bytes; status remains available for diagnostics.
+/// Explicit recovery and OTA routes bypass the wildcard handlers.
+pub fn api_admission(method: &str, path: &str, memory_low: bool) -> ApiAdmission {
+    let exempt = matches!(
+        (method, path),
+        ("GET", "/api/state" | "/api/effects" | "/api/catalog" | "/api/status" | "/api/firmware" | "/api/recovery")
+            | ("POST", "/api/recovery/retry" | "/api/reboot")
+    );
+    if memory_low && path.starts_with("/api/") && !exempt {
+        ApiAdmission::Shed
+    } else {
+        ApiAdmission::Allow
+    }
+}
+
 #[cfg(target_os = "espidf")]
 fn memory_is_low() -> bool {
+    use esp_idf_sys as idf;
+    let internal = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_8BIT;
+    let dma = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_DMA;
+    // Samples are advisory and can change immediately after the calls.
     unsafe {
-        let free = esp_idf_sys::esp_get_free_heap_size();
-        let largest_block =
-            esp_idf_sys::heap_caps_get_largest_free_block(esp_idf_sys::MALLOC_CAP_8BIT);
-        // Shed incoming dynamic API requests when free heap drops below 16 KB or largest
-        // allocatable block drops below 8 KB. This protects the ESP32 from OOM aborts.
-        free < 16 * 1024 || largest_block < 8 * 1024
+        shed_dynamic_api(HttpHeapPressure {
+            internal_free: idf::heap_caps_get_free_size(internal),
+            internal_largest: idf::heap_caps_get_largest_free_block(internal),
+            dma_free: idf::heap_caps_get_free_size(dma),
+            dma_largest: idf::heap_caps_get_largest_free_block(dma),
+        })
     }
 }
 
@@ -112,7 +163,7 @@ impl FirmwareHttpServer {
         let ctx = api_ctx.clone();
         server
             .fn_handler("/api/*", Method::Get, move |req| {
-                if memory_is_low() {
+                if api_admission("GET", req.uri(), memory_is_low()) == ApiAdmission::Shed {
                     return send_response(
                         req,
                         HttpResponse::err_json(503, "device low on memory, shedding load"),
@@ -200,7 +251,7 @@ impl FirmwareHttpServer {
         let ctx = api_ctx.clone();
         server
             .fn_handler("/api/*", Method::Post, move |mut req| {
-                if memory_is_low() {
+                if api_admission("POST", req.uri(), memory_is_low()) == ApiAdmission::Shed {
                     return send_response(
                         req,
                         HttpResponse::err_json(503, "device low on memory, shedding load"),
