@@ -147,8 +147,11 @@ impl WifiManager {
 
         // Keep the system event loop alive for default Wi-Fi handlers and HTTP.
         let event_loop_guard = sysloop;
+        #[cfg(target_os = "espidf")]
+        crate::memory_diagnostics::log_heap("wifi-before-driver");
         let mut wifi = EspWifi::new(modem, event_loop_guard.clone(), Some(nvs))
             .map_err(|e| format!("EspWifi::new: {e}"))?;
+        crate::memory_diagnostics::log_heap("wifi-after-driver");
 
         let ap_conf = AccessPointConfiguration {
             ssid: policy
@@ -196,7 +199,9 @@ impl WifiManager {
 
         wifi.set_configuration(&init_mode)
             .map_err(|e| format!("set_configuration: {e}"))?;
+        crate::memory_diagnostics::log_heap("wifi-after-config");
         wifi.start().map_err(|e| format!("start: {e}"))?;
+        crate::memory_diagnostics::log_heap("wifi-after-start");
 
         let power = unsafe {
             esp_idf_svc::sys::esp_wifi_set_ps(esp_idf_svc::sys::wifi_ps_type_t_WIFI_PS_NONE)

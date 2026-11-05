@@ -7,6 +7,12 @@ use std::sync::mpsc::{self, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "espidf")]
+fn log_current_stack(task: &str) {
+    let free = unsafe { esp_idf_sys::uxTaskGetStackHighWaterMark(std::ptr::null_mut()) };
+    log::warn!("RAM stack task={task} minimum_free_bytes={free}");
+}
+
 pub const MAX_KIND_BYTES: usize = 128;
 pub const MAX_PAYLOAD_BYTES: usize = 2048;
 
@@ -147,8 +153,19 @@ impl ControlHub {
         let cached_snapshot = Arc::new(RwLock::new(initial_snapshot));
         let (telemetry_tx, telemetry_rx) = mpsc::sync_channel::<Telemetry>(2);
         let worker_cache = cached_snapshot.clone();
-        std::thread::Builder::new().name("telemetry-worker".into()).stack_size(16384)
-            .spawn(move || { while let Ok(item) = telemetry_rx.recv() { publish_telemetry(&worker_cache, item); } })
+        std::thread::Builder::new().name("telemetry-worker".into()).stack_size(12288)
+            .spawn(move || {
+                #[cfg(target_os = "espidf")]
+                let mut last_stack_log = Instant::now();
+                while let Ok(item) = telemetry_rx.recv() {
+                    publish_telemetry(&worker_cache, item);
+                    #[cfg(target_os = "espidf")]
+                    if last_stack_log.elapsed() >= Duration::from_secs(10) {
+                        log_current_stack("telemetry");
+                        last_stack_log = Instant::now();
+                    }
+                }
+            })
             .map_err(|e| format!("failed to spawn telemetry worker: {e}"))?;
         let cached_frame = Arc::new(RwLock::new(initial_frame));
         let thread_handle = Arc::new(Mutex::new(None));
@@ -186,7 +203,7 @@ impl ControlHub {
         let last_output_error_for_thread = last_output_error;
 
         #[cfg(target_os = "espidf")]
-        let stack_size = 24576;
+        let stack_size = 20480;
         #[cfg(not(target_os = "espidf"))]
         let stack_size = 131072;
 
@@ -212,7 +229,14 @@ impl ControlHub {
                 let mut state = Arc::new(engine.capture_snapshot());
                 let mut published_state = state.clone();
                 let mut pending: Option<Telemetry> = None;
+                #[cfg(target_os = "espidf")]
+                let mut last_stack_log = Instant::now();
                 while !shutdown_for_thread.load(Ordering::Relaxed) {
+                    #[cfg(target_os = "espidf")]
+                    if last_stack_log.elapsed() >= Duration::from_secs(10) {
+                        log_current_stack("render");
+                        last_stack_log = Instant::now();
+                    }
                     // 1. Drain up to finite batch of commands (e.g. 16)
                     let mut state_changed = false;
                     if let Some(item) = pending.take() {

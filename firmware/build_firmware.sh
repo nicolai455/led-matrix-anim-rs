@@ -260,9 +260,10 @@ build_target() {
     export MCU="$mcu"
     local resolved_defaults="$SCRIPT_DIR/target/matrix-sdkconfig-$mcu.defaults"
     mkdir -p "$SCRIPT_DIR/target"
-    cp "$SCRIPT_DIR/sdkconfig.defaults" "$resolved_defaults"
-    printf '\nCONFIG_PARTITION_TABLE_CUSTOM_FILENAME="%s/%s"\nCONFIG_PARTITION_TABLE_FILENAME="%s/%s"\n' \
-        "$SCRIPT_DIR" "$table_file" "$SCRIPT_DIR" "$table_file" >> "$resolved_defaults"
+    # Only absolute partition paths belong in this final override layer; copying
+    # common defaults here would override the target-specific configuration.
+    printf 'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="%s/%s"\nCONFIG_PARTITION_TABLE_FILENAME="%s/%s"\n' \
+        "$SCRIPT_DIR" "$table_file" "$SCRIPT_DIR" "$table_file" > "$resolved_defaults"
     export ESP_IDF_SDKCONFIG_DEFAULTS="$SCRIPT_DIR/sdkconfig.defaults;$SCRIPT_DIR/$defaults_file;$resolved_defaults"
 
     mkdir -p "$SCRIPT_DIR/target/$target_arch/$PROFILE"

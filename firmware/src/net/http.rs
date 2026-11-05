@@ -137,9 +137,11 @@ impl FirmwareHttpServer {
                     for chunk in catalog.chunks(1024) {
                         response.write_all(chunk)?;
                     }
+                    crate::memory_diagnostics::log_current_stack("http");
                     return Ok::<(), anyhow::Error>(());
                 }
                 let resp = handle_api_request(&ctx, "GET", &uri, &[]);
+                crate::memory_diagnostics::log_current_stack("http");
                 send_response(req, resp)
             })
             .map_err(|e| e.to_string())?;
@@ -237,6 +239,7 @@ impl FirmwareHttpServer {
                 }
 
                 let resp = handle_api_request(&ctx, "POST", &uri, &body);
+                crate::memory_diagnostics::log_current_stack("http");
                 send_response(req, resp)
             })
             .map_err(|e| e.to_string())?;

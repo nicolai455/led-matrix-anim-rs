@@ -38,7 +38,11 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
         .clone();
     std::thread::Builder::new()
         .name("boot-validation".into())
-        .stack_size(8192)
+        // An 8192-byte stack had a 6340-byte minimum free watermark
+        // (1852 bytes observed used). 6144 retains about 4292 bytes of
+        // observed headroom; unobserved failure/rollback paths may use more.
+        // Recheck the watermark on hardware, including failure paths.
+        .stack_size(6144)
         .spawn(move || {
             let started = Instant::now();
             let mut window = HealthWindow::default();
@@ -60,6 +64,7 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
                 // These must survive release_max_level_warn: otherwise a
                 // rejected trial leaves no explanation in its serial capture.
                 if previous == 0 || started.elapsed().as_secs() % 5 == 0 {
+                    crate::memory_diagnostics::log_current_stack("boot-validation");
                     log::warn!(
                         "OTA trial health: age={}s ready={} failed={} hub={} output={} paused={} frames={} previous={} errors={}",
                         started.elapsed().as_secs(), ready, failed, hub.is_some(),

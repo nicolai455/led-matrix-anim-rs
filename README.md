@@ -233,6 +233,12 @@ curl -X POST --data-binary @firmware/target/xtensa-esp32-espidf/release/matrix-f
 
 The device performs a two-phase handshake (clears LEDs, halts I2S DMA), writes to the passive OTA slot, and reboots.
 
+### Memory diagnostics
+
+Release firmware emits `RAM` diagnostics to the serial console at boot, around service startup, on microphone capture transitions and OTA quiescence, and every 10 seconds. All values are bytes: `free` is current heap, `min` is the boot-to-date low-water mark, and `largest` is the largest contiguous allocation. Internal DMA-capable memory overlaps the internal region; do not add the two. PSRAM values are zero on boards without it. Region low-water marks are aggregated per heap and are not necessarily simultaneous.
+
+`RAM stack` lines show each task's minimum free stack since creation (smaller means closer to overflow). Render, microphone and MQTT report periodically; telemetry reports when processing work, and HTTP reports when requests are handled. Missing task lines can mean the service is disabled or idle, not that its stack is empty. Exercise effects, microphone capture, HTTP, MQTT and OTA to establish useful worst cases; logging itself affects stack and timing. OTA diagnostics do not initiate an update.
+
 ### 6. Fallback Access Point (`JDJLIGHT`)
 
 If configured Wi-Fi is unavailable or out of range, the device creates a standalone fallback Wi-Fi hotspot:

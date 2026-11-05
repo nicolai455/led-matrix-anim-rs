@@ -18,6 +18,8 @@ struct QuiesceState {
     requested: bool,
     confirmed: bool,
     disabled: bool,
+    worker_started: bool,
+    services_initialized: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -75,6 +77,7 @@ pub struct I2sMicAudioInput {
     shared: Arc<CaptureShared>,
     #[allow(dead_code)]
     worker_handle: Option<std::thread::JoinHandle<()>>,
+    last_spawn_attempt: Option<std::time::Instant>,
 }
 
 #[derive(Clone)]
@@ -83,11 +86,22 @@ pub struct MicQuiesce {
     available: bool,
 }
 impl MicQuiesce {
+    /// Allow lazy capture startup once network services have initialized.
+    pub fn network_services_initialized(&self) {
+        self.shared.quiesce.lock().unwrap().services_initialized = true;
+    }
+
     pub fn pause(&self) -> Result<(), String> {
         if !self.available {
             return Ok(());
         }
-        self.shared.quiesce.lock().unwrap().requested = true;
+        {
+            let mut state = self.shared.quiesce.lock().unwrap();
+            state.requested = true;
+            if !state.worker_started {
+                state.confirmed = true;
+            }
+        }
         let deadline = std::time::Instant::now() + Duration::from_secs(1);
         while !self.shared.quiesce.lock().unwrap().confirmed {
             if std::time::Instant::now() >= deadline {
@@ -122,25 +136,47 @@ impl I2sMicAudioInput {
             capture_enabled: AtomicBool::new(false),
         });
 
-        let worker_handle = if available {
-            let shared_worker = Arc::clone(&shared);
-            std::thread::Builder::new()
-                .name("i2s_mic".to_string())
-                // DSP state and sample blocks live on the heap; a larger stack
-                // starved the HTTP server of internal RAM next to the LCD buffer.
-                .stack_size(16384)
-                .spawn(move || {
-                    Self::capture_worker_loop(shared_worker);
-                })
-                .ok()
-        } else {
-            None
-        };
-
         Self {
             available,
             shared,
-            worker_handle,
+            worker_handle: None,
+            last_spawn_attempt: None,
+        }
+    }
+
+    fn ensure_worker_started(&mut self) {
+        self.ensure_worker_started_with(|shared| {
+            std::thread::Builder::new()
+                .name("i2s_mic".into())
+                .stack_size(16384)
+                .spawn(move || Self::capture_worker_loop(shared))
+        });
+    }
+
+    fn ensure_worker_started_with(
+        &mut self,
+        spawn: impl FnOnce(Arc<CaptureShared>) -> std::io::Result<std::thread::JoinHandle<()>>,
+    ) {
+        if !self.available || self.worker_handle.is_some()
+            || !self.shared.capture_enabled.load(Ordering::SeqCst)
+        {
+            return;
+        }
+        // Serialize starting with pause's acknowledgement.
+        let mut state = self.shared.quiesce.lock().unwrap();
+        if !state.services_initialized
+            || state.requested
+            || self.last_spawn_attempt.is_some_and(|at| at.elapsed() < Duration::from_secs(1))
+        {
+            return;
+        }
+        self.last_spawn_attempt = Some(std::time::Instant::now());
+        match spawn(self.shared.clone()) {
+            Ok(handle) => {
+                state.worker_started = true;
+                self.worker_handle = Some(handle);
+            }
+            Err(err) => log::error!("Failed to start microphone worker: {err}"),
         }
     }
 
@@ -152,7 +188,13 @@ impl I2sMicAudioInput {
         if !self.available {
             return;
         }
-        self.shared.quiesce.lock().unwrap().requested = true;
+        {
+            let mut state = self.shared.quiesce.lock().unwrap();
+            state.requested = true;
+            if !state.worker_started {
+                state.confirmed = true;
+            }
+        }
         // Handshake: wait up to 300ms for capture worker to confirm I2S DMA is disabled
         for _ in 0..30 {
             if self.shared.quiesce.lock().unwrap().confirmed {
@@ -262,8 +304,15 @@ impl I2sMicAudioInput {
         let mut raw_buf = vec![0i32; MIC_BLOCK_SAMPLES].into_boxed_slice();
         #[cfg(target_os = "espidf")]
         let mut samples = vec![0.0f32; MIC_BLOCK_SAMPLES].into_boxed_slice();
+        #[cfg(target_os = "espidf")]
+        let mut last_stack_log = std::time::Instant::now();
 
         while !shared.shutdown.load(Ordering::Relaxed) {
+            #[cfg(target_os = "espidf")]
+            if last_stack_log.elapsed() >= Duration::from_secs(10) {
+                crate::memory_diagnostics::log_current_stack("microphone");
+                last_stack_log = std::time::Instant::now();
+            }
             // Serialize the request and transition so old acknowledgements cannot
             // be published after resume, even across a rapid pause/resume/pause.
             let step = shared.quiesce.lock().unwrap().step(
@@ -305,6 +354,7 @@ impl I2sMicAudioInput {
                         }
                         log::info!("Microphone capture stopped; I2S channel released");
                         dsp = Box::new(MicDsp::new());
+                        crate::memory_diagnostics::log_heap("mic-stopped");
                     }
                     init_attempted = false;
                 }
@@ -332,6 +382,7 @@ impl I2sMicAudioInput {
                     .unwrap_or(false);
                 shared.reconfigure_channel.store(false, Ordering::SeqCst);
                 rx_chan = Self::init_hardware_channel(right_channel_active);
+                crate::memory_diagnostics::log_heap(if rx_chan.is_some() { "mic-started" } else { "mic-start-failed" });
                 if rx_chan.is_some() {
                     log::info!("Microphone capture started");
                 }
@@ -428,12 +479,18 @@ impl Drop for I2sMicAudioInput {
         self.shared.shutdown.store(true, Ordering::SeqCst);
         if let Some(worker) = self.worker_handle.take() {
             let _ = worker.join();
+            let mut state = self.shared.quiesce.lock().unwrap();
+            state.worker_started = false;
+            if state.requested {
+                state.confirmed = true;
+            }
         }
     }
 }
 
 impl AudioInput for I2sMicAudioInput {
     fn snapshot(&mut self, _now_ms: u64) -> AudioSnapshot {
+        self.ensure_worker_started();
         if !self.available
             || !self.shared.capture_enabled.load(Ordering::Acquire)
             || self.shared.quiesce.lock().unwrap().requested
@@ -468,6 +525,9 @@ impl AudioInput for I2sMicAudioInput {
     fn set_active(&mut self, active: bool) {
         if self.available {
             self.shared.capture_enabled.store(active, Ordering::Release);
+            if active {
+                self.ensure_worker_started();
+            }
         }
     }
 
@@ -493,6 +553,116 @@ impl AudioInput for I2sMicAudioInput {
 #[cfg(test)]
 mod quiesce_regressions {
     use super::*;
+
+    #[test]
+    fn saved_mic_waits_for_services_and_starts_on_next_snapshot() {
+        let mut mic = I2sMicAudioInput::new(true, MicSettings::default());
+        let gate = mic.quiesce_handle();
+        mic.set_active(true);
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_none());
+        gate.network_services_initialized();
+        assert!(mic.worker_handle.is_none());
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_some());
+    }
+
+    #[test]
+    fn services_ready_during_ota_cannot_start_until_resume() {
+        let mut mic = I2sMicAudioInput::new(true, MicSettings::default());
+        let gate = mic.quiesce_handle();
+        mic.set_active(true);
+        gate.pause().unwrap();
+        gate.network_services_initialized();
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_none());
+        assert!(mic.shared.quiesce.lock().unwrap().confirmed);
+        gate.resume();
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_some());
+    }
+
+    #[test]
+    fn failed_spawn_retries_on_sampling() {
+        let mut mic = I2sMicAudioInput::new(true, MicSettings::default());
+        mic.quiesce_handle().network_services_initialized();
+        mic.shared.capture_enabled.store(true, Ordering::SeqCst);
+        mic.ensure_worker_started_with(|_| Err(std::io::Error::other("injected failure")));
+        assert!(mic.worker_handle.is_none());
+        let mut retried = false;
+        mic.ensure_worker_started_with(|_| {
+            retried = true;
+            Err(std::io::Error::other("unexpected retry"))
+        });
+        assert!(!retried, "failed spawns must be rate limited");
+        mic.last_spawn_attempt = Some(std::time::Instant::now() - Duration::from_secs(2));
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_some());
+    }
+
+    #[test]
+    fn worker_starts_only_on_capture_activation() {
+        let mut mic = I2sMicAudioInput::new(true, MicSettings::default());
+        mic.quiesce_handle().network_services_initialized();
+        assert!(mic.worker_handle.is_none());
+        mic.set_active(false);
+        assert!(mic.worker_handle.is_none());
+        mic.set_active(true);
+        assert!(mic.worker_handle.is_some());
+        mic.set_active(false);
+        mic.set_active(true);
+        assert!(mic.worker_handle.is_some());
+    }
+
+    #[test]
+    fn never_started_worker_can_quiesce_and_activation_remains_paused() {
+        let mut mic = I2sMicAudioInput::new(true, MicSettings::default());
+        let pause = mic.quiesce_handle();
+        pause.network_services_initialized();
+        pause.pause().unwrap();
+        assert!(mic.worker_handle.is_none());
+        mic.set_active(true);
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_none());
+        assert!(mic.shared.quiesce.lock().unwrap().requested);
+        pause.pause().unwrap();
+        pause.resume();
+        mic.snapshot(0);
+        assert!(mic.worker_handle.is_some());
+    }
+
+    #[test]
+    fn concurrent_activation_and_pause_preserve_quiescence() {
+        for _ in 0..100 {
+            let mut mic = I2sMicAudioInput::new(true, MicSettings::default());
+            let pause = mic.quiesce_handle();
+            pause.network_services_initialized();
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let other = barrier.clone();
+            let thread = std::thread::spawn(move || {
+                other.wait();
+                pause.pause().unwrap();
+                pause
+            });
+            barrier.wait();
+            mic.set_active(true);
+            let pause = thread.join().unwrap();
+            let state = mic.shared.quiesce.lock().unwrap();
+            assert!(state.requested && state.confirmed);
+            drop(state);
+            drop(mic);
+            pause.pause().unwrap();
+            pause.resume();
+        }
+    }
+
+    #[test]
+    fn unavailable_mic_never_spawns() {
+        let mut mic = I2sMicAudioInput::new(false, MicSettings::default());
+        mic.set_active(true);
+        assert!(mic.worker_handle.is_none());
+        mic.quiesce_handle().pause().unwrap();
+    }
 
     #[test]
     fn disable_failure_never_acknowledges_and_retries() {

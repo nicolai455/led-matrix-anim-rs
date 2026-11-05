@@ -86,12 +86,7 @@ fn run_firmware() {
     #[cfg(target_os = "espidf")]
     let boot_health = matrix_firmware::boot_guard::start();
     #[cfg(target_os = "espidf")]
-    unsafe {
-        let stack_watermark = esp_idf_sys::uxTaskGetStackHighWaterMark(std::ptr::null_mut());
-        let free_heap = esp_idf_sys::esp_get_free_heap_size();
-        let min_free_heap = esp_idf_sys::esp_get_minimum_free_heap_size();
-        log::info!("firmware-main started! Stack high-water mark: {stack_watermark}, free heap: {free_heap}, min free: {min_free_heap}");
-    }
+    matrix_firmware::memory_diagnostics::log_heap("boot");
 
     let profile = get_default_profile();
     log::info!("=== Matrix Firmware booting on {} ===", profile.name);
@@ -227,6 +222,9 @@ fn run_firmware() {
         matrix_firmware::recovery::RecoveryOutput::Hardware(hardware)
     };
 
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("after-led-output");
+
     // 8. Initialize Microphone
     let has_mic = !safe_mode && profile.mic_pins.is_some();
     let initial_mic = nvs
@@ -235,6 +233,8 @@ fn run_firmware() {
     let mic_input = I2sMicAudioInput::new(has_mic, initial_mic);
     let mic_quiesce = mic_input.quiesce_handle();
     let mic_controller = Arc::new(MicController::new(has_mic));
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("after-mic-setup");
 
     // 9. Wire shared ApiContext storage using real NVS backend hooks
     let config_store = Arc::new(ConfigStore::with_backend(
@@ -242,6 +242,9 @@ fn run_firmware() {
         Some(panel_config.clone()),
     ));
     let state_store = Arc::new(StateStore::with_backend(nvs.state_backend()));
+
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("before-hub");
 
     // 10. Spawn ControlHub render actor thread
     let output_quiesce_flag = rmt_output.control();
@@ -258,6 +261,8 @@ fn run_firmware() {
         }
     };
 
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("after-hub");
     #[cfg(target_os = "espidf")]
     {
         let mut health = boot_health.lock().expect("boot health lock poisoned");
@@ -277,6 +282,8 @@ fn run_firmware() {
     #[cfg(target_os = "espidf")]
     matrix_firmware::recovery::supervise(hub.clone(), output_quiesce_flag.clone(), safe_mode)
         .expect("Cannot start progress guard");
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("after-progress-guard");
 
     let api_ctx = Arc::new(ApiContext {
         hub: hub.clone(),
@@ -322,6 +329,8 @@ fn run_firmware() {
         (Ok(m), Ok(s)) => (m, s),
         _ => {
             log::warn!("Could not take modem or system event loop; networking skipped");
+            // Permit local audio even when networking cannot be initialized.
+            mic_quiesce.network_services_initialized();
             loop {
                 std::thread::sleep(Duration::from_secs(60));
             }
@@ -337,6 +346,8 @@ fn run_firmware() {
             None
         }
     };
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("before-wifi-start");
     #[cfg(target_os = "espidf")]
     let _wifi = match WifiManager::start(
         modem,
@@ -360,6 +371,9 @@ fn run_firmware() {
         }
     };
 
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("after-wifi-start");
+
     let _http_server = match FirmwareHttpServer::start(api_ctx, Arc::clone(&ota_manager)) {
         Ok(s) => {
             log::warn!("HTTP server operational on port 80");
@@ -371,6 +385,8 @@ fn run_firmware() {
         }
     };
 
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("after-http-start");
     #[cfg(target_os = "espidf")]
     log::warn!("Boot services: wifi={} http={}; initializing optional MQTT", _wifi.is_some(), _http_server.is_some());
     let _mqtt = network
@@ -391,6 +407,10 @@ fn run_firmware() {
             }
         });
 
+    // A saved Mic selection may already be sampled by the hub. Reserve the
+    // network services' memory before allowing the lazy I2S worker to start.
+    mic_quiesce.network_services_initialized();
+
     #[cfg(target_os = "espidf")]
     {
         boot_health.lock().expect("boot health lock poisoned").ready =
@@ -401,17 +421,18 @@ fn run_firmware() {
         matrix_firmware::recovery::startup_ready();
     }
 
+    #[cfg(target_os = "espidf")]
+    matrix_firmware::memory_diagnostics::log_heap("services-ready");
     // Retain lifetimes forever: prevent main thread from exiting and dropping resources
     log::info!("Firmware main bootstrap complete. Entering supervisor loop.");
     loop {
         #[cfg(target_os = "espidf")]
+        {
+            matrix_firmware::memory_diagnostics::log_heap("periodic");
+            matrix_firmware::memory_diagnostics::log_current_stack("supervisor");
+        }
+        #[cfg(target_os = "espidf")]
         unsafe {
-            log::info!(
-                "Runtime memory: free heap={}, minimum free heap={}, supervisor stack watermark={}",
-                esp_idf_sys::esp_get_free_heap_size(),
-                esp_idf_sys::esp_get_minimum_free_heap_size(),
-                esp_idf_sys::uxTaskGetStackHighWaterMark(std::ptr::null_mut())
-            );
             let mut access_point: esp_idf_sys::wifi_ap_record_t = std::mem::zeroed();
             if esp_idf_sys::esp_wifi_sta_get_ap_info(&mut access_point) == esp_idf_sys::ESP_OK {
                 let _ = hub.submit("rssi", &access_point.rssi.to_string());

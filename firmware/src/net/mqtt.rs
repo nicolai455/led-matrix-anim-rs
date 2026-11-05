@@ -112,7 +112,12 @@ impl FirmwareMqtt {
                 let mut topic = String::new();
                 let mut body = Vec::new();
                 let mut connection_seen=0;
+                let mut last_stack_log = Instant::now();
                 while !stop.load(Ordering::Relaxed) {
+                    if last_stack_log.elapsed() >= Duration::from_secs(10) {
+                        crate::memory_diagnostics::log_current_stack("mqtt");
+                        last_stack_log = Instant::now();
+                    }
                     let state=connection.load(Ordering::Acquire);
                     if state!=connection_seen {
                         connection_seen=state;

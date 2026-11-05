@@ -100,6 +100,8 @@ impl OtaManager {
         self.total_written = 0;
 
         self.quiesce()?;
+        crate::memory_diagnostics::log_heap("ota-quiesced");
+        crate::memory_diagnostics::log_current_stack("http");
 
         unsafe {
             let update_partition = esp_idf_sys::esp_ota_get_next_update_partition(std::ptr::null());

@@ -1,4 +1,6 @@
 CONFIG_IDF_TARGET="esp32s3"
+# Candidate supervisor (ESP-IDF main task) stack size, in bytes.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=20480
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ=240
@@ -16,6 +18,9 @@ CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
 # Reserve internal-capable memory for native service/task stacks after Wi-Fi
 # and parallel DMA initialization; PSRAM cannot satisfy those allocations.
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=65536
+
+# Four fewer static Wi-Fi TX buffers save approximately 6.4 KB internal RAM.
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=12
 
 # Keep the I2S GDMA callback context in internal RAM, as required by the
 # IRAM-safe GDMA interrupt used by LCD output.
