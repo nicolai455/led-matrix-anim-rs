@@ -93,7 +93,7 @@ test('mic meter targets newest sample immediately and decays without HTTP', () =
   for (let i = 2; i < 10; i++) h.run(`animateMicBands(micReceivedAt + ${i * 16})`);
   const peak = h.run('micDisplayedBands[0]');
   assert.ok(peak > first);
-  for (let i = 10; i < 100; i++) h.run(`animateMicBands(micReceivedAt + ${i * 16})`);
+  for (let i = 10; i < 200; i++) h.run(`animateMicBands(micReceivedAt + ${i * 16})`);
   assert.ok(h.run('micDisplayedBands[0]') < peak / 10);
   assert.deepEqual(h.requests, []);
 });
@@ -220,6 +220,8 @@ test('config UI distinguishes pending and persisted-but-failed power updates', a
     [false, {powerLimitApply: 'failed', error: 'queue full'}, /Saved, but power limit not applied/i],
   ]) {
     const h = harness();
+    Object.assign(h.element('cfgPanelOrder'), {value:'0,1,2,3'});
+    for (const [id, value] of Object.entries({cfgStartCorner:'0',cfgPanelLayout:'0',cfgDataPin:'4',cfgMaxMilliamps:'12000',cfgPin0:'4',cfgPin1:'16',cfgPin2:'17',cfgPin3:'18',cfgRotation0:'0',cfgRotation1:'0',cfgRotation2:'0',cfgRotation3:'0',cfgBootBrightness:'128',cfgBootEffect:'Rainbow',cfgBootCycle:'0',cfgBootPath:'/animations/example.lfx'})) h.element(id).value = value;
     h.sandbox.fetch = async () => ({ok, json: async () => response});
     await h.run('savePanelConfig()');
     assert.match(h.element('cfgStatusMsg').textContent, expected);

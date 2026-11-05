@@ -43,6 +43,28 @@ h2 { font-size:0.8rem; font-weight:600; margin-bottom:10px; color:var(--muted); 
 .status-dot.connected { background:var(--green); box-shadow:0 0 8px var(--green); }
 
 .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:14px; }
+.config-card { padding:0; overflow:hidden; }
+.config-card > summary { cursor:pointer; list-style:none; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.config-card > summary::-webkit-details-marker { display:none; }
+.config-card > summary:after { content:'+'; color:var(--accent); font-size:1.4rem; }
+.config-card[open] > summary:after { content:'−'; }
+.config-title { display:block; font-weight:600; font-size:1rem; }
+.config-subtitle, .config-help { display:block; color:var(--muted); font-size:0.78rem; line-height:1.5; margin-top:4px; }
+.config-body { padding:0 18px 18px; }
+.config-section { border-top:1px solid var(--border); padding:18px 0; }
+.config-section h3 { font-size:0.9rem; margin-bottom:4px; }
+.config-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
+.config-field { display:flex; flex-direction:column; gap:6px; font-size:0.8rem; color:var(--text); min-width:0; }
+.config-field input, .config-field select { width:100%; min-width:0; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:9px; color:var(--text); font:inherit; }
+.config-field input:focus, .config-field select:focus { outline:2px solid var(--accent); outline-offset:1px; }
+.config-check { display:flex; align-items:center; gap:8px; font-size:0.82rem; margin-top:12px; }
+.config-check input { accent-color:var(--accent); }
+.panel-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:14px; }
+.panel-tile { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px; min-width:0; }
+.panel-tile strong { font-size:0.8rem; }
+.panel-tile .config-field { margin-top:10px; }
+.config-notice { background:rgba(210,153,34,.09); border:1px solid rgba(210,153,34,.3); border-radius:7px; padding:10px 12px; color:var(--text); font-size:0.78rem; line-height:1.5; }
+@media (max-width:520px) { .panel-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .preview-wrap { display:flex; flex-direction:column; align-items:center; }
 .matrix-preview { width:min(100%, 448px); height:auto; aspect-ratio:1; image-rendering:pixelated; border:2px solid var(--border); border-radius:4px; background:#000; }
 .preview-controls { width:min(100%, 448px); margin-top:12px; }
@@ -227,6 +249,9 @@ select option, .param-select option { background:var(--card); color:var(--text);
         <span class="toggle-track"></span>
       </label>
     </div>
+    <label class="config-field" style="margin-top:12px">Microphone I2S channel
+      <select id="micChannel" onchange="submitMicSetting('rightChannel', this.value === 'right')"><option value="left">Left</option><option value="right">Right</option></select>
+    </label>
     <div style="margin-top:10px; padding:8px; background:var(--card-hover); border-radius:4px; font-size:0.8rem; display:flex; justify-content:space-between">
       <span>Raw: <strong id="micRawDisplay">--</strong> dBFS</span>
       <span>Applied Gain: <strong id="micGainDisplay">--</strong> dB</span>
@@ -235,50 +260,41 @@ select option, .param-select option { background:var(--card); color:var(--text);
   </div>
 </details>
 
-<!-- Panel Configuration -->
-<details class="card" id="configCard">
-  <summary style="cursor:pointer; font-weight:600; color:var(--text); font-size:0.9rem;">PANEL CONFIGURATION</summary>
-  <div style="margin-top:12px">
-    <div class="slider-row">
-      <label style="min-width:100px; font-size:0.85rem">Matrix Size</label>
-      <input type="number" id="cfgWidth" min="1" max="8" value="2" style="width:60px; background:var(--card-hover); border:1px solid var(--border); border-radius:4px; padding:4px 6px; color:var(--text)">
-      <span style="font-size:0.85rem">×</span>
-      <input type="number" id="cfgHeight" min="1" max="8" value="2" style="width:60px; background:var(--card-hover); border:1px solid var(--border); border-radius:4px; padding:4px 6px; color:var(--text)">
-    </div>
-    <div class="slider-row" style="margin-top:8px">
-      <label style="min-width:100px; font-size:0.85rem">Start Corner</label>
-      <select id="cfgStartCorner" class="param-select" style="flex:1">
-        <option value="0">Top-Left (0)</option>
-        <option value="1">Top-Right (1)</option>
-        <option value="2">Bottom-Left (2)</option>
-        <option value="3">Bottom-Right (3)</option>
-      </select>
-    </div>
-    <div class="slider-row" style="margin-top:8px">
-      <label style="min-width:100px; font-size:0.85rem">Panel Layout</label>
-      <select id="cfgPanelLayout" class="param-select" style="flex:1">
-        <option value="0">Horizontal (0)</option>
-        <option value="1">Vertical (1)</option>
-      </select>
-    </div>
-    <div class="slider-row" style="margin-top:8px">
-      <label style="min-width:100px; font-size:0.85rem">Panel Order</label>
-      <input type="text" id="cfgPanelOrder" style="flex:1; background:var(--card-hover); border:1px solid var(--border); border-radius:4px; padding:4px 6px; color:var(--text)" placeholder="0,1,2,3">
-    </div>
-    <div class="slider-row" style="margin-top:8px">
-      <label style="min-width:100px; font-size:0.85rem">Data Pin</label>
-      <input type="number" id="cfgDataPin" min="0" max="48" value="8" style="width:70px; background:var(--card-hover); border:1px solid var(--border); border-radius:4px; padding:4px 6px; color:var(--text)">
-      <label style="margin-left:12px; min-width:90px; font-size:0.85rem">Parallel Out</label>
-      <input type="checkbox" id="cfgParallelOutput">
-    </div>
-    <div class="slider-row" style="margin-top:8px">
-      <label style="min-width:100px; font-size:0.85rem">Max Power (mA)</label>
-      <input type="number" id="cfgMaxMilliamps" min="500" max="60000" step="500" value="12000" style="flex:1; background:var(--card-hover); border:1px solid var(--border); border-radius:4px; padding:4px 6px; color:var(--text)">
-    </div>
-    <div class="btn-row" style="margin-top:12px">
-      <button class="btn btn-primary" onclick="savePanelConfig()">Save Configuration</button>
-      <span id="cfgStatusMsg" style="font-size:0.8rem; color:var(--muted); align-self:center"></span>
-    </div>
+<!-- Hardware configuration -->
+<details class="card config-card" id="configCard">
+  <summary><span><span class="config-title">Hardware configuration</span><span class="config-subtitle">Output pins, panel wiring &amp; power</span></span></summary>
+  <div class="config-body">
+    <div class="config-notice">Wiring and layout changes need a device restart. Check your board's pinout before saving: reserved, input-only or microphone pins cannot be used for LED output.</div>
+    <section class="config-section">
+      <h3>LED output</h3><span class="config-help">Choose a single data line or one output per panel. GPIO availability depends on your board.</span>
+      <label class="config-check"><input type="checkbox" id="cfgParallelOutput" onchange="updateOutputMode()"> Use four parallel outputs</label>
+      <div class="config-grid"><label class="config-field">Single output GPIO<input type="number" id="cfgDataPin" min="0" max="48" step="1"></label>
+      <label class="config-field">Power limit (mA)<input type="number" id="cfgMaxMilliamps" min="1000" max="60000" step="1"></label></div>
+      <span class="config-help">The power limit is applied live when possible. Microphone pins are fixed by the board profile.</span>
+    </section>
+    <section class="config-section">
+      <h3>Panel mapping</h3><span class="config-help">Four 16 × 16 panels form a fixed 32 × 32 matrix. Panel numbers are 0–3.</span>
+      <div class="config-grid">
+        <label class="config-field">Start corner<select id="cfgStartCorner"><option value="0">Top left</option><option value="1">Top right</option><option value="2">Bottom left</option><option value="3">Bottom right</option></select></label>
+        <label class="config-field">Wiring direction<select id="cfgPanelLayout"><option value="0">Horizontal</option><option value="1">Vertical</option></select></label>
+        <label class="config-field">Panel order<input type="text" id="cfgPanelOrder" placeholder="0, 1, 2, 3"></label>
+      </div>
+      <label class="config-check"><input type="checkbox" id="cfgPanelSerpentine"> Serpentine panel arrangement</label>
+      <label class="config-check"><input type="checkbox" id="cfgMirrorX"> Mirror horizontally</label>
+      <div class="panel-grid" id="cfgPanels"></div>
+      <span class="config-help">Rotation and pixel serpentine are per physical panel; GPIOs are used in parallel mode.</span>
+    </section>
+    <section class="config-section">
+      <h3>Startup defaults</h3><span class="config-help">Used after a restart; saved runtime state can override brightness, effect and cycle settings. The LEDs always start off.</span>
+      <div class="config-grid">
+        <label class="config-field">Default brightness (0–255)<input type="number" id="cfgBootBrightness" min="0" max="255" step="1"></label>
+        <label class="config-field">Default effect ID<input type="text" id="cfgBootEffect"></label>
+        <label class="config-field">Auto-cycle interval (ms; 0 = off)<input type="number" id="cfgBootCycle" min="0" max="4294967295" step="1"></label>
+        <label class="config-field">LFX asset path (within SPIFFS)<input type="text" id="cfgBootPath"></label>
+      </div>
+      <span class="config-help">LED protocol: WS2812B · Color order: GRB</span>
+    </section>
+    <div class="btn-row"><button class="btn btn-primary" id="cfgSaveBtn" onclick="savePanelConfig()" disabled>Save configuration</button><span id="cfgStatusMsg" role="status" aria-live="polite" style="font-size:0.8rem; color:var(--muted); align-self:center"></span></div>
   </div>
 </details>
 
@@ -299,10 +315,11 @@ select option, .param-select option { background:var(--card); color:var(--text);
 
 <!-- Persistence & Config -->
 <div class="card">
-  <h2>Settings & Persistence</h2>
+  <h2>Runtime state &amp; device</h2>
+  <p class="config-help" style="margin-bottom:10px">Save or clear the current runtime state separately from hardware configuration.</p>
   <div class="btn-row">
-    <button class="btn btn-primary" onclick="saveState()">Save to Flash</button>
-    <button class="btn btn-danger" onclick="clearState()">Clear Saved</button>
+    <button class="btn btn-primary" onclick="saveState()">Save runtime state</button>
+    <button class="btn btn-danger" onclick="clearState()">Clear runtime state</button>
     <button class="btn" id="restartBtn" onclick="restartDevice()">Restart Device</button>
   </div>
 </div>
@@ -317,6 +334,7 @@ select option, .param-select option { background:var(--card); color:var(--text);
 let state = {};
 let catalog = [];
 let loadedConfig = {};
+let configRestartPending = false;
 let micSettings = {};
 const previewCtx = document.getElementById('previewCanvas').getContext('2d');
 const previewImage = previewCtx.createImageData(32, 32);
@@ -663,37 +681,89 @@ async function clearState() {
   }
 }
 
+function updateOutputMode() {
+  const parallel = document.getElementById('cfgParallelOutput').checked;
+  document.getElementById('cfgDataPin').disabled = parallel;
+  for (let i = 0; i < 4; i++) document.getElementById('cfgPin' + i).disabled = !parallel;
+}
+
 async function loadPanelConfig() {
+  const msg = document.getElementById('cfgStatusMsg');
   try {
     const cfg = await fetchJSON('/api/config');
     loadedConfig = cfg;
-    document.getElementById('cfgWidth').value = cfg.matrixWidth || 2;
-    document.getElementById('cfgHeight').value = cfg.matrixHeight || 2;
-    document.getElementById('cfgStartCorner').value = cfg.startCorner !== undefined ? cfg.startCorner : 0;
-    document.getElementById('cfgPanelLayout').value = cfg.panelLayout !== undefined ? cfg.panelLayout : 0;
-    if (cfg.panelOrder) document.getElementById('cfgPanelOrder').value = cfg.panelOrder.join(',');
-    document.getElementById('cfgDataPin').value = cfg.dataPin !== undefined ? cfg.dataPin : 8;
-    document.getElementById('cfgParallelOutput').checked = !!cfg.parallelOutput;
-    document.getElementById('cfgMaxMilliamps').value = cfg.ledMaxMilliamps || 12000;
-  } catch(e) {}
+    const panels = document.getElementById('cfgPanels');
+    panels.innerHTML = Array.from({length: 4}, (_, i) =>
+      '<div class="panel-tile"><strong>Panel ' + i + '</strong>' +
+      '<label class="config-field">GPIO<input type="number" min="0" max="48" step="1" id="cfgPin' + i + '"></label>' +
+      '<label class="config-field">Rotation<select id="cfgRotation' + i + '"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>' +
+      '<label class="config-check"><input type="checkbox" id="cfgSerpentine' + i + '"> Zigzag</label></div>').join('');
+    document.getElementById('cfgStartCorner').value = cfg.startCorner;
+    document.getElementById('cfgPanelLayout').value = cfg.panelLayout;
+    document.getElementById('cfgPanelOrder').value = cfg.panelOrder.join(', ');
+    document.getElementById('cfgDataPin').value = cfg.dataPin;
+    document.getElementById('cfgParallelOutput').checked = cfg.parallelOutput;
+    document.getElementById('cfgPanelSerpentine').checked = cfg.panelSerpentine;
+    document.getElementById('cfgMirrorX').checked = cfg.mirrorX;
+    document.getElementById('cfgMaxMilliamps').value = cfg.ledMaxMilliamps;
+    document.getElementById('cfgBootBrightness').value = cfg.ledBrightness;
+    document.getElementById('cfgBootEffect').value = cfg.defaultAnimation;
+    document.getElementById('cfgBootCycle').value = cfg.autoCycleMs;
+    document.getElementById('cfgBootPath').value = cfg.fsAnimationPath;
+    for (let i = 0; i < 4; i++) {
+      document.getElementById('cfgPin' + i).value = cfg.panelPins[i];
+      document.getElementById('cfgRotation' + i).value = cfg.panelRotation[i];
+      document.getElementById('cfgSerpentine' + i).checked = cfg.serpentine[i];
+    }
+    updateOutputMode();
+    document.getElementById('cfgSaveBtn').disabled = false;
+    msg.textContent = '';
+  } catch(e) {
+    document.getElementById('cfgSaveBtn').disabled = true;
+    msg.textContent = 'Could not load configuration. Reload the page to retry.';
+    msg.style.color = 'var(--red)';
+  }
 }
 
 async function savePanelConfig() {
   const msg = document.getElementById('cfgStatusMsg');
-  msg.textContent = 'Saving...';
-  const orderStr = document.getElementById('cfgPanelOrder').value;
-  const order = orderStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-  const payload = {
-    ...loadedConfig,
-    matrixWidth: parseInt(document.getElementById('cfgWidth').value),
-    matrixHeight: parseInt(document.getElementById('cfgHeight').value),
-    startCorner: parseInt(document.getElementById('cfgStartCorner').value),
-    panelLayout: parseInt(document.getElementById('cfgPanelLayout').value),
-    panelOrder: order.length === 4 ? order : [0, 1, 2, 3],
-    dataPin: parseInt(document.getElementById('cfgDataPin').value),
-    parallelOutput: document.getElementById('cfgParallelOutput').checked,
-    ledMaxMilliamps: parseInt(document.getElementById('cfgMaxMilliamps').value)
+  const number = (id, min, max) => {
+    const value = document.getElementById(id).value.trim();
+    if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) throw new Error('Check ' + id.replace('cfg', '') + ': enter a whole number from ' + min + ' to ' + max + '.');
+    return Number(value);
   };
+  let payload;
+  try {
+    const parts = document.getElementById('cfgPanelOrder').value.split(',').map(s => s.trim());
+    if (parts.length !== 4 || parts.some(s => !/^[0-3]$/.test(s)) || new Set(parts).size !== 4) throw new Error('Panel order must contain 0, 1, 2 and 3 exactly once.');
+    const panelPins = Array.from({length: 4}, (_, i) => number('cfgPin' + i, 0, 48));
+    const parallel = document.getElementById('cfgParallelOutput').checked;
+    if (parallel && new Set(panelPins).size !== 4) throw new Error('Parallel output GPIOs must be unique.');
+    const effect = document.getElementById('cfgBootEffect').value.trim();
+    const path = document.getElementById('cfgBootPath').value.trim();
+    if (!effect) throw new Error('Default effect ID cannot be empty.');
+    if (path.split('/').includes('..')) throw new Error('LFX path cannot contain parent directory segments.');
+    payload = {
+      startCorner: number('cfgStartCorner', 0, 3), panelLayout: number('cfgPanelLayout', 0, 1),
+      panelOrder: parts.map(Number), panelPins,
+      panelRotation: Array.from({length: 4}, (_, i) => number('cfgRotation' + i, 0, 270)),
+      serpentine: Array.from({length: 4}, (_, i) => document.getElementById('cfgSerpentine' + i).checked),
+      panelSerpentine: document.getElementById('cfgPanelSerpentine').checked,
+      mirrorX: document.getElementById('cfgMirrorX').checked,
+      dataPin: number('cfgDataPin', 0, 48), parallelOutput: parallel,
+      ledMaxMilliamps: number('cfgMaxMilliamps', 1000, 60000),
+      ledBrightness: number('cfgBootBrightness', 0, 255), defaultAnimation: effect,
+      autoCycleMs: number('cfgBootCycle', 0, 4294967295), fsAnimationPath: path
+    };
+    payload = Object.fromEntries(Object.entries(payload).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(loadedConfig[key])));
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.style.color = 'var(--red)';
+    return;
+  }
+  const bootChanged = ['ledBrightness', 'defaultAnimation', 'autoCycleMs', 'fsAnimationPath'].some(key => key in payload);
+  msg.textContent = 'Saving...';
+  document.getElementById('cfgSaveBtn').disabled = true;
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -701,24 +771,28 @@ async function savePanelConfig() {
       body: JSON.stringify(payload)
     });
     const res = await r.json();
+    if (res.config) loadedConfig = res.config;
+    configRestartPending = configRestartPending || (res.config && bootChanged) || !!res.restartRequired || res.restart === 'required';
     if (r.ok) {
       if (res.powerLimitApply === 'pending') {
-        msg.textContent = 'Saved; power limit update pending' + (res.restartRequired ? ' (reboot required for pin/layout changes)' : '');
+        msg.textContent = 'Saved; power limit update pending' + (configRestartPending ? ' (restart required for configuration changes)' : '');
         msg.style.color = 'var(--yellow)';
-      } else if (res.restartRequired || res.restart === 'required') {
-        msg.textContent = 'Saved! (Reboot required for pin/layout changes)';
+      } else if (configRestartPending) {
+        msg.textContent = 'Saved. Restart required for configuration changes.';
         msg.style.color = 'var(--yellow)';
       } else {
-        msg.textContent = 'Saved! (Power limit applied live)';
+        msg.textContent = 'Saved. Power limit applied live.';
         msg.style.color = 'var(--green)';
       }
     } else {
-      msg.textContent = (res.powerLimitApply === 'failed' ? 'Saved, but power limit not applied: ' : 'Error: ') + (res.error || r.statusText);
+      msg.textContent = (res.powerLimitApply === 'failed' ? 'Saved, but power limit not applied: ' : 'Error: ') + (res.error || r.statusText) + (configRestartPending ? ' Restart required for configuration changes.' : '');
       msg.style.color = 'var(--red)';
     }
   } catch (e) {
-    msg.textContent = 'Save failed';
+    msg.textContent = 'Save failed; configuration may have been saved. Reload to check.';
     msg.style.color = 'var(--red)';
+  } finally {
+    document.getElementById('cfgSaveBtn').disabled = false;
   }
 }
 
@@ -738,6 +812,7 @@ async function loadMicData() {
       document.getElementById('micDecaySlider').value = d.settings.decayMs;
       document.getElementById('micDecayVal').textContent = d.settings.decayMs;
       document.getElementById('micAgcToggle').checked = !!d.settings.agc;
+      document.getElementById('micChannel').value = d.settings.rightChannel ? 'right' : 'left';
     }
     if (d.rawDbfs !== null && d.rawDbfs !== undefined) {
       document.getElementById('micRawDisplay').textContent = d.rawDbfs.toFixed(1);

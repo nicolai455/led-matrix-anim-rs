@@ -3,6 +3,29 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub const ESP_IMAGE_HEADER_MAGIC: u8 = 0xE9;
+static RESTART_SIGNAL: RestartSignal = RestartSignal(std::sync::Mutex::new(None));
+
+/// A delayed, coalescing restart request serviced by the existing supervisor.
+#[derive(Default)]
+pub struct RestartSignal(std::sync::Mutex<Option<std::time::Instant>>);
+
+impl RestartSignal {
+    pub fn request(&self, now: std::time::Instant, delay: Duration) {
+        let mut deadline = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let requested = now + delay;
+        *deadline = Some(deadline.map_or(requested, |old| old.min(requested)));
+    }
+
+    pub fn take_due(&self, now: std::time::Instant) -> bool {
+        let mut deadline = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if deadline.is_some_and(|at| now >= at) {
+            *deadline = None;
+            true
+        } else {
+            false
+        }
+    }
+}
 
 pub struct OtaManager {
     quiesce_flags: Vec<Arc<AtomicBool>>,
@@ -238,19 +261,10 @@ impl OtaManager {
     }
 
     pub fn schedule_restart() {
-        log::info!("OTA: scheduling restart in 1 second...");
-        std::thread::spawn(|| {
-            std::thread::sleep(Duration::from_millis(1000));
-            #[cfg(target_os = "espidf")]
-            let _ = crate::recovery::planned();
-            #[cfg(target_os = "espidf")]
-            unsafe {
-                esp_idf_sys::esp_restart();
-            }
-            #[cfg(not(target_os = "espidf"))]
-            {
-                log::info!("Simulated reboot triggered");
-            }
-        });
+        RESTART_SIGNAL.request(std::time::Instant::now(), Duration::from_secs(1));
+    }
+
+    pub fn restart_due() -> bool {
+        RESTART_SIGNAL.take_due(std::time::Instant::now())
     }
 }

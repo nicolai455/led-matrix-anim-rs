@@ -228,6 +228,12 @@ mod runtime {
                 let mut healthy_saved = false;
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(1));
+                    if crate::ota::OtaManager::restart_due() {
+                        if let Err(error) = planned() {
+                            log::error!("Could not record planned restart: {error}");
+                        }
+                        unsafe { esp_idf_sys::esp_restart() };
+                    }
                     let now = started.elapsed().as_millis() as u64;
                     let stalled = watch.stalled(
                         now,
