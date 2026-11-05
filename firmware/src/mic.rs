@@ -4,20 +4,64 @@ use matrix_core::audio::MicDsp;
 use matrix_core::audio::MicSettings;
 use matrix_core::AudioSnapshot;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 pub const MIC_SAMPLE_RATE: u32 = 22050;
 pub const MIC_BLOCK_SAMPLES: usize = 512;
 pub const MIC_STALE_TIMEOUT_MS: u64 = 250;
 
+// The request, acknowledgement and channel transition share one lock: a resume
+// cannot race a worker publishing an acknowledgement for an older request.
+#[derive(Default)]
+struct QuiesceState {
+    requested: bool,
+    confirmed: bool,
+    disabled: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum QuiesceStep {
+    Paused,
+    Running,
+    EnableFailed,
+}
+
+impl QuiesceState {
+    fn resume(&mut self) {
+        self.requested = false;
+        self.confirmed = false;
+    }
+
+    fn step(
+        &mut self,
+        disable: impl FnOnce() -> bool,
+        enable: impl FnOnce() -> bool,
+    ) -> QuiesceStep {
+        if self.requested {
+            if !self.disabled && disable() {
+                self.disabled = true;
+            }
+            self.confirmed = self.disabled;
+            QuiesceStep::Paused
+        } else if self.disabled {
+            if !enable() {
+                return QuiesceStep::EnableFailed;
+            }
+            self.disabled = false;
+            QuiesceStep::Running
+        } else {
+            QuiesceStep::Running
+        }
+    }
+}
+
 struct CaptureShared {
     settings: RwLock<MicSettings>,
     latest_snapshot: RwLock<AudioSnapshot>,
     latest_metrics: RwLock<Option<(f32, f32)>>,
     last_block_ms: RwLock<Option<std::time::Instant>>,
-    quiesce_requested: AtomicBool,
-    quiesced_confirmed: AtomicBool,
+    quiesce: Mutex<QuiesceState>,
     shutdown: AtomicBool,
     reconfigure_channel: AtomicBool,
     /// Set while the engine consumes mic audio. When false, the worker
@@ -43,9 +87,9 @@ impl MicQuiesce {
         if !self.available {
             return Ok(());
         }
-        self.shared.quiesce_requested.store(true, Ordering::Release);
+        self.shared.quiesce.lock().unwrap().requested = true;
         let deadline = std::time::Instant::now() + Duration::from_secs(1);
-        while !self.shared.quiesced_confirmed.load(Ordering::Acquire) {
+        while !self.shared.quiesce.lock().unwrap().confirmed {
             if std::time::Instant::now() >= deadline {
                 self.resume();
                 return Err("microphone did not quiesce".into());
@@ -55,12 +99,7 @@ impl MicQuiesce {
         Ok(())
     }
     pub fn resume(&self) {
-        self.shared
-            .quiesced_confirmed
-            .store(false, Ordering::Release);
-        self.shared
-            .quiesce_requested
-            .store(false, Ordering::Release);
+        self.shared.quiesce.lock().unwrap().resume();
     }
 }
 
@@ -77,8 +116,7 @@ impl I2sMicAudioInput {
             latest_snapshot: RwLock::new(AudioSnapshot::default()),
             latest_metrics: RwLock::new(None),
             last_block_ms: RwLock::new(None),
-            quiesce_requested: AtomicBool::new(false),
-            quiesced_confirmed: AtomicBool::new(false),
+            quiesce: Mutex::new(QuiesceState::default()),
             shutdown: AtomicBool::new(false),
             reconfigure_channel: AtomicBool::new(false),
             capture_enabled: AtomicBool::new(false),
@@ -114,10 +152,10 @@ impl I2sMicAudioInput {
         if !self.available {
             return;
         }
-        self.shared.quiesce_requested.store(true, Ordering::SeqCst);
+        self.shared.quiesce.lock().unwrap().requested = true;
         // Handshake: wait up to 300ms for capture worker to confirm I2S DMA is disabled
         for _ in 0..30 {
-            if self.shared.quiesced_confirmed.load(Ordering::SeqCst) {
+            if self.shared.quiesce.lock().unwrap().confirmed {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -128,10 +166,7 @@ impl I2sMicAudioInput {
         if !self.available {
             return;
         }
-        self.shared
-            .quiesced_confirmed
-            .store(false, Ordering::SeqCst);
-        self.shared.quiesce_requested.store(false, Ordering::SeqCst);
+        self.shared.quiesce.lock().unwrap().resume();
     }
 
     #[cfg(target_os = "espidf")]
@@ -194,7 +229,12 @@ impl I2sMicAudioInput {
                 return None;
             }
 
-            esp_idf_sys::i2s_channel_enable(rx_handle);
+            let err = esp_idf_sys::i2s_channel_enable(rx_handle);
+            if err != esp_idf_sys::ESP_OK {
+                log::error!("Failed to enable I2S channel: {err}");
+                esp_idf_sys::i2s_del_channel(rx_handle);
+                return None;
+            }
             Some(rx_handle)
         }
     }
@@ -224,29 +264,34 @@ impl I2sMicAudioInput {
         let mut samples = vec![0.0f32; MIC_BLOCK_SAMPLES].into_boxed_slice();
 
         while !shared.shutdown.load(Ordering::Relaxed) {
-            // Check quiesce request (e.g. for OTA)
-            if shared.quiesce_requested.load(Ordering::SeqCst) {
-                #[cfg(target_os = "espidf")]
-                if let Some(chan) = rx_chan {
-                    unsafe {
-                        let _ = esp_idf_sys::i2s_channel_disable(chan);
+            // Serialize the request and transition so old acknowledgements cannot
+            // be published after resume, even across a rapid pause/resume/pause.
+            let step = shared.quiesce.lock().unwrap().step(
+                || {
+                    #[cfg(target_os = "espidf")]
+                    if let Some(chan) = rx_chan {
+                        let err = unsafe { esp_idf_sys::i2s_channel_disable(chan) };
+                        if err != esp_idf_sys::ESP_OK {
+                            log::error!("Failed to disable I2S channel: {err}");
+                            return false;
+                        }
                     }
-                }
-                shared.quiesced_confirmed.store(true, Ordering::SeqCst);
-
-                while shared.quiesce_requested.load(Ordering::SeqCst)
-                    && !shared.shutdown.load(Ordering::Relaxed)
-                {
-                    std::thread::sleep(Duration::from_millis(20));
-                }
-
-                #[cfg(target_os = "espidf")]
-                if let Some(chan) = rx_chan {
-                    unsafe {
-                        let _ = esp_idf_sys::i2s_channel_enable(chan);
+                    true
+                },
+                || {
+                    #[cfg(target_os = "espidf")]
+                    if let Some(chan) = rx_chan {
+                        let err = unsafe { esp_idf_sys::i2s_channel_enable(chan) };
+                        if err != esp_idf_sys::ESP_OK {
+                            log::error!("Failed to re-enable I2S channel: {err}");
+                            return false;
+                        }
                     }
-                }
-                shared.quiesced_confirmed.store(false, Ordering::SeqCst);
+                    true
+                },
+            );
+            if step != QuiesceStep::Running {
+                std::thread::sleep(Duration::from_millis(20));
                 continue;
             }
 
@@ -391,7 +436,7 @@ impl AudioInput for I2sMicAudioInput {
     fn snapshot(&mut self, _now_ms: u64) -> AudioSnapshot {
         if !self.available
             || !self.shared.capture_enabled.load(Ordering::Acquire)
-            || self.shared.quiesce_requested.load(Ordering::Relaxed)
+            || self.shared.quiesce.lock().unwrap().requested
         {
             return AudioSnapshot::default();
         }
@@ -442,5 +487,85 @@ impl AudioInput for I2sMicAudioInput {
                 .reconfigure_channel
                 .store(true, Ordering::SeqCst);
         }
+    }
+}
+
+#[cfg(test)]
+mod quiesce_regressions {
+    use super::*;
+
+    #[test]
+    fn disable_failure_never_acknowledges_and_retries() {
+        let mut state = QuiesceState::default();
+        state.requested = true;
+        assert_eq!(state.step(|| false, || true), QuiesceStep::Paused);
+        assert!(!state.confirmed);
+        assert_eq!(state.step(|| true, || true), QuiesceStep::Paused);
+        assert!(state.confirmed);
+    }
+
+    #[test]
+    fn resume_enable_failure_is_retried_without_reading() {
+        let mut state = QuiesceState::default();
+        state.requested = true;
+        state.step(|| true, || true);
+        state.resume();
+        assert_eq!(state.step(|| true, || false), QuiesceStep::EnableFailed);
+        assert!(!state.confirmed);
+        assert_eq!(
+            state.step(|| panic!("already disabled"), || true),
+            QuiesceStep::Running
+        );
+        assert!(!state.disabled);
+    }
+
+    #[test]
+    fn resumed_request_cannot_inherit_previous_ack() {
+        let mut state = QuiesceState::default();
+        state.requested = true;
+        state.step(|| true, || true);
+        state.resume();
+        state.requested = true;
+        assert!(!state.confirmed);
+        assert_eq!(
+            state.step(|| panic!("already disabled"), || panic!("still requested")),
+            QuiesceStep::Paused
+        );
+        assert!(state.confirmed);
+    }
+    #[test]
+    fn resume_waits_for_in_flight_disable_before_clearing_ack() {
+        use std::sync::mpsc;
+        let state = Arc::new(Mutex::new(QuiesceState {
+            requested: true,
+            ..Default::default()
+        }));
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker_state = state.clone();
+        let worker = std::thread::spawn(move || {
+            worker_state.lock().unwrap().step(
+                || {
+                    entered_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    true
+                },
+                || true,
+            );
+        });
+        entered_rx.recv().unwrap();
+        let resume_state = state.clone();
+        let resume = std::thread::spawn(move || resume_state.lock().unwrap().resume());
+        release_tx.send(()).unwrap();
+        worker.join().unwrap();
+        resume.join().unwrap();
+        let mut state = state.lock().unwrap();
+        state.requested = true;
+        assert!(!state.confirmed);
+        assert_eq!(
+            state.step(|| panic!("already disabled"), || true),
+            QuiesceStep::Paused
+        );
+        assert!(state.confirmed);
     }
 }

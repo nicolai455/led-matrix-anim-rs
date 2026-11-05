@@ -3,7 +3,7 @@ use matrix_control::LedOutput;
 use matrix_core::geometry::calculate_max_brightness;
 use matrix_core::geometry::{PanelConfig, DEFAULT_MAX_MILLIAMPS, NUM_PANELS};
 use matrix_core::{Frame, PIXELS};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 pub const PANEL_PIXELS: usize = PIXELS / NUM_PANELS; // 256
@@ -93,49 +93,80 @@ impl OutputSettings {
     }
 }
 
+// Low two bits encode the state; the remaining bits identify a request.
+const QUIESCE_STATE_MASK: usize = 3;
+const QUIESCE_REQUESTED: usize = 1;
+const QUIESCE_CONFIRMED: usize = 2;
+
 #[derive(Clone, Default)]
 pub struct OutputQuiesce {
-    requested: Arc<AtomicBool>,
-    confirmed: Arc<AtomicBool>,
+    state: Arc<AtomicUsize>,
     inactive: bool,
 }
 
 impl OutputQuiesce {
+    fn start_request(&self) -> usize {
+        let previous = self
+            .state
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                Some((state & !QUIESCE_STATE_MASK).wrapping_add(4) | QUIESCE_REQUESTED)
+            })
+            .unwrap();
+        (previous & !QUIESCE_STATE_MASK).wrapping_add(4) | QUIESCE_REQUESTED
+    }
+
+    fn confirm_request(&self, request: usize) {
+        let _ = self.state.compare_exchange(
+            request,
+            (request & !QUIESCE_STATE_MASK) | QUIESCE_CONFIRMED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+    }
+
     pub fn is_requested(&self) -> bool {
-        self.requested.load(Ordering::Acquire)
+        self.state.load(Ordering::Acquire) & QUIESCE_STATE_MASK != 0
     }
 
     pub fn pause(&self, timeout: std::time::Duration) -> Result<(), String> {
-        self.requested.store(true, Ordering::Release);
+        let request = self.start_request();
         if self.inactive {
+            self.confirm_request(request);
             return Ok(());
         }
         let deadline = std::time::Instant::now() + timeout;
-        while !self.confirmed.load(Ordering::Acquire) {
-            if std::time::Instant::now() >= deadline {
-                self.resume();
+        loop {
+            let state = self.state.load(Ordering::Acquire);
+            if state == (request & !QUIESCE_STATE_MASK) | QUIESCE_CONFIRMED {
+                return Ok(());
+            }
+            if state != request || std::time::Instant::now() >= deadline {
+                // Only cancel our own request; a later one must survive.
+                let generation = request & !QUIESCE_STATE_MASK;
+                let _ = self
+                    .state
+                    .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                        (current & !QUIESCE_STATE_MASK == generation).then_some(generation)
+                    });
                 return Err("LED output did not confirm physical blackout before OTA".into());
             }
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
-        Ok(())
     }
 
     pub fn inactive() -> Self {
         Self {
-            requested: Arc::new(AtomicBool::new(false)),
-            confirmed: Arc::new(AtomicBool::new(true)),
             inactive: true,
+            ..Self::default()
         }
     }
 
     pub fn is_paused(&self) -> bool {
-        self.requested.load(Ordering::Acquire) && self.confirmed.load(Ordering::Acquire)
+        self.state.load(Ordering::Acquire) & QUIESCE_STATE_MASK == QUIESCE_CONFIRMED
     }
 
     pub fn resume(&self) {
-        self.confirmed.store(false, Ordering::Release);
-        self.requested.store(false, Ordering::Release);
+        self.state.fetch_and(!QUIESCE_STATE_MASK, Ordering::AcqRel);
     }
 }
 
@@ -480,10 +511,11 @@ impl RmtLedOutput {
 
 impl LedOutput for RmtLedOutput {
     fn show(&mut self, frame: &Frame, brightness: u8) -> Result<(), String> {
-        if self.quiesced.requested.load(Ordering::Acquire) {
-            if !self.quiesced.confirmed.load(Ordering::Acquire) {
+        let request = self.quiesced.state.load(Ordering::Acquire);
+        if request & QUIESCE_STATE_MASK != 0 {
+            if request & QUIESCE_STATE_MASK == QUIESCE_REQUESTED {
                 self.blank()?;
-                self.quiesced.confirmed.store(true, Ordering::Release);
+                self.quiesced.confirm_request(request);
             }
             // Prevent a hot loop while output is intentionally suspended.
             std::thread::sleep(std::time::Duration::from_millis(1));
@@ -565,5 +597,46 @@ impl LedOutput for RmtLedOutput {
 
     fn update_config(&mut self, config: &PanelConfig) -> Result<(), String> {
         RmtLedOutput::update_config(self, config)
+    }
+}
+
+#[cfg(test)]
+mod quiesce_race_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn old_blackout_completion_cannot_acknowledge_a_new_request() {
+        let control = OutputQuiesce::default();
+        let old = control.start_request();
+        control.resume();
+        control.confirm_request(old);
+        assert!(control.pause(Duration::ZERO).is_err());
+        assert!(!control.is_paused());
+    }
+
+    #[test]
+    fn late_completion_cannot_acknowledge_an_active_retry() {
+        let control = OutputQuiesce::default();
+        let old = control.start_request();
+        control.resume();
+        let retry = control.start_request();
+        control.confirm_request(old);
+        assert!(control.is_requested());
+        assert!(!control.is_paused());
+        control.confirm_request(retry);
+        assert!(control.is_paused());
+        control.resume();
+        assert!(!control.is_requested());
+        assert!(!control.is_paused());
+    }
+
+    #[test]
+    fn inactive_output_can_pause_and_resume() {
+        let control = OutputQuiesce::inactive();
+        assert!(control.pause(Duration::ZERO).is_ok());
+        assert!(control.is_paused());
+        control.resume();
+        assert!(!control.is_paused());
     }
 }
