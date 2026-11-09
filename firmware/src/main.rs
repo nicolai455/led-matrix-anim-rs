@@ -337,15 +337,30 @@ fn run_firmware() {
         }
     };
 
-    let network = match matrix_firmware::network_config::NetworkConfig::load(Path::new(
-        "/spiffs/config/network.json",
-    )) {
-        Ok(config) => config,
+    let network = match nvs.load_network_config() {
+        Ok(Some(config)) => Some(config),
+        Ok(None) => matrix_firmware::network_config::NetworkConfig::load(Path::new(
+            "/spiffs/config/network.json",
+        ))
+        .unwrap_or_else(|error| {
+            log::warn!("Network file configuration unavailable: {error}");
+            None
+        }),
         Err(error) => {
-            log::error!("Networking disabled: {error}");
+            log::error!("Persisted network config rejected: {error}");
             None
         }
     };
+    #[cfg(target_os = "espidf")]
+    let wifi_config = network.as_ref().and_then(|config| {
+        match WifiConfig::from_network_config(config) {
+            Ok(runtime) => Some(runtime),
+            Err(error) => {
+                log::error!("Validated network config cannot be adapted for Wi-Fi: {error}");
+                None
+            }
+        }
+    });
     #[cfg(target_os = "espidf")]
     matrix_firmware::memory_diagnostics::log_heap("before-wifi-start");
     #[cfg(target_os = "espidf")]
@@ -353,13 +368,7 @@ fn run_firmware() {
         modem,
         sysloop,
         default_nvs,
-        network
-            .as_ref()
-            .filter(|c| !c.wifi_ssid.is_empty())
-            .map(|c| WifiConfig {
-                ssid: c.wifi_ssid.clone(),
-                password: (!c.wifi_password.is_empty()).then(|| c.wifi_password.clone()),
-            }),
+        wifi_config,
     ) {
         Ok(w) => {
             log::info!("Wi-Fi service initialized");
@@ -374,7 +383,11 @@ fn run_firmware() {
     #[cfg(target_os = "espidf")]
     matrix_firmware::memory_diagnostics::log_heap("after-wifi-start");
 
-    let _http_server = match FirmwareHttpServer::start(api_ctx, Arc::clone(&ota_manager)) {
+    let _http_server = match FirmwareHttpServer::start(
+        api_ctx,
+        Arc::clone(&ota_manager),
+        Arc::clone(&nvs),
+    ) {
         Ok(s) => {
             log::warn!("HTTP server operational on port 80");
             Some(s)

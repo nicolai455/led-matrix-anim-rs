@@ -7,6 +7,13 @@ pub struct AudioSnapshot {
     pub waveform: [f32; 128],
     pub level: f32,
     pub peak: f32,
+    /// Normalized low-frequency energy (0.0 = silence, 1.0 = full scale).
+    pub bass: f32,
+    /// Normalized positive bass-energy novelty for this frame (0.0..=1.0).
+    pub onset: f32,
+    /// Estimated tempo in beats per minute; 0.0 means unavailable/stale.
+    pub bpm: f32,
+    /// One-frame onset pulse, derived by the shared core onset detector.
     pub beat: bool,
     pub available: bool,
 }
@@ -18,6 +25,9 @@ impl Default for AudioSnapshot {
             waveform: [0.0; 128],
             level: 0.0,
             peak: 0.0,
+            bass: 0.0,
+            onset: 0.0,
+            bpm: 0.0,
             beat: false,
             available: false,
         }
@@ -41,10 +51,13 @@ impl AudioSnapshot {
             return;
         }
         self.available = false;
+        self.onset = 0.0;
+        self.bpm = 0.0;
+        self.beat = false;
         if age_ms >= AUDIO_STALE_AFTER_MS + AUDIO_FADE_DURATION_MS {
             self.level = 0.0;
             self.peak = 0.0;
-            self.beat = false;
+            self.bass = 0.0;
             self.bands.fill(0.0);
             self.waveform.fill(0.0);
         } else {
@@ -52,7 +65,7 @@ impl AudioSnapshot {
             let gain = (1.0 - fade_age / (AUDIO_FADE_DURATION_MS as f32)).clamp(0.0, 1.0);
             self.level *= gain;
             self.peak *= gain;
-            self.beat = false;
+            self.bass *= gain;
             for b in &mut self.bands {
                 *b *= gain;
             }
@@ -187,9 +200,14 @@ pub struct MicDsp {
     smooth: [f32; BANDS],
     level: f32,
     bass_avg: f32,
+    prev_bass: f32,
+    last_onset_ms: Option<u64>,
+    intervals_ms: [u64; 4],
+    interval_count: usize,
+    interval_next: usize,
+    bpm: f32,
     agc_gain_db: f32,
     beats: u32,
-    last_beat_ms: u64,
     beat_init: bool,
     pub raw_dbfs: f32,
     pub applied_gain_db: f32,
@@ -203,9 +221,14 @@ impl Default for MicDsp {
             smooth: [0.0; BANDS],
             level: 0.0,
             bass_avg: 0.0,
+            prev_bass: 0.0,
+            last_onset_ms: None,
+            intervals_ms: [0; 4],
+            interval_count: 0,
+            interval_next: 0,
+            bpm: 0.0,
             agc_gain_db: 30.0,
             beats: 0,
-            last_beat_ms: 0,
             beat_init: false,
             raw_dbfs: -180.0,
             applied_gain_db: 30.0,
@@ -233,20 +256,42 @@ impl MicDsp {
         settings: &MicSettings,
         now_ms: u64,
     ) -> AudioSnapshot {
+        self.process_at_sample_rate(samples, settings, now_ms, SAMPLE_RATE as u32)
+    }
+
+    /// Process a mono PCM block using its actual sample rate and end timestamp.
+    /// Invalid sample rates fall back to the crate's default rate.
+    pub fn process_at_sample_rate(
+        &mut self,
+        samples: &[f32],
+        settings: &MicSettings,
+        now_ms: u64,
+        sample_rate_hz: u32,
+    ) -> AudioSnapshot {
         let n = FFT_SIZE.min(samples.len());
         if n == 0 {
             return AudioSnapshot::default();
         }
+        let sample_rate = if sample_rate_hz == 0 {
+            SAMPLE_RATE
+        } else {
+            sample_rate_hz as f32
+        };
+        let gain_db = finite_or(settings.gain_db, 30.0).clamp(0.0, 60.0);
+        let squelch_db = finite_or(settings.squelch_db, -60.0).clamp(-100.0, -10.0);
+        let beat_threshold = finite_or(settings.beat_threshold, 1.6).clamp(1.0, 5.0);
+        let attack_ms = finite_or(settings.attack_ms, 40.0).clamp(1.0, 1000.0);
+        let decay_ms = finite_or(settings.decay_ms, 300.0).clamp(10.0, 5000.0);
 
         let mut mean = 0.0f32;
         for &s in &samples[..n] {
-            mean += s;
+            mean += finite_sample(s);
         }
         mean /= n as f32;
 
         let mut sum = 0.0f32;
         for (i, &sample) in samples.iter().take(n).enumerate() {
-            let v = sample - mean;
+            let v = finite_sample(sample) - mean;
             sum += v * v;
             // Hann window
             let window = 0.5 - 0.5 * (TWO_PI * (i as f32) / ((FFT_SIZE - 1) as f32)).cos();
@@ -260,17 +305,20 @@ impl MicDsp {
 
         self.raw_dbfs = 20.0 * ((sum / (n as f32)).sqrt() + 1e-9).log10();
         if !settings.agc {
-            self.agc_gain_db = settings.gain_db;
+            self.agc_gain_db = gain_db;
         }
         self.applied_gain_db = self.agc_gain_db;
-        let gated = self.raw_dbfs < settings.squelch_db;
+        let gated = self.raw_dbfs < squelch_db;
 
         let mut target = [0.0f32; BANDS];
         if !gated {
             fft(&mut self.re, &mut self.im);
             for b in 0..BANDS {
                 let mut peak = 0.0f32;
-                for k in EDGES[b]..EDGES[b + 1] {
+                let bin_scale = sample_rate / SAMPLE_RATE;
+                let lo = ((EDGES[b] as f32 * bin_scale) as usize).clamp(1, FFT_SIZE / 2 - 1);
+                let hi = ((EDGES[b + 1] as f32 * bin_scale) as usize).clamp(lo + 1, FFT_SIZE / 2);
+                for k in lo..hi {
                     let mag = (self.re[k] * self.re[k] + self.im[k] * self.im[k]).sqrt()
                         * (4.0 / (FFT_SIZE as f32));
                     peak = peak.max(mag);
@@ -295,9 +343,9 @@ impl MicDsp {
             self.agc_gain_db = (self.agc_gain_db + (0.75 - peak) * 0.6).clamp(0.0, 60.0);
         }
 
-        let dt = (FFT_SIZE as f32) * 1000.0 / SAMPLE_RATE;
-        let up = 1.0 - (-dt / settings.attack_ms.max(1.0)).exp();
-        let down = 1.0 - (-dt / settings.decay_ms.max(1.0)).exp();
+        let dt = n as f32 * 1000.0 / sample_rate;
+        let up = 1.0 - (-dt / attack_ms).exp();
+        let down = 1.0 - (-dt / decay_ms).exp();
 
         let mut snapshot = AudioSnapshot {
             available: true,
@@ -326,33 +374,86 @@ impl MicDsp {
         let step = (n / 128).max(1);
         for i in 0..128 {
             let idx = (i * step).min(n.saturating_sub(1));
-            let s = samples[idx];
-            snapshot.waveform[i] = if s.is_finite() {
-                s.clamp(-1.0, 1.0)
-            } else {
-                0.0
-            };
+            snapshot.waveform[i] = finite_sample(samples[idx]);
         }
 
         let bass_now = (target[0] + target[1] + target[2]) / 3.0;
-        if !self.beat_init {
+        if gated {
+            self.bass_avg *= (-dt / 250.0).exp();
+            self.prev_bass = 0.0;
+        } else if !self.beat_init {
             self.bass_avg = bass_now;
             self.beat_init = true;
         }
 
-        let mut beat_detected = false;
-        if bass_now > self.bass_avg * settings.beat_threshold
-            && bass_now > 0.2
-            && (now_ms.saturating_sub(self.last_beat_ms) > 150)
-        {
+        let novelty = (bass_now - self.prev_bass).max(0.0);
+        let onset_level = clamp01(novelty * 4.0);
+        let refractory_ms = 240;
+        let onset_detected = !gated
+            && bass_now > 0.12
+            && bass_now > self.bass_avg * beat_threshold
+            && novelty > 0.035
+            && self
+                .last_onset_ms
+                .is_none_or(|last| now_ms.saturating_sub(last) >= refractory_ms);
+        if onset_detected {
             self.beats = self.beats.wrapping_add(1);
-            self.last_beat_ms = now_ms;
-            beat_detected = true;
+            if let Some(previous) = self.last_onset_ms {
+                let interval = now_ms.saturating_sub(previous);
+                if (270..=1200).contains(&interval) {
+                    self.intervals_ms[self.interval_next] = interval;
+                    self.interval_next = (self.interval_next + 1) % self.intervals_ms.len();
+                    self.interval_count = (self.interval_count + 1).min(self.intervals_ms.len());
+                    let mut ordered = [0u64; 4];
+                    ordered[..self.interval_count]
+                        .copy_from_slice(&self.intervals_ms[..self.interval_count]);
+                    ordered[..self.interval_count].sort_unstable();
+                    let median = ordered[self.interval_count / 2] as f32;
+                    let candidate = 60_000.0 / median;
+                    if (50.0..=220.0).contains(&candidate) {
+                        self.bpm = candidate;
+                    }
+                } else {
+                    self.interval_count = 0;
+                    self.interval_next = 0;
+                    self.bpm = 0.0;
+                }
+            }
+            self.last_onset_ms = Some(now_ms);
         }
-        self.bass_avg = self.bass_avg * 0.97 + bass_now * 0.03;
-        snapshot.beat = beat_detected;
+        let avg_factor = 1.0 - (-dt / 500.0).exp();
+        self.bass_avg += (bass_now - self.bass_avg) * avg_factor;
+        self.prev_bass = bass_now;
+        if self
+            .last_onset_ms
+            .is_none_or(|last| now_ms.saturating_sub(last) > 2500)
+        {
+            self.bpm = 0.0;
+        }
+        snapshot.bass = bass_now;
+        snapshot.onset = if onset_detected { onset_level } else { 0.0 };
+        snapshot.bpm = self.bpm;
+        snapshot.beat = onset_detected;
 
         snapshot
+    }
+}
+
+#[inline]
+fn finite_or(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        fallback
+    }
+}
+
+#[inline]
+fn finite_sample(value: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(-1.0, 1.0)
+    } else {
+        0.0
     }
 }
 
@@ -449,6 +550,9 @@ mod tests {
             waveform: [0.5; 128],
             level: 0.8,
             peak: 0.9,
+            bass: 0.6,
+            onset: 0.8,
+            bpm: 120.0,
             beat: true,
             available: true,
         };
@@ -470,6 +574,8 @@ mod tests {
         snap_251.apply_staleness(251);
         assert!(!snap_251.available);
         assert!(!snap_251.beat);
+        assert_eq!(snap_251.onset, 0.0);
+        assert_eq!(snap_251.bpm, 0.0);
         assert!(snap_251.level < 0.8);
 
         // Midway through 500ms fade (250ms stale threshold + 250ms = 500ms): gain = 0.5
@@ -481,6 +587,9 @@ mod tests {
         assert!((snap_500.peak - 0.45).abs() < 1e-4);
         assert!((snap_500.bands[0] - 0.3).abs() < 1e-4);
         assert!((snap_500.waveform[0] - 0.25).abs() < 1e-4);
+        assert!((snap_500.bass - 0.3).abs() < 1e-4);
+        assert_eq!(snap_500.bpm, 0.0);
+        assert_eq!(snap_500.onset, 0.0);
 
         // Fade complete at 750ms (250ms + 500ms): all faded to silence
         let mut snap_750 = make_active_snapshot();
@@ -489,6 +598,9 @@ mod tests {
         assert!(!snap_750.beat);
         assert_eq!(snap_750.level, 0.0);
         assert_eq!(snap_750.peak, 0.0);
+        assert_eq!(snap_750.bass, 0.0);
+        assert_eq!(snap_750.bpm, 0.0);
+        assert_eq!(snap_750.onset, 0.0);
         assert!(snap_750.bands.iter().all(|&b| b == 0.0));
         assert!(snap_750.waveform.iter().all(|&w| w == 0.0));
 
@@ -569,5 +681,148 @@ mod tests {
         }
         let snap_sine = dsp.process(&sine, &settings, 100);
         assert!(snap_sine.level > 0.0);
+    }
+
+    fn process_kick_train(bpm: f32, sample_rate: u32, duration_ms: u64) -> (MicDsp, AudioSnapshot) {
+        let mut dsp = MicDsp::new();
+        let settings = MicSettings {
+            agc: false,
+            gain_db: 30.0,
+            ..MicSettings::default()
+        };
+        let total_samples = (duration_ms as u128 * sample_rate as u128 / 1000) as usize;
+        let period_sec = 60.0 / bpm;
+        let mut last_snapshot = AudioSnapshot::default();
+
+        for block_start in (0..total_samples).step_by(FFT_SIZE) {
+            let block_end = (block_start + FFT_SIZE).min(total_samples);
+            let samples: Vec<f32> = (block_start..block_end)
+                .map(|sample_idx| {
+                    let t = sample_idx as f32 / sample_rate as f32;
+                    let phase = t % period_sec;
+                    if phase < 0.12 {
+                        0.9 * (-phase / 0.055).exp() * (TWO_PI * 70.0 * phase).sin()
+                    } else {
+                        0.0
+                    }
+                })
+                .collect();
+            let now_ms = (block_end as u128 * 1000 / sample_rate as u128) as u64;
+            last_snapshot = dsp.process_at_sample_rate(&samples, &settings, now_ms, sample_rate);
+        }
+        (dsp, last_snapshot)
+    }
+
+    #[test]
+    fn deterministic_pcm_kicks_estimate_80_120_and_160_bpm() {
+        for expected_bpm in [80.0, 120.0, 160.0] {
+            let (dsp, snapshot) = process_kick_train(expected_bpm, 22_050, 8_000);
+            assert!(
+                (snapshot.bpm - expected_bpm).abs() < 6.0,
+                "expected {expected_bpm} BPM, detected {}",
+                snapshot.bpm
+            );
+            assert!(
+                dsp.beat_count() >= 7,
+                "too few onsets at {expected_bpm} BPM"
+            );
+            assert!(snapshot.bass.is_finite() && snapshot.onset.is_finite());
+        }
+    }
+
+    #[test]
+    fn deterministic_pcm_bpm_is_sample_rate_and_block_time_correct() {
+        let (_, at_22050) = process_kick_train(120.0, 22_050, 6_000);
+        let (_, at_44100) = process_kick_train(120.0, 44_100, 6_000);
+        assert!(
+            (at_22050.bpm - 120.0).abs() < 6.0,
+            "22.05kHz: {}",
+            at_22050.bpm
+        );
+        assert!(
+            (at_44100.bpm - 120.0).abs() < 6.0,
+            "44.1kHz: {}",
+            at_44100.bpm
+        );
+        assert!((at_22050.bpm - at_44100.bpm).abs() < 4.0);
+    }
+
+    #[test]
+    fn deterministic_pcm_tempo_change_is_followed_and_silence_expires_bpm() {
+        let sample_rate = 22_050u32;
+        let mut dsp = MicDsp::new();
+        let settings = MicSettings {
+            agc: false,
+            ..MicSettings::default()
+        };
+        let mut last = AudioSnapshot::default();
+        let mut sample_idx = 0usize;
+        let total_samples = 9 * sample_rate as usize;
+        while sample_idx < total_samples {
+            let block_end = (sample_idx + FFT_SIZE).min(total_samples);
+            let bpm = if sample_idx as f32 / (sample_rate as f32) < 4.5 {
+                80.0
+            } else {
+                160.0
+            };
+            let period = 60.0 / bpm;
+            let samples: Vec<f32> = (sample_idx..block_end)
+                .map(|idx| {
+                    let t = idx as f32 / sample_rate as f32;
+                    let phase = t % period;
+                    if phase < 0.12 {
+                        0.9 * (-phase / 0.055).exp() * (TWO_PI * 70.0 * phase).sin()
+                    } else {
+                        0.0
+                    }
+                })
+                .collect();
+            let now_ms = (block_end as u128 * 1000 / sample_rate as u128) as u64;
+            last = dsp.process_at_sample_rate(&samples, &settings, now_ms, sample_rate);
+            sample_idx = block_end;
+        }
+        assert!(
+            (last.bpm - 160.0).abs() < 10.0,
+            "tempo change not tracked: {}",
+            last.bpm
+        );
+
+        let silent = [0.0f32; FFT_SIZE];
+        let block_ms = (FFT_SIZE as u64 * 1000).div_ceil(sample_rate as u64);
+        for block in 1..=180u64 {
+            last = dsp.process_at_sample_rate(
+                &silent,
+                &settings,
+                9_000 + block * block_ms,
+                sample_rate,
+            );
+        }
+        assert_eq!(last.bpm, 0.0, "tempo must expire during silence");
+        assert!(!last.beat);
+        assert_eq!(last.onset, 0.0);
+        assert!(last.bass < 0.05);
+
+        let mut stale = AudioSnapshot { bpm: 120.0, ..last };
+        stale.apply_staleness(AUDIO_STALE_AFTER_MS + 1);
+        assert_eq!(stale.bpm, 0.0);
+    }
+
+    #[test]
+    fn non_finite_pcm_never_poison_analysis_state() {
+        let mut dsp = MicDsp::new();
+        let settings = MicSettings::default();
+        let mut samples = [0.0; FFT_SIZE];
+        samples[0] = f32::NAN;
+        samples[1] = f32::INFINITY;
+        samples[2] = f32::NEG_INFINITY;
+        samples[3] = f32::MAX;
+        let snapshot = dsp.process_at_sample_rate(&samples, &settings, 0, 0);
+        assert!(snapshot.level.is_finite());
+        assert!(snapshot.peak.is_finite());
+        assert!(snapshot.bass.is_finite());
+        assert!(snapshot.onset.is_finite());
+        assert!(snapshot.bpm.is_finite());
+        assert!(snapshot.bands.iter().all(|value| value.is_finite()));
+        assert!(snapshot.waveform.iter().all(|value| value.is_finite()));
     }
 }

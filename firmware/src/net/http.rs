@@ -79,6 +79,7 @@ impl FirmwareHttpServer {
     pub fn start(
         api_ctx: Arc<ApiContext>,
         ota_manager: Arc<Mutex<OtaManager>>,
+        network_nvs: Arc<crate::nvs_store::FirmwareNvs>,
     ) -> Result<Self, String> {
         use esp_idf_svc::http::server::{Configuration, EspHttpServer};
         use esp_idf_svc::http::Method;
@@ -101,6 +102,62 @@ impl FirmwareHttpServer {
             };
             format!("{e}; HTTP stack={} internal free={free} largest={largest} minimum={minimum}", config.stack_size)
         })?;
+
+        let network_nvs_get = Arc::clone(&network_nvs);
+        server
+            .fn_handler("/api/network", Method::Get, move |req| {
+                let response = match crate::net::network_api::get_config(&network_nvs_get) {
+                    Ok(value) => HttpResponse::ok_json(value),
+                    Err(error) => HttpResponse::err_json(500, &error),
+                };
+                send_response(req, response)
+            })
+            .map_err(|error| error.to_string())?;
+
+        let network_nvs_post = Arc::clone(&network_nvs);
+        let ota_for_network = Arc::clone(&ota_manager);
+        server
+            .fn_handler("/api/network", Method::Post, move |mut req| {
+                if !crate::request_guard::trusted_control(
+                    req.header("Origin"), req.header("Host"), req.header("X-Matrix-Control"),
+                ) {
+                    return send_response(req, HttpResponse::err_json(403, "Untrusted control request"));
+                }
+                if api_admission("POST", "/api/network", memory_is_low()) == ApiAdmission::Shed {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(503, "device low on memory, shedding load"),
+                    );
+                }
+                let mut body = Vec::with_capacity(512);
+                let mut chunk = [0u8; 512];
+                loop {
+                    let read = match req.read(&mut chunk) {
+                        Ok(read) => read,
+                        Err(_) => return send_response(req, HttpResponse::err_json(400, "request body transport failed")),
+                    };
+                    if read == 0 { break; }
+                    if body.len() + read > MAX_API_BODY_BYTES {
+                        return send_response(req, HttpResponse::err_json(413, "payload too large"));
+                    }
+                    body.extend_from_slice(&chunk[..read]);
+                }
+                let config = match crate::net::network_api::update_config(&network_nvs_post, &body) {
+                    Ok(value) => value,
+                    Err(error) => return send_response(req, HttpResponse::err_json(400, &error)),
+                };
+                let result = send_response(req, HttpResponse::ok_json(serde_json::json!({
+                    "ok": true,
+                    "config": config,
+                    "reconnectRequired": true,
+                    "address": "http://192.168.4.1/"
+                })));
+                if result.is_ok() && ota_for_network.lock().is_ok() {
+                    OtaManager::schedule_restart();
+                }
+                result
+            })
+            .map_err(|error| error.to_string())?;
 
         server
             .fn_handler("/api/recovery", Method::Get, move |req| {
@@ -375,6 +432,7 @@ impl FirmwareHttpServer {
     pub fn start(
         _api_ctx: Arc<ApiContext>,
         _ota_manager: Arc<Mutex<OtaManager>>,
+        _network_nvs: Arc<crate::nvs_store::FirmwareNvs>,
     ) -> Result<Self, String> {
         log::info!("Firmware HTTP server started (host simulator mode)");
         Ok(Self {})

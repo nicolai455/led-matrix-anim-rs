@@ -27,7 +27,7 @@ fn pressure_sheds_dynamic_routes_but_not_recovery_or_streaming_ota() {
         ("GET", "/api/frame"),
         ("GET", "/api/audio"),
         ("GET", "/api/effects/state"),
-        ("POST", "/api/state"),
+        ("POST", "/api/network"),
         ("POST", "/api/config"),
         ("POST", "/api/unknown"),
     ] {

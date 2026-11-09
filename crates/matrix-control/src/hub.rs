@@ -1,6 +1,7 @@
 use matrix_core::audio::MicSettings;
 use matrix_core::{AudioMode, AudioSnapshot, Engine, Frame, PanelConfig};
 use matrix_core::engine::DetachedSnapshot;
+use crate::persistence::StateStore;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, SyncSender};
@@ -75,7 +76,8 @@ struct Telemetry {
 }
 fn publish_telemetry(cache: &RwLock<Arc<Vec<u8>>>, item: Telemetry) {
     let result = (|| -> Result<(), String> {
-        let mut snap = serde_json::to_value(&*item.state).map_err(|e| e.to_string())?;
+        let value = serde_json::to_value(item.state.as_ref()).map_err(|e| e.to_string())?;
+        let mut snap = value;
         let obj = snap.as_object_mut().ok_or("invalid snapshot")?;
         obj.insert("fps".into(), json!(item.fps)); obj.insert("outputErrors".into(), json!(item.errors));
         obj.insert("uptime".into(), json!(item.uptime)); obj.insert("hasMic".into(), json!(item.has_mic));
@@ -88,7 +90,9 @@ fn publish_telemetry(cache: &RwLock<Arc<Vec<u8>>>, item: Telemetry) {
             let waveform: Vec<i8> = item.audio.waveform.iter().map(|v| (v.clamp(-1.0, 1.0) * 127.0).round() as i8).collect();
             obj.insert("waveform".into(), json!(waveform));
         }
-        obj.insert("bass".into(), json!(item.audio.bands[0..4].iter().sum::<f32>() / 4.0));
+        obj.insert("bass".into(), json!(item.audio.bass));
+        obj.insert("onset".into(), json!(item.audio.onset));
+        obj.insert("bpm".into(), json!(item.audio.bpm));
         obj.insert("mid".into(), json!(item.audio.bands[4..10].iter().sum::<f32>() / 6.0));
         obj.insert("treble".into(), json!(item.audio.bands[10..16].iter().sum::<f32>() / 6.0));
         let bytes = serde_json::to_vec(&snap).map_err(|e| e.to_string())?;
@@ -512,6 +516,11 @@ impl ControlHub {
             }
         }
         Value::Object(result)
+    }
+
+    /// Persist the latest engine snapshot; serialized transient audio telemetry is not retained.
+    pub fn save_runtime_state(&self, store: &StateStore) -> Result<(), String> {
+        store.save_json(self.snapshot_json().as_slice())
     }
 
     /// Returns the static effect catalog.

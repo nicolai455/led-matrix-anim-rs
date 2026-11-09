@@ -103,6 +103,10 @@ fn handle_api_request_inner(
         ("GET", "/preview.wasm.gz") => {
             HttpResponse::ok_binary("application/gzip", PREVIEW_WASM.to_vec())
         }
+        ("GET", "/api/network") | ("POST", "/api/network") => HttpResponse::err_json(
+            503,
+            "Wi-Fi configuration is unavailable in host simulator mode; no radio is present",
+        ),
         ("GET", "/api/audio") => {
             let snapshot = ctx.hub.snapshot_scalar();
             let mut audio = serde_json::Map::new();
@@ -236,9 +240,8 @@ fn handle_api_request_inner(
         }
 
         ("POST", "/api/state/save") => {
-            let snap = ctx.hub.snapshot_json();
-            match ctx.state_store.save_json(&snap) {
-                Ok(_) => HttpResponse::ok_json(json!({ "ok": true })),
+            match ctx.hub.save_runtime_state(&ctx.state_store) {
+                Ok(()) => HttpResponse::ok_json(json!({ "ok": true })),
                 Err(e) => HttpResponse::err_json(500, &e),
             }
         }

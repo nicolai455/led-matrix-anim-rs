@@ -1,4 +1,6 @@
-# Matrix Firmware (ESP32 and ESP32-S3)
+# Matrix Firmware (ESP32-S3)
+
+> The production build is currently supported only on ESP32-S3. The active device uses S3; standard ESP32 and ESP32-bare release images exceed the OTA partition. See the top-level [`VERIFICATION.md`](../VERIFICATION.md). S3 cross-build/image-fit pass, but no hardware flash or runtime test was performed.
 
 ### OTA startup validation and deployment
 
@@ -21,7 +23,7 @@ rollback API failures are logged and never treated as success. Crash/reset
 rollback depends on the installed bootloader. Actual device behavior, recovery,
 and physical output require hardware verification.
 
-Real ESP-IDF std Rust firmware for the 32x32 WS2812B LED Matrix, supporting ESP32-WROOM (standard and bare profiles) and ESP32-S3 (N16R8).
+Real ESP-IDF std Rust firmware for the 32x32 WS2812B LED Matrix. **Current production support is ESP32-S3 N16R8 only**; standard ESP32 and ESP32-bare release images exceed their configured OTA slots. See [`VERIFICATION.md`](../VERIFICATION.md). S3 release build/image fit passed; no hardware flash or runtime test was performed.
 
 ## Architecture & Responsibilities
 
@@ -31,6 +33,8 @@ Real ESP-IDF std Rust firmware for the 32x32 WS2812B LED Matrix, supporting ESP3
 - **Pacing**: Render is a dedicated task backpressured directly by the completion of physical LED output (RMT transmission). Network (HTTP, MQTT, Wi-Fi) runs on independent tasks and remains responsive.
 
 ## Target Profiles & Wiring
+
+> ESP32-S3 N16R8 is the only currently supported production target. Classic ESP32 and ESP32-bare do not pass the configured OTA image-fit gate; see [`VERIFICATION.md`](../VERIFICATION.md).
 
 ### 1. ESP32-WROOM (`esp32`)
 - **Board Name**: `"ESP32-WROOM"`
@@ -106,6 +110,8 @@ However:
    - Mounts VFS SPIFFS filesystem at `/spiffs` for streaming LFX asset files (`/spiffs/animations/example.lfx`).
    - Implements `StorageBackend` trait for `FirmwareNvs` to back `ConfigStore` and `StateStore`.
    - Restores persistent settings and panel configuration on boot while strictly preserving initial OFF power state.
+   - Network settings persist up to five ordered station profiles and MQTT options; `/api/network` never reveals passphrase values.
+   - A WPA2 fallback AP is enabled only with an explicitly provisioned per-device password; there is no universal default or zero-touch factory bootstrap.
 
 7. **Web UI & REST API**:
    - Server configured with `uri_match_wildcard: true`.

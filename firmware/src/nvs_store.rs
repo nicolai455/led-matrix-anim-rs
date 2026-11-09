@@ -8,6 +8,7 @@ pub const NVS_NAMESPACE: &str = "matrix_cfg";
 pub const KEY_PANEL_CONFIG: &str = "panel_cfg";
 pub const KEY_SAVED_STATE: &str = "saved_state";
 pub const KEY_MIC_SETTINGS: &str = "mic_cfg";
+pub const KEY_NETWORK_CONFIG: &str = "network_cfg";
 
 pub struct FirmwareNvs {
     #[cfg(target_os = "espidf")]
@@ -173,5 +174,57 @@ impl StorageBackend for NvsStorageBackend {
 
     fn clear(&self) -> Result<(), String> {
         self.nvs.remove(self.key)
+    }
+}
+
+impl FirmwareNvs {
+    /// Load validated Wi-Fi and MQTT configuration from the private NVS key.
+    pub fn load_network_config(&self) -> Result<Option<crate::network_config::NetworkConfig>, String> {
+        self.get_str(KEY_NETWORK_CONFIG)?
+            .map(|json| crate::network_config::NetworkConfig::parse(&json))
+            .transpose()
+    }
+
+    /// Validate and serialize the canonical schema before writing it to NVS.
+    pub fn save_network_config(
+        &self,
+        config: &crate::network_config::NetworkConfig,
+    ) -> Result<(), String> {
+        let json = config.to_json()?;
+        self.set_str(KEY_NETWORK_CONFIG, &json)
+    }
+}
+
+#[cfg(test)]
+mod network_config_tests {
+    use super::*;
+    use crate::network_config::NetworkConfig;
+
+    #[test]
+    fn network_config_round_trips_profiles_and_mqtt_via_nvs() {
+        let nvs = FirmwareNvs::new().unwrap();
+        let config = NetworkConfig::parse(
+            r#"{"wifiProfiles":[{"ssid":"office","password":"test-pass-123","priority":2,"hidden":true}],"mqttHost":"broker.local","mqttPort":1884,"mqttUser":"matrix","mqttPassword":"mqtt-pass"}"#,
+        )
+        .unwrap();
+        nvs.save_network_config(&config).unwrap();
+        let loaded = nvs.load_network_config().unwrap().unwrap();
+        assert_eq!(loaded.prioritized_wifi_profiles().unwrap()[0].ssid, "office");
+        assert!(loaded.prioritized_wifi_profiles().unwrap()[0].hidden);
+        assert_eq!(loaded.mqtt_host, "broker.local");
+        assert_eq!(loaded.mqtt_port, 1884);
+        assert_eq!(loaded.mqtt_user, "matrix");
+        assert_eq!(loaded.mqtt_password, "mqtt-pass");
+    }
+
+    #[test]
+    fn invalid_persisted_network_config_is_rejected_when_loaded() {
+        let nvs = FirmwareNvs::new().unwrap();
+        nvs.set_str(
+            KEY_NETWORK_CONFIG,
+            r#"{"wifiProfiles":[{"ssid":"","password":"bad"}]}"#,
+        )
+        .unwrap();
+        assert!(nvs.load_network_config().is_err());
     }
 }
