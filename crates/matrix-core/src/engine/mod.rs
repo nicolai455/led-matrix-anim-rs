@@ -4,12 +4,52 @@ use crate::pixel::{Frame, Rgb};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+const MAX_PLAYLIST_ENTRIES: usize = 32;
+const MIN_PLAYLIST_ENTRY_MS: u64 = 1_000;
+const MAX_PLAYLIST_ENTRY_MS: u64 = 86_400_000;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AudioMode {
     #[default]
     Off,
     Synthetic,
     External,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlaylistEntry {
+    effect_id: String,
+    duration_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum PlaylistStatus {
+    #[default]
+    Stopped,
+    Running,
+    Paused,
+}
+
+impl PlaylistStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Stopped => "stopped",
+            Self::Running => "running",
+            Self::Paused => "paused",
+        }
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistSnapshot {
+    entries: Vec<PlaylistEntry>,
+    r#loop: bool,
+    status: &'static str,
+    index: Option<usize>,
+    effect_id: Option<String>,
+    remaining_ms: u64,
 }
 
 pub struct Engine {
@@ -25,6 +65,12 @@ pub struct Engine {
     last_cycle_ms: u64,
     last_render_ms: u64,
     has_rendered: bool,
+    playlist_entries: Vec<PlaylistEntry>,
+    playlist_loop: bool,
+    playlist_status: PlaylistStatus,
+    playlist_index: Option<usize>,
+    playlist_remaining_ms: u64,
+    playlist_last_update_ms: u64,
     audio_mode: AudioMode,
     audio_available: bool,
     mic_settings: MicSettings,
@@ -35,16 +81,32 @@ pub struct Engine {
 /// Detached owned state; captures effect parameters without JSON construction.
 #[derive(Clone, Serialize)]
 pub struct DetachedSnapshot {
-    state: &'static str, brightness: u8, color_mode: &'static str, color: Rgb,
-    effect: &'static str, effect_id: &'static str, text: String, speed: u32,
-    cycle: &'static str, rssi: i32, audio_source: &'static str,
-    audio_status: &'static str, mic: MicSettings,
-    effects: std::collections::BTreeMap<&'static str, std::collections::BTreeMap<&'static str, DetachedParameter>>,
+    state: &'static str,
+    brightness: u8,
+    color_mode: &'static str,
+    color: Rgb,
+    effect: &'static str,
+    effect_id: &'static str,
+    text: String,
+    speed: u32,
+    cycle: &'static str,
+    rssi: i32,
+    audio_source: &'static str,
+    audio_status: &'static str,
+    mic: MicSettings,
+    playlist: PlaylistSnapshot,
+    effects: std::collections::BTreeMap<
+        &'static str,
+        std::collections::BTreeMap<&'static str, DetachedParameter>,
+    >,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(untagged)]
-enum DetachedParameter { Text(&'static str), Number(f32) }
+enum DetachedParameter {
+    Text(&'static str),
+    Number(f32),
+}
 
 impl Engine {
     /// Creates a new Engine with the given effect catalog.
@@ -87,6 +149,12 @@ impl Engine {
             last_cycle_ms: 0,
             last_render_ms: 0,
             has_rendered: false,
+            playlist_entries: Vec::new(),
+            playlist_loop: false,
+            playlist_status: PlaylistStatus::Stopped,
+            playlist_index: None,
+            playlist_remaining_ms: 0,
+            playlist_last_update_ms: 0,
             audio_mode: AudioMode::Off,
             audio_available: false,
             mic_settings: MicSettings::default(),
@@ -250,19 +318,259 @@ impl Engine {
         &self.effects
     }
 
-    /// Select an effect by name or id.
     pub fn switch_to_effect(&mut self, name_or_id: &str) -> bool {
-        for (i, e) in self.effects.iter().enumerate() {
-            if e.id().eq_ignore_ascii_case(name_or_id) || e.name().eq_ignore_ascii_case(name_or_id)
+        for i in 0..self.effects.len() {
+            let effect = &self.effects[i];
+            if effect.id().eq_ignore_ascii_case(name_or_id)
+                || effect.name().eq_ignore_ascii_case(name_or_id)
             {
-                self.effects[self.current_effect_idx].deactivate();
-                self.current_effect_idx = i;
-                self.effects[i].reset();
+                self.stop_playlist();
+                self.select_effect_idx(i);
                 self.dirty = true;
                 return true;
             }
         }
         false
+    }
+
+    fn select_effect_idx(&mut self, idx: usize) {
+        self.effects[self.current_effect_idx].deactivate();
+        self.current_effect_idx = idx;
+        self.effects[idx].reset();
+    }
+
+    fn stop_playlist(&mut self) {
+        self.playlist_status = PlaylistStatus::Stopped;
+        self.playlist_index = None;
+        self.playlist_remaining_ms = 0;
+        self.playlist_last_update_ms = self.last_render_ms;
+    }
+
+    fn playlist_snapshot(&self) -> PlaylistSnapshot {
+        PlaylistSnapshot {
+            entries: self.playlist_entries.clone(),
+            r#loop: self.playlist_loop,
+            status: self.playlist_status.as_str(),
+            index: self.playlist_index,
+            effect_id: self
+                .playlist_index
+                .map(|index| self.playlist_entries[index].effect_id.clone()),
+            remaining_ms: self.playlist_remaining_ms,
+        }
+    }
+
+    pub(crate) fn playlist_persistence(&self) -> serde_json::Value {
+        json!({"entries": self.playlist_entries, "loop": self.playlist_loop})
+    }
+
+    fn update_playlist(&mut self, now_ms: u64) {
+        if self.playlist_status != PlaylistStatus::Running || !self.on {
+            self.playlist_last_update_ms = now_ms;
+            return;
+        }
+
+        let elapsed = now_ms.saturating_sub(self.playlist_last_update_ms);
+        self.playlist_last_update_ms = now_ms;
+        if elapsed < self.playlist_remaining_ms {
+            if elapsed > 0 {
+                self.playlist_remaining_ms -= elapsed;
+                self.dirty = true;
+            }
+            return;
+        }
+
+        let mut overdue = elapsed - self.playlist_remaining_ms;
+        let Some(mut index) = self.playlist_index else {
+            self.stop_playlist();
+            return;
+        };
+        let count = self.playlist_entries.len();
+        if count == 0 {
+            self.stop_playlist();
+            return;
+        }
+
+        let round_ms: u64 = self.playlist_entries.iter().map(|entry| entry.duration_ms).sum();
+        if self.playlist_loop && round_ms > 0 {
+            overdue %= round_ms;
+        }
+        loop {
+            if index + 1 == count {
+                if !self.playlist_loop {
+                    self.stop_playlist();
+                    break;
+                }
+                index = 0;
+            } else {
+                index += 1;
+            }
+            self.playlist_index = Some(index);
+            self.playlist_remaining_ms = self.playlist_entries[index].duration_ms;
+            let effect_idx = self
+                .effect_index_by_id(&self.playlist_entries[index].effect_id)
+                .expect("configured playlist effect id remains in engine catalog");
+            self.select_effect_idx(effect_idx);
+
+            if overdue == 0 {
+                break;
+            }
+            if overdue < self.playlist_remaining_ms {
+                self.playlist_remaining_ms -= overdue;
+                break;
+            }
+            overdue -= self.playlist_remaining_ms;
+        }
+        self.dirty = true;
+    }
+
+    fn freeze_playlist(&mut self, now_ms: u64) {
+        if self.playlist_status == PlaylistStatus::Running {
+            let elapsed = now_ms.saturating_sub(self.playlist_last_update_ms);
+            self.playlist_remaining_ms = self.playlist_remaining_ms.saturating_sub(elapsed);
+        }
+        self.playlist_last_update_ms = now_ms;
+    }
+
+    fn resume_playlist_clock(&mut self, now_ms: u64) {
+        self.playlist_last_update_ms = now_ms;
+    }
+
+    fn apply_playlist_config(&mut self, payload: &str) -> Result<(), String> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Config {
+            entries: Vec<PlaylistEntry>,
+            r#loop: bool,
+        }
+
+        let config: Config = serde_json::from_str(payload)
+            .map_err(|e| format!("invalid playlist_config JSON: {e}"))?;
+        if config.entries.len() > MAX_PLAYLIST_ENTRIES {
+            return Err(format!(
+                "playlist supports at most {MAX_PLAYLIST_ENTRIES} entries"
+            ));
+        }
+        for (index, entry) in config.entries.iter().enumerate() {
+            if entry.duration_ms < MIN_PLAYLIST_ENTRY_MS
+                || entry.duration_ms > MAX_PLAYLIST_ENTRY_MS
+            {
+                return Err(format!(
+                    "playlist entry {index} durationMs must be in [{MIN_PLAYLIST_ENTRY_MS}..{MAX_PLAYLIST_ENTRY_MS}]"
+                ));
+            }
+            if !self
+                .effects
+                .iter()
+                .any(|effect| effect.id() == entry.effect_id)
+            {
+                return Err(format!(
+                    "unknown stable effect id '{}' in playlist",
+                    entry.effect_id
+                ));
+            }
+        }
+
+        self.stop_playlist();
+        self.playlist_entries = config.entries;
+        self.playlist_loop = config.r#loop;
+        if !self.playlist_entries.is_empty() {
+            self.auto_cycle_ms = 0;
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn apply_playlist_control(&mut self, payload: &str) -> Result<(), String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Control {
+            action: String,
+        }
+        let control: Control = serde_json::from_str(payload)
+            .map_err(|e| format!("invalid playlist_control JSON: {e}"))?;
+        let action = control.action.trim().to_ascii_lowercase();
+        match action.as_str() {
+            "start" => {
+                if self.playlist_entries.is_empty() {
+                    return Err("cannot start an empty playlist".to_string());
+                }
+                self.auto_cycle_ms = 0;
+                self.playlist_index = Some(0);
+                self.playlist_remaining_ms = self.playlist_entries[0].duration_ms;
+                self.playlist_status = PlaylistStatus::Running;
+                self.playlist_last_update_ms = self.last_render_ms;
+                // Play is an explicit user action: wake the output while keeping
+                // ordinary boot and saved playlist restoration dark/stopped.
+                self.on = true;
+                let effect_idx = self
+                    .effect_index_by_id(&self.playlist_entries[0].effect_id)
+                    .expect("configured playlist effect id remains in engine catalog");
+                self.select_effect_idx(effect_idx);
+            }
+            "pause" => {
+                if self.playlist_status != PlaylistStatus::Running {
+                    return Err("playlist is not running".to_string());
+                }
+                self.freeze_playlist(self.last_render_ms);
+                self.playlist_status = PlaylistStatus::Paused;
+            }
+            "resume" => {
+                if self.playlist_status != PlaylistStatus::Paused {
+                    return Err("playlist is not paused".to_string());
+                }
+                self.playlist_status = PlaylistStatus::Running;
+                self.resume_playlist_clock(self.last_render_ms);
+            }
+            "stop" => self.stop_playlist(),
+            "next" | "previous" => {
+                if !matches!(
+                    self.playlist_status,
+                    PlaylistStatus::Running | PlaylistStatus::Paused
+                ) {
+                    return Err("playlist is not running or paused".to_string());
+                }
+                let count = self.playlist_entries.len();
+                let current = self
+                    .playlist_index
+                    .ok_or("playlist has no selected entry")?;
+                let index = if action == "next" {
+                    if current + 1 == count {
+                        if self.playlist_loop {
+                            0
+                        } else {
+                            current
+                        }
+                    } else {
+                        current + 1
+                    }
+                } else if current == 0 {
+                    if self.playlist_loop {
+                        count - 1
+                    } else {
+                        0
+                    }
+                } else {
+                    current - 1
+                };
+                self.playlist_index = Some(index);
+                self.playlist_remaining_ms = self.playlist_entries[index].duration_ms;
+                self.playlist_last_update_ms = self.last_render_ms;
+                let effect_idx = self
+                    .effect_index_by_id(&self.playlist_entries[index].effect_id)
+                    .expect("configured playlist effect id remains in engine catalog");
+                self.select_effect_idx(effect_idx);
+            }
+            _ => return Err(
+                "invalid playlist action; expected start, pause, resume, stop, next, or previous"
+                    .to_string(),
+            ),
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn effect_index_by_id(&self, id: &str) -> Option<usize> {
+        self.effects.iter().position(|effect| effect.id() == id)
     }
 
     /// Renders the current frame.
@@ -302,6 +610,8 @@ impl Engine {
             }
         }
 
+        self.update_playlist(now_ms);
+
         let mut frame = Frame::default();
         if let Some(effect) = self.effects.get_mut(self.current_effect_idx) {
             let context = RenderContext {
@@ -337,6 +647,8 @@ impl Engine {
             "text" => self.apply_text(payload),
             "speed" => self.apply_speed(payload),
             "cycle" => self.apply_cycle(payload),
+            "playlist_config" => self.apply_playlist_config(payload),
+            "playlist_control" => self.apply_playlist_control(payload),
             "audio_source" => self.apply_audio_source(payload),
             "mic" => self.apply_mic(payload),
             "rssi" => self.apply_rssi(payload),
@@ -428,6 +740,9 @@ impl Engine {
         if let Some(on) = target_on {
             if !on {
                 self.effects[self.current_effect_idx].deactivate();
+                self.freeze_playlist(self.last_render_ms);
+            } else if !self.on {
+                self.resume_playlist_clock(self.last_render_ms);
             }
             self.on = on;
         }
@@ -444,9 +759,8 @@ impl Engine {
                         || effect.name().eq_ignore_ascii_case("solid")
                         || effect.name().eq_ignore_ascii_case("solid color")
                     {
-                        self.effects[self.current_effect_idx].deactivate();
-                        self.current_effect_idx = idx;
-                        self.effects[idx].reset();
+                        self.stop_playlist();
+                        self.select_effect_idx(idx);
                         self.auto_cycle_ms = 0;
                         break;
                     }
@@ -454,9 +768,8 @@ impl Engine {
             }
         }
         if let Some(effect_idx) = target_effect_idx {
-            self.effects[self.current_effect_idx].deactivate();
-            self.current_effect_idx = effect_idx;
-            self.effects[effect_idx].reset();
+            self.stop_playlist();
+            self.select_effect_idx(effect_idx);
             self.auto_cycle_ms = 0;
         }
 
@@ -480,9 +793,8 @@ impl Engine {
         // Legacy behavior: legacy text command auto-selects TextScroll (exact ID per TextAnimation.h:79)
         for (idx, effect) in self.effects.iter().enumerate() {
             if effect.id() == "TextScroll" || effect.name() == "TextScroll" {
-                self.effects[self.current_effect_idx].deactivate();
-                self.current_effect_idx = idx;
-                self.effects[idx].reset();
+                self.stop_playlist();
+                self.select_effect_idx(idx);
                 self.auto_cycle_ms = 0;
                 break;
             }
@@ -508,6 +820,7 @@ impl Engine {
     fn apply_cycle(&mut self, payload: &str) -> Result<(), String> {
         let trimmed = payload.trim();
         if trimmed.eq_ignore_ascii_case("on") || trimmed == "1" {
+            self.stop_playlist();
             self.auto_cycle_ms = self.cycle_interval_ms;
             self.last_cycle_ms = 0;
         } else if trimmed.eq_ignore_ascii_case("off") || trimmed == "0" {
@@ -649,30 +962,53 @@ impl Engine {
             for p in effect.parameters() {
                 if let Some(v) = effect.parameter(p.id) {
                     let value = match p.kind {
-                        ParameterKind::Boolean => DetachedParameter::Text(if v != 0.0 { "ON" } else { "OFF" }),
-                        ParameterKind::Select if (v as usize) < p.options.len() => DetachedParameter::Text(p.options[v as usize]),
+                        ParameterKind::Boolean => {
+                            DetachedParameter::Text(if v != 0.0 { "ON" } else { "OFF" })
+                        }
+                        ParameterKind::Select if (v as usize) < p.options.len() => {
+                            DetachedParameter::Text(p.options[v as usize])
+                        }
                         _ => DetachedParameter::Number(v),
                     };
                     params.insert(p.id, value);
                 }
             }
-            if !params.is_empty() { effects.insert(effect.id(), params); }
+            if !params.is_empty() {
+                effects.insert(effect.id(), params);
+            }
         }
         let effect = &self.effects[self.current_effect_idx];
         DetachedSnapshot {
-            state: if self.on { "ON" } else { "OFF" }, brightness: self.brightness,
-            color_mode: "rgb", color: self.color, effect: effect.name(), effect_id: effect.id(),
-            text: self.text.clone(), speed: self.speed,
-            cycle: if self.auto_cycle_ms > 0 { "ON" } else { "OFF" }, rssi: self.rssi,
-            audio_source: match self.audio_mode { AudioMode::Off => "Off", AudioMode::Synthetic => "Synthetic", AudioMode::External => "Mic" },
-            audio_status: self.audio_status(), mic: self.mic_settings.clone(), effects,
+            state: if self.on { "ON" } else { "OFF" },
+            brightness: self.brightness,
+            color_mode: "rgb",
+            color: self.color,
+            effect: effect.name(),
+            effect_id: effect.id(),
+            text: self.text.clone(),
+            speed: self.speed,
+            cycle: if self.auto_cycle_ms > 0 { "ON" } else { "OFF" },
+            rssi: self.rssi,
+            audio_source: match self.audio_mode {
+                AudioMode::Off => "Off",
+                AudioMode::Synthetic => "Synthetic",
+                AudioMode::External => "Mic",
+            },
+            audio_status: self.audio_status(),
+            mic: self.mic_settings.clone(),
+            playlist: self.playlist_snapshot(),
+            effects,
         }
     }
 
     /// Full state snapshot matching legacy JSON schema.
     pub fn snapshot(&self) -> serde_json::Value {
-        serde_json::from_slice(&self.snapshot_json(&serde_json::Map::new()).expect("serialize state"))
-            .expect("internally serialized state")
+        serde_json::from_slice(
+            &self
+                .snapshot_json(&serde_json::Map::new())
+                .expect("serialize state"),
+        )
+        .expect("internally serialized state")
     }
 
     /// Small state without the effect parameter tree, for telemetry consumers.
@@ -712,6 +1048,7 @@ impl Engine {
             "rssi": self.rssi,
             "audio_source": audio_src,
             "audio_status": audio_stat,
+            "playlist": self.playlist_snapshot(),
             "mic": {
                 "gainDb": self.mic_settings.gain_db,
                 "squelchDb": self.mic_settings.squelch_db,
@@ -726,7 +1063,10 @@ impl Engine {
     }
 
     /// Serialize state and effect parameters directly without constructing a Value tree.
-    pub fn snapshot_json(&self, extra: &serde_json::Map<String, serde_json::Value>) -> Result<Vec<u8>, serde_json::Error> {
+    pub fn snapshot_json(
+        &self,
+        extra: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<Vec<u8>, serde_json::Error> {
         use serde::ser::{SerializeMap, Serializer};
         struct Params<'a>(&'a dyn Effect);
         impl Serialize for Params<'_> {
@@ -735,8 +1075,12 @@ impl Engine {
                 for p in self.0.parameters() {
                     if let Some(v) = self.0.parameter(p.id) {
                         match p.kind {
-                            ParameterKind::Boolean => map.serialize_entry(p.id, if v != 0.0 { "ON" } else { "OFF" })?,
-                            ParameterKind::Select if (v as usize) < p.options.len() => map.serialize_entry(p.id, p.options[v as usize])?,
+                            ParameterKind::Boolean => {
+                                map.serialize_entry(p.id, if v != 0.0 { "ON" } else { "OFF" })?
+                            }
+                            ParameterKind::Select if (v as usize) < p.options.len() => {
+                                map.serialize_entry(p.id, p.options[v as usize])?
+                            }
                             _ => map.serialize_entry(p.id, &v)?,
                         }
                     }
@@ -749,7 +1093,11 @@ impl Engine {
             fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
                 let mut map = s.serialize_map(None)?;
                 for effect in &self.0.effects {
-                    if effect.parameters().iter().any(|p| effect.parameter(p.id).is_some()) {
+                    if effect
+                        .parameters()
+                        .iter()
+                        .any(|p| effect.parameter(p.id).is_some())
+                    {
                         map.serialize_entry(effect.id(), &Params(effect.as_ref()))?;
                     }
                 }
@@ -762,9 +1110,15 @@ impl Engine {
                 let scalar = self.0.snapshot_scalar();
                 let mut map = s.serialize_map(None)?;
                 for (key, value) in scalar.as_object().expect("scalar object") {
-                    if key != "effects" && !self.1.contains_key(key) { map.serialize_entry(key, value)?; }
+                    if key != "effects" && !self.1.contains_key(key) {
+                        map.serialize_entry(key, value)?;
+                    }
                 }
-                for (key, value) in self.1 { if key != "effects" { map.serialize_entry(key, value)?; } }
+                for (key, value) in self.1 {
+                    if key != "effects" {
+                        map.serialize_entry(key, value)?;
+                    }
+                }
                 map.serialize_entry("effects", &Effects(self.0))?;
                 map.end()
             }
@@ -786,7 +1140,9 @@ impl Engine {
                 self.0 += data.len();
                 Ok(data.len())
             }
-            fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
         }
         let catalog = Catalog(&self.effects);
         let mut counter = Counter(0);
@@ -813,7 +1169,9 @@ impl Serialize for Catalog<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeSeq;
         let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
-        for effect in self.0 { seq.serialize_element(&CatalogEffect(effect.as_ref()))?; }
+        for effect in self.0 {
+            seq.serialize_element(&CatalogEffect(effect.as_ref()))?;
+        }
         seq.end()
     }
 }
@@ -832,12 +1190,16 @@ impl Serialize for CatalogParameters<'_> {
         use serde::ser::SerializeSeq;
         #[derive(Serialize)]
         struct Parameter<'a> {
-            #[serde(flatten)] descriptor: &'a crate::effect::ParameterDescriptor,
+            #[serde(flatten)]
+            descriptor: &'a crate::effect::ParameterDescriptor,
             value: f32,
         }
         let mut seq = serializer.serialize_seq(Some(self.0.parameters().len()))?;
         for p in self.0.parameters() {
-            seq.serialize_element(&Parameter { descriptor: p, value: self.0.parameter(p.id).unwrap_or(p.default) })?;
+            seq.serialize_element(&Parameter {
+                descriptor: p,
+                value: self.0.parameter(p.id).unwrap_or(p.default),
+            })?;
         }
         seq.end()
     }

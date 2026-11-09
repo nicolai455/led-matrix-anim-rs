@@ -1,0 +1,7 @@
+# Network and Wi-Fi provisioning
+
+Firmware configuration is stored in NVS and uses canonical `wifiProfiles` JSON (up to five prioritized profiles); legacy `wifiSsid`/`wifiPassword` migrate to one profile. MQTT fields remain in the same config. `/api/network` GET returns SSIDs/metadata and credential-configured flags only, never Wi-Fi, AP or MQTT passphrases. POST uses the existing same-origin control guard, caps the body at 4096 bytes, validates before persisting atomically, and triggers a controlled restart only after returning a redacted response.
+
+The existing port-80 firmware HTTP server provides `/api/network` GET and POST. The configured fallback AP requests gateway `192.168.4.1/24` with DHCP. The AP is WPA2 and starts only when a private per-device AP passphrase has been provisioned. There is no universal password and no zero-touch first-boot bootstrap: an unprovisioned factory device has no setup AP until private provisioning. Manufacturing/owner procedures must provision the initial AP passphrase out of band. The web UI has no separate login; AP WPA2 is the local access boundary.
+
+Host firmware tests cover parsing, validation, NVS round-trip, redaction, profile ordering and fallback policy. They do not prove ESP-IDF compilation, actual scans/reconnect, DHCP, embedded HTTP behavior or radio behavior. Hardware acceptance remains open; do not treat host tests as device tests.

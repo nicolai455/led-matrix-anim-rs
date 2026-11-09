@@ -47,6 +47,7 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
             "b": engine.color().b
         },
         "audio": audio_str,
+        "playlist": engine.playlist_persistence(),
         "mic": {
             "gainDb": mic.gain_db,
             "squelchDb": mic.squelch_db,
@@ -78,12 +79,22 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
         let effects: std::collections::BTreeMap<&str, &serde_json::value::RawValue> =
             serde_json::from_str(params.get()).unwrap_or_default();
         for (effect_id, raw) in effects {
-            let Ok(map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(raw.get()) else { continue; };
+            let Ok(map) =
+                serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(raw.get())
+            else {
+                continue;
+            };
             for (param_id, val) in map {
-                let payload = if let Some(num) = val.as_f64() { Some(num.to_string()) }
-                    else if let Some(b) = val.as_bool() { Some(if b { "ON" } else { "OFF" }.to_owned()) }
-                    else { val.as_str().map(str::to_owned) };
-                if let Some(payload) = payload { let _ = engine.apply(&format!("effect/{effect_id}/{param_id}"), &payload); }
+                let payload = if let Some(num) = val.as_f64() {
+                    Some(num.to_string())
+                } else if let Some(b) = val.as_bool() {
+                    Some(if b { "ON" } else { "OFF" }.to_owned())
+                } else {
+                    val.as_str().map(str::to_owned)
+                };
+                if let Some(payload) = payload {
+                    let _ = engine.apply(&format!("effect/{effect_id}/{param_id}"), &payload);
+                }
             }
         }
     }
@@ -132,7 +143,13 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
         let _ = engine.apply("light", &serde_json::Value::Object(light_obj).to_string());
     }
 
-    // 7. Restore auto-cycle after light command (since light command disables auto-cycle)
+    // Restore playlist configuration only; playback state intentionally never resumes.
+    if let Some(playlist) = doc.get("playlist") {
+        let _ = engine.apply("playlist_config", &playlist.to_string());
+    }
+
+    // Auto-cycle has precedence when both persisted settings are enabled; enabling
+    // it stops playlist playback while retaining the saved playlist configuration.
     if let Some(cycle) = doc.get("autoCycle").and_then(|v| v.as_bool()) {
         let _ = engine.apply("cycle", if cycle { "ON" } else { "OFF" });
     }

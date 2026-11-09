@@ -42,6 +42,11 @@ fn preview_telemetry_includes_clock_and_compact_external_waveform() {
                 .iter()
                 .all(|v| { v.as_i64().is_some_and(|n| (-127..=127).contains(&n)) }));
             assert!(state["beat"].is_boolean());
+            assert!(state["bass"].is_number());
+            assert!(state["onset"].is_number());
+            assert!(state["bpm"].is_number());
+            assert!(state["mid"].is_number());
+            assert!(state["treble"].is_number());
             assert!(state["peak"].is_number());
             break;
         }
@@ -205,6 +210,9 @@ impl AudioInput for MockAudioInput {
         AudioSnapshot {
             bands,
             level: 0.75,
+            bass: 0.31,
+            onset: 0.42,
+            bpm: 124.0,
             beat: true,
             available: true,
             ..Default::default()
@@ -349,6 +357,20 @@ fn test_audio_mode_precedence_and_mic_settings_delivery() {
         snapshots_on > 0,
         "AudioMode::External must actively sample external audio input"
     );
+    let telemetry_deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        let snapshot = hub.snapshot();
+        if snapshot["bpm"] == 124.0 {
+            assert!((snapshot["bass"].as_f64().unwrap() - 0.31).abs() < 1e-6);
+            assert!((snapshot["onset"].as_f64().unwrap() - 0.42).abs() < 1e-6);
+            break;
+        }
+        assert!(
+            Instant::now() < telemetry_deadline,
+            "missing audio novelty/tempo telemetry"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
     assert_eq!(*active_calls.lock().unwrap(), vec![true]);
 
     // Update mic settings via command

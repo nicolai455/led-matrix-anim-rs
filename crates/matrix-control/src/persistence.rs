@@ -228,8 +228,23 @@ pub fn normalize_json(input: &str) -> Result<String, String> {
     let params = fields.remove("params");
     let effects = fields.remove("effects");
     let params = params.or(effects);
+    let playlist = fields.remove("playlist");
     let scalar = serde_json::to_value(fields).map_err(|e| e.to_string())?;
     let mut normalized = normalize_runtime_state(&scalar);
+    if let Some(playlist) = playlist {
+        if playlist.get().starts_with('{') {
+            let value: Value = serde_json::from_str(playlist.get()).map_err(|e| e.to_string())?;
+            let entries_valid = value.get("entries").and_then(Value::as_array).is_some_and(|entries| {
+                entries.len() <= 32 && entries.iter().all(|entry| {
+                    entry.get("effectId").and_then(Value::as_str).is_some_and(|id| !id.is_empty() && id.len() <= 64)
+                        && entry.get("durationMs").and_then(Value::as_u64).is_some_and(|duration| (1_000..=86_400_000).contains(&duration))
+                })
+            });
+            if entries_valid && value.get("loop").and_then(Value::as_bool).is_some() {
+                normalized.as_object_mut().ok_or("invalid normalized state")?.insert("playlist".into(), value);
+            }
+        }
+    }
     let mut result = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
     if let Some(params) = params {
         // Validate structure in the restore path; preserve original parameter representations.

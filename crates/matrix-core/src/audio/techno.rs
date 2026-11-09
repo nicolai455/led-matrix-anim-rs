@@ -298,6 +298,9 @@ pub fn generate_synthetic_audio(now_ms: u64) -> AudioSnapshot {
         waveform,
         level,
         peak,
+        bass: bass_group,
+        onset: if beat { 1.0 } else { 0.0 },
+        bpm: 120.0,
         beat,
         available: true,
     }

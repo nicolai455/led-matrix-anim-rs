@@ -435,7 +435,12 @@ impl I2sMicAudioInput {
                             .unwrap_or_default();
                         let now_ms = start_time.elapsed().as_millis() as u64;
 
-                        let snap = dsp.process(&samples, &cur_settings, now_ms);
+                        let snap = dsp.process_at_sample_rate(
+                            &samples,
+                            &cur_settings,
+                            now_ms,
+                            MIC_SAMPLE_RATE,
+                        );
                         let metrics = (dsp.raw_dbfs, dsp.applied_gain_db);
 
                         if let Ok(mut lock) = shared.latest_snapshot.write() {

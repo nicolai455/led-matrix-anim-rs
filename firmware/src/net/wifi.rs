@@ -1,11 +1,37 @@
 pub const FALLBACK_AP_SSID: &str = "JDJLIGHT";
-pub const FALLBACK_AP_PASSWORD: &str = "JDJLIGHT1337";
+/// Legacy compatibility export. A password is never supplied by firmware.
+pub const FALLBACK_AP_PASSWORD: &str = "";
 pub const STA_CONNECT_TIMEOUT_SECS: u64 = 18; // WLED standard timeout (~18s)
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use crate::network_config::{NetworkConfig, WifiProfile};
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WifiConfig {
+    pub profiles: Vec<WifiProfile>,
+    pub fallback_ap: Option<FallbackApConfig>,
+    /// Legacy single-profile fields retained for the existing firmware caller.
     pub ssid: String,
     pub password: Option<String>,
+}
+
+impl WifiConfig {
+    /// Convert validated persisted settings into ordered runtime Wi-Fi settings.
+    pub fn from_network_config(config: &NetworkConfig) -> Result<Self, String> {
+        let profiles = config.prioritized_wifi_profiles()?;
+        let ssid = profiles
+            .first()
+            .map(|profile| profile.ssid.clone())
+            .unwrap_or_default();
+        let password = profiles
+            .first()
+            .and_then(|profile| profile.password.clone());
+        Ok(Self {
+            profiles,
+            fallback_ap: config.fallback_ap_config()?,
+            ssid,
+            password,
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,7 +46,7 @@ impl Default for FallbackApConfig {
     fn default() -> Self {
         Self {
             ssid: FALLBACK_AP_SSID.to_string(),
-            password: FALLBACK_AP_PASSWORD.to_string(),
+            password: String::new(),
             channel: 1,
             max_connections: 4,
         }
@@ -120,6 +146,17 @@ impl ConnectingTimer {
         self.ready = up;
         now.duration_since(self.started).as_secs()
     }
+
+    #[cfg(target_os = "espidf")]
+    fn reset(&mut self, now: std::time::Instant) {
+        self.started = now;
+        self.ready = false;
+    }
+
+    #[cfg(target_os = "espidf")]
+    fn elapsed_secs(&self, now: std::time::Instant) -> u64 {
+        now.duration_since(self.started).as_secs()
+    }
 }
 
 pub struct WifiManager {
@@ -135,69 +172,106 @@ impl WifiManager {
         nvs: esp_idf_svc::nvs::EspDefaultNvsPartition,
         config: Option<WifiConfig>,
     ) -> Result<Self, String> {
+        use esp_idf_svc::ipv4;
+        use esp_idf_svc::netif::{EspNetif, NetifStack};
         use esp_idf_svc::wifi::{
-            AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration, EspWifi,
+            AccessPointConfiguration, AuthMethod, Configuration, EspWifi,
+            WifiDriver,
         };
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::time::{Duration, Instant};
 
+        // esp-idf-svc 0.51 debug-logs configuration structs that include AP
+        // and STA passwords. Never permit debug-level config logging to be
+        // enabled later by the application, and keep third-party debug logs
+        // suppressed for the entire Wi-Fi manager lifetime.
+        log::set_max_level(log::LevelFilter::Info);
+
         let shutdown = std::sync::Arc::new(AtomicBool::new(false));
-        let policy = WifiPolicy::default();
-        policy.ap_config.validate()?;
+        let config = config.unwrap_or_default();
+        let profiles = if config.profiles.is_empty() && !config.ssid.is_empty() {
+            vec![WifiProfile {
+                ssid: config.ssid,
+                password: config.password,
+                priority: 0,
+                hidden: false,
+            }]
+        } else {
+            config.profiles
+        };
+        let fallback_ap = config.fallback_ap;
+        if let Some(ap) = fallback_ap.as_ref() {
+            ap.validate()?;
+        }
+        let policy = WifiPolicy::new(
+            STA_CONNECT_TIMEOUT_SECS,
+            fallback_ap.clone().unwrap_or_default(),
+        );
 
         // Keep the system event loop alive for default Wi-Fi handlers and HTTP.
         let event_loop_guard = sysloop;
         #[cfg(target_os = "espidf")]
         crate::memory_diagnostics::log_heap("wifi-before-driver");
-        let mut wifi = EspWifi::new(modem, event_loop_guard.clone(), Some(nvs))
-            .map_err(|e| format!("EspWifi::new: {e}"))?;
+        let driver = WifiDriver::new(modem, event_loop_guard.clone(), Some(nvs))
+            .map_err(|e| format!("WifiDriver::new: {e}"))?;
+        let sta_netif = EspNetif::new(NetifStack::Sta)
+            .map_err(|e| format!("STA network interface setup failed: {e}"))?;
+        let ap_netif = if fallback_ap.is_some() {
+            let mut ap_netif_conf = NetifStack::Ap.default_configuration();
+            let ap_ip = ipv4::Ipv4Addr::new(192, 168, 4, 1);
+            ap_netif_conf.ip_configuration =
+                Some(ipv4::Configuration::Router(ipv4::RouterConfiguration {
+                    subnet: ipv4::Subnet {
+                        gateway: ap_ip,
+                        mask: ipv4::Mask(24),
+                    },
+                    dhcp_enabled: true,
+                    dns: Some(ap_ip),
+                    secondary_dns: None,
+                }));
+            EspNetif::new_with_conf(&ap_netif_conf)
+                .map_err(|e| format!("fallback AP network interface setup failed: {e}"))?
+        } else {
+            EspNetif::new(NetifStack::Ap)
+                .map_err(|e| format!("AP network interface setup failed: {e}"))?
+        };
+        let mut wifi = EspWifi::wrap_all(driver, sta_netif, ap_netif)
+            .map_err(|e| format!("EspWifi::wrap_all: {e}"))?;
         crate::memory_diagnostics::log_heap("wifi-after-driver");
 
-        let ap_conf = AccessPointConfiguration {
-            ssid: policy
-                .ap_config
-                .ssid
-                .as_str()
-                .try_into()
-                .map_err(|_| "Fallback AP SSID too long")?,
-            password: policy
-                .ap_config
-                .password
-                .as_str()
-                .try_into()
-                .map_err(|_| "Fallback AP password too long")?,
-            auth_method: AuthMethod::WPA2Personal,
-            channel: policy.ap_config.channel,
-            max_connections: policy.ap_config.max_connections,
-            ..Default::default()
-        };
-
-        let (init_mode, client_conf) = match config {
-            Some(ref sta) if !sta.ssid.is_empty() => {
-                let password = sta.password.clone().unwrap_or_default();
-                let client = ClientConfiguration {
-                    ssid: sta
+        let ap_conf = fallback_ap
+            .as_ref()
+            .map(|ap| {
+                Ok::<_, String>(AccessPointConfiguration {
+                    ssid: ap
                         .ssid
                         .as_str()
                         .try_into()
-                        .map_err(|_| "Wi-Fi SSID too long")?,
-                    password: password
+                        .map_err(|_| "Fallback AP SSID too long")?,
+                    password: ap
+                        .password
                         .as_str()
                         .try_into()
-                        .map_err(|_| "Wi-Fi password too long")?,
-                    auth_method: if password.is_empty() {
-                        AuthMethod::None
-                    } else {
-                        AuthMethod::WPA2Personal
-                    },
+                        .map_err(|_| "Fallback AP password too long")?,
+                    auth_method: AuthMethod::WPA2Personal,
+                    channel: ap.channel,
+                    max_connections: ap.max_connections,
                     ..Default::default()
-                };
-                (Configuration::Client(client.clone()), Some(client))
-            }
-            _ => (Configuration::AccessPoint(ap_conf.clone()), None),
+                })
+            })
+            .transpose()?;
+        let clients = profiles
+            .iter()
+            .map(client_configuration)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let init_mode = match (clients.first(), ap_conf.as_ref()) {
+            (Some(client), _) => Configuration::Client(client.clone()),
+            (None, Some(ap)) => Configuration::AccessPoint(ap.clone()),
+            (None, None) => Configuration::None,
         };
 
-        wifi.set_configuration(&init_mode)
+        set_configuration_safely(&mut wifi, &init_mode)
             .map_err(|e| format!("set_configuration: {e}"))?;
         crate::memory_diagnostics::log_heap("wifi-after-config");
         wifi.start().map_err(|e| format!("start: {e}"))?;
@@ -210,12 +284,15 @@ impl WifiManager {
             return Err(format!("Cannot disable Wi-Fi modem sleep: {power}"));
         }
 
-        if client_conf.is_none() {
-            log::info!(
-                "No STA Wi-Fi configured - Fallback AP '{}' active on 192.168.4.1 (Password: '{}')",
-                FALLBACK_AP_SSID,
-                FALLBACK_AP_PASSWORD
-            );
+        if clients.is_empty() {
+            if let Some(ap) = fallback_ap.as_ref() {
+                log::info!(
+                    "No STA profiles configured; fallback AP '{}' is active",
+                    ap.ssid
+                );
+            } else {
+                log::info!("No Wi-Fi profiles or fallback AP configured; Wi-Fi is disabled");
+            }
         }
 
         let stop = shutdown.clone();
@@ -224,16 +301,14 @@ impl WifiManager {
             .stack_size(4096)
             .spawn(move || {
                 let _event_loop_guard = event_loop_guard;
-                let mut current_mode = match client_conf {
-                    Some(_) => WifiOperatingMode::StaOnly,
-                    None => WifiOperatingMode::ApOnly,
-                };
-
                 let mut connecting_timer = ConnectingTimer::new(Instant::now());
                 let mut sta_ready = false;
+                let mut profile_index = 0usize;
+                let mut fallback_active = false;
 
                 while !stop.load(Ordering::Relaxed) {
-                    if let Some(ref client) = client_conf {
+                    if !clients.is_empty() {
+                        let client = &clients[profile_index];
                         let connected = wifi.is_connected().unwrap_or(false);
                         let up = connected && wifi.sta_netif().is_up().unwrap_or(false);
 
@@ -241,45 +316,51 @@ impl WifiManager {
                             log::info!("Wi-Fi STA IP ready: {:?}", wifi.sta_netif().get_ip_info().ok());
                         }
 
-                        if !connected {
-                            let _ = wifi.connect();
-                        }
-
-                        let elapsed = connecting_timer.update(up, Instant::now());
-                        let desired_mode = policy.evaluate_mode(true, up, elapsed);
-
-                        if desired_mode != current_mode {
-                            match desired_mode {
-                                WifiOperatingMode::MixedApSta => {
-                                    log::warn!(
-                                        "Wi-Fi connection to '{}' timed out after {}s - Activating fallback AP '{}' (PW: '{}')",
-                                        client.ssid,
-                                        policy.timeout_secs,
-                                        FALLBACK_AP_SSID,
-                                        FALLBACK_AP_PASSWORD
-                                    );
-                                    let mixed = Configuration::Mixed(client.clone(), ap_conf.clone());
-                                    if let Err(e) = wifi.set_configuration(&mixed) {
-                                        log::error!("Failed switching to Mixed AP+STA: {e}");
-                                    } else {
-                                        current_mode = WifiOperatingMode::MixedApSta;
-                                        log::info!(
-                                            "Fallback AP '{}' broadcasting on 192.168.4.1. Web UI accessible via AP.",
-                                            FALLBACK_AP_SSID
-                                        );
+                        let now = Instant::now();
+                        let elapsed = connecting_timer.update(up, now);
+                        if up {
+                            if fallback_active {
+                                let sta_only = Configuration::Client(client.clone());
+                                match set_configuration_safely(&mut wifi, &sta_only) {
+                                    Ok(()) => {
+                                        fallback_active = false;
+                                        log::info!("Wi-Fi STA connection restored; fallback AP stopped");
                                     }
+                                    Err(error) => log::error!("Failed switching back to STA only: {error}"),
                                 }
-                                WifiOperatingMode::StaOnly => {
-                                    log::info!("Wi-Fi STA connection re-established, returning to STA mode.");
-                                    let sta_only = Configuration::Client(client.clone());
-                                    if let Err(e) = wifi.set_configuration(&sta_only) {
-                                        log::error!("Failed switching back to STA only: {e}");
-                                    } else {
-                                        current_mode = WifiOperatingMode::StaOnly;
-                                    }
-                                }
-                                WifiOperatingMode::ApOnly => {}
                             }
+                        } else if elapsed >= policy.timeout_secs {
+                            let next_index = (profile_index + 1) % clients.len();
+                            let next_client = &clients[next_index];
+                            let enable_fallback = fallback_active || fallback_ap.is_some();
+                            let next_mode = match (enable_fallback, ap_conf.as_ref()) {
+                                (true, Some(ap)) => Configuration::Mixed(next_client.clone(), ap.clone()),
+                                _ => Configuration::Client(next_client.clone()),
+                            };
+                            match set_configuration_safely(&mut wifi, &next_mode) {
+                                Ok(()) => {
+                                    profile_index = next_index;
+                                    fallback_active = enable_fallback && ap_conf.is_some();
+                                    connecting_timer.reset(now);
+                                    log::warn!(
+                                        "Wi-Fi connection attempt timed out; retrying configured profile {} of {}",
+                                        profile_index + 1,
+                                        clients.len()
+                                    );
+                                    if fallback_active {
+                                        if let Some(ap) = fallback_ap.as_ref() {
+                                            log::info!("Fallback AP '{}' is active on 192.168.4.1", ap.ssid);
+                                        }
+                                    }
+                                    let _ = wifi.connect();
+                                }
+                                Err(error) => {
+                                    connecting_timer.reset(now);
+                                    log::error!("Failed updating Wi-Fi profile configuration: {error}");
+                                }
+                            }
+                        } else if !connected {
+                            let _ = wifi.connect();
                         }
 
                         sta_ready = up;
@@ -307,6 +388,39 @@ impl WifiManager {
     pub fn start(_config: Option<WifiConfig>) -> Result<Self, String> {
         Err("ESP Wi-Fi hardware unavailable on host".into())
     }
+}
+
+#[cfg(target_os = "espidf")]
+fn client_configuration(
+    profile: &WifiProfile,
+) -> Result<esp_idf_svc::wifi::ClientConfiguration, String> {
+    use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration};
+
+    let password = profile.password.as_deref().unwrap_or_default();
+    Ok(ClientConfiguration {
+        ssid: profile
+            .ssid
+            .as_str()
+            .try_into()
+            .map_err(|_| "Wi-Fi SSID too long")?,
+        password: password.try_into().map_err(|_| "Wi-Fi password too long")?,
+        auth_method: if password.is_empty() {
+            AuthMethod::None
+        } else {
+            AuthMethod::WPA2Personal
+        },
+        ..Default::default()
+    })
+}
+
+#[cfg(target_os = "espidf")]
+fn set_configuration_safely(
+    wifi: &mut esp_idf_svc::wifi::EspWifi<'_>,
+    configuration: &esp_idf_svc::wifi::Configuration,
+) -> Result<(), esp_idf_svc::sys::EspError> {
+    // Route configuration through this helper so the max-level guard in
+    // `WifiManager::start` applies to esp-idf-svc's debug-formatted configs.
+    wifi.set_configuration(configuration)
 }
 
 impl Drop for WifiManager {
@@ -349,9 +463,9 @@ mod tests {
     fn test_fallback_ap_default_configuration() {
         let ap = FallbackApConfig::default();
         assert_eq!(ap.ssid, "JDJLIGHT");
-        assert_eq!(ap.password, "JDJLIGHT1337");
+        assert!(ap.password.is_empty());
         assert_eq!(ap.channel, 1);
-        assert!(ap.validate().is_ok());
+        assert!(ap.validate().is_err());
     }
 
     #[test]

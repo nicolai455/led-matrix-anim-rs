@@ -1,5 +1,7 @@
 pub mod http;
 pub mod mqtt;
+#[path = "../network_api.rs"]
+pub mod network_api;
 pub mod wifi;
 
 pub use http::FirmwareHttpServer;

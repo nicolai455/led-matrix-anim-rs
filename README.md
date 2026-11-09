@@ -1,7 +1,9 @@
-# ⚡ Rust 32x32 LED Matrix (ESP32 & ESP32-S3)
+# ⚡ Rust 32x32 LED Matrix (ESP32-S3)
+
+> Firmware is currently supported only on ESP32-S3. The active device uses S3. Classic ESP32 / ESP32-bare release images do not fit their configured OTA slots; see [`VERIFICATION.md`](VERIFICATION.md). The S3 cross-build and partition fit are verified, but no hardware flash or runtime test was performed.
 
 [![Rust ESP-IDF](https://img.shields.io/badge/Rust-ESP--IDF%20v5.2.1-orange.svg)](https://github.com/esp-rs/esp-idf-svc)
-[![Hardware](https://img.shields.io/badge/Hardware-ESP32%20%7C%20ESP32--S3-blue.svg)](https://www.espressif.com/)
+[![Hardware](https://img.shields.io/badge/Hardware-ESP32--S3-blue.svg)](https://www.espressif.com/)
 [![Matrix](https://img.shields.io/badge/Matrix-32x32%20WS2812B%20(1024%20LEDs)-brightgreen.svg)]()
 [![Framerate](https://img.shields.io/badge/Framerate-60%2B%20FPS%20(4--Ch%20Parallel%20RMT)-success.svg)]()
 [![Audio](https://img.shields.io/badge/Audio-I2S%20DMA%20(INMP441%2FICS--43434)-blueviolet.svg)]()
@@ -62,16 +64,26 @@ WLED is the gold standard for addressable LED strips. However, when driving larg
 - No native Art-Net / DMX streaming input yet.
 - No standalone app store app (control via Web UI or Home Assistant).
 
+- **Wi-Fi:** prioritizes multiple STA profiles (up to five) with an 18-second timeout per attempt. If all station profiles fail, switches to a WPA2 fallback AP only when an explicitly provisioned per-device AP passphrase is present; otherwise Wi-Fi remains station-only/off. AP gateway is configured as `192.168.4.1/24` with DHCP. The app has no universal AP password; first boot needs private manufacturing/owner provisioning before a setup AP is available. The Web UI exposes `/api/network` with passphrase redaction.
+- **Shared audio analysis:** Core PCM processing uses actual sample rates, normalized bass/onset and an estimated BPM. Control telemetry and the browser preview consume the same snapshot fields. This is deterministic host-tested analysis, not an ESP32 performance or sound-quality qualification.
+- **Engine playlist:** stable effect IDs and bounded durations are configured separately from Auto Cycle; playback state is time-stepped by Engine snapshots. Queue configuration persists, while playback never auto-resumes and power still boots OFF.
+- **Arcade Invaders:** projectile/alien collision is evaluated before drawing the hit frame; destroyed aliens remain gone until reset (host regression-tested; see [`SPACE_INVADERS_VERIFICATION.md`](SPACE_INVADERS_VERIFICATION.md)).
+
+For details and limitations, see [`WIFI_CONFIGURATION.md`](WIFI_CONFIGURATION.md), [`FIRMWARE_NETWORK.md`](FIRMWARE_NETWORK.md), [`AUDIO_EFFECT_REVIEW.md`](AUDIO_EFFECT_REVIEW.md), and [`VERIFICATION.md`](VERIFICATION.md).
+
+Current hardware support is limited to ESP32-S3, the only target used by this project right now. The S3 release cross-build and OTA-slot fit pass; this does not establish that the firmware has been tested on-device. Classic ESP32 / ESP32-bare images currently exceed their OTA slots.
+
 ---
 
 ## 🛠️ Hardware Requirements & Bill of Materials
+
+> Firmware is currently supported only on ESP32-S3. The active device uses S3; classic ESP32 release images do not fit their OTA slots. See [`VERIFICATION.md`](VERIFICATION.md) for build/image-fit details. No hardware flash or runtime test was performed.
 
 ### 1. LED Matrix
 - **Four 16x16 WS2812B (or SK6812) LED Panels:** Assembled in a 2x2 grid to form a **32x32 display (1024 LEDs)**. Flexible or rigid PCB panels work equally well.
 
 ### 2. Microcontroller
-- **ESP32-WROOM-32** (Dual-core Xtensa LX6, 4MB or 8MB Flash) **OR**
-- **ESP32-S3** (Xtensa LX7, e.g. ESP32-S3-WROOM-1 / N16R8 with 16MB Flash & 8MB Octal PSRAM).
+- **ESP32-S3 N16R8** is the only currently supported production target. Its firmware release image fits the configured OTA slot. Classic ESP32 and ESP32-bare are not presently supported for OTA releases because their images exceed their slots; see [`VERIFICATION.md`](VERIFICATION.md).
 
 ### 3. Microphone (Sound-Reactive Audio)
 - **Digital I2S Microphone:** **INMP441** or **ICS-43434** (or SPH0645).
@@ -241,10 +253,7 @@ Release firmware emits `RAM` diagnostics to the serial console at boot, around s
 
 ### 6. Fallback Access Point (`JDJLIGHT`)
 
-If configured Wi-Fi is unavailable or out of range, the device creates a standalone fallback Wi-Fi hotspot:
-- **SSID:** `JDJLIGHT`
-- **Password:** `matrixpass`
-- **Web UI:** Navigate to `http://192.168.4.1` to reconfigure network credentials or control animations directly.
+If configured Wi-Fi is unavailable or out of range, the device can create the fallback Wi-Fi hotspot only when a per-device WPA2 AP password has already been privately provisioned. Firmware has no universal AP password; an unprovisioned device does not expose a setup AP and requires local/physical bootstrap provisioning. The UI is at `http://192.168.4.1/` when the AP is active. Network password values are never returned by the general configuration GET endpoint. See [`WIFI_CONFIGURATION.md`](WIFI_CONFIGURATION.md) for the bootstrap limitation and API details.
 
 ---
 
@@ -368,7 +377,7 @@ impl Effect for MyAwesomeEffect {
 | **`crates/matrix-effects`** | Catalog of 80+ handcrafted visual effects, parameter schemas, demoscene math, and lazy factory loading. |
 | **`crates/matrix-control`** | Render engine actor, bounded command queues, Web UI & REST API dispatch, MQTT & Home Assistant discovery, state persistence. |
 | **`crates/matrix-preview`** | WebAssembly bindings compiled to `.wasm` for instant zero-latency browser rendering. |
-| **`firmware`** | Production ESP-IDF application for ESP32 and ESP32-S3, 4-channel parallel RMT driver, I2S microphone capture task, OTA updater, and NVS/SPIFFS storage. |
+| **`firmware`** | Production ESP-IDF application; currently supported only on ESP32-S3 N16R8. Classic ESP32 OTA images exceed their configured slots; see [`VERIFICATION.md`](VERIFICATION.md). |
 | **`tests`** | Geometry mapping tests, regression test suites, and mock network services. |
 
 ---

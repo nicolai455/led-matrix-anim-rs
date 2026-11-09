@@ -97,6 +97,9 @@ impl Preview {
         self.audio.available = s["audio_status"] == "External";
         self.audio.level = s["level"].as_f64().unwrap_or(0.0) as f32;
         self.audio.peak = s["peak"].as_f64().unwrap_or(0.0) as f32;
+        self.audio.bass = s["bass"].as_f64().unwrap_or(0.0) as f32;
+        self.audio.onset = s["onset"].as_f64().unwrap_or(0.0) as f32;
+        self.audio.bpm = s["bpm"].as_f64().unwrap_or(0.0) as f32;
         self.audio.beat = s["beat"].as_bool().unwrap_or(false);
         for (key, target, divisor) in [
             ("bands", &mut self.audio.bands[..], 1.0),
@@ -155,6 +158,7 @@ pub extern "C" fn preview_render(now_ms: f64) -> *const u8 {
             a.apply_staleness(now.saturating_sub(p.audio_time));
             if p.consumed_beat == Some(p.audio_time) {
                 a.beat = false;
+                a.onset = 0.0;
             }
             p.consumed_beat = Some(p.audio_time);
             a
@@ -250,6 +254,26 @@ pub extern "C" fn preview_audio_pcm(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sync_parses_core_bass_onset_and_bpm_metrics() {
+        let mut p = Preview::new();
+        p.sync(json!({
+            "effect_id": "Rainbow",
+            "audio_source": "Mic",
+            "audio_status": "External",
+            "bass": 0.23,
+            "onset": 0.67,
+            "bpm": 123.0,
+            "renderTimeMs": 100
+        }))
+        .unwrap();
+
+        assert_eq!(p.audio.bass, 0.23);
+        assert_eq!(p.audio.onset, 0.67);
+        assert_eq!(p.audio.bpm, 123.0);
+    }
+
     #[test]
     fn all_effects_sync_and_render_without_restarting_settings() {
         let mut p = Preview::new();
