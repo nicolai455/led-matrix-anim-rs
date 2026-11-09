@@ -16,7 +16,7 @@ Core PCM tests cover deterministic 80/120/160 BPM, multiple sample rates, tempo 
 ## Known gaps / blockers
 
 - Standard ESP32 release cross-build generated an image of 2,120,064 bytes, 153,984 bytes over the 1,966,080-byte OTA slot. ESP32-bare generated 2,101,776 bytes, 135,696 bytes over the same slot. Firmware release acceptance remains blocked on those profiles; only S3 is currently supported.
-- The ESP32-S3 release cross-build completed; the current generated image is 2,733,168 bytes and fits the 4,194,304-byte app slot with 1,461,136 bytes headroom (65.2% used). The active hardware uses S3. This verifies compilation and partition fit only—not device startup, LED behavior, networking, microphone, or OTA at runtime. No hardware flash or runtime test was done.
+- The ESP32-S3 release cross-build completed; the current generated image is 2,733,296 bytes and fits the 4,194,304-byte app slot with 1,461,008 bytes headroom (65.2% used). The active hardware uses S3. This verifies compilation and partition fit only—not device startup, LED behavior, networking, microphone, or OTA at runtime. No hardware flash or runtime test was done.
 - Firmware simulator has no radio-backed configuration adapter; `/api/network` returns 503 in host mode rather than fabricating Wi-Fi status.
 - Boot code now converts stored ordered profiles and explicit AP config through `WifiConfig::from_network_config`; final source build/runtime verification remains target-blocked.
 - A fresh unprovisioned device has no fallback AP until an owner provisioned WPA2 passphrase exists. No secure bootstrap mechanism is implemented; manufacturing or private local provisioning must cover first boot.
