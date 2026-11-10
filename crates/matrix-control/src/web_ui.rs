@@ -665,7 +665,7 @@ async function postCommand(kind, payload) {
   try {
     const r = await fetch('/api/command', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' },
       body: JSON.stringify({ kind, payload })
     });
     const data = await r.json();
@@ -1071,7 +1071,7 @@ async function persistSavedPlaylistSnapshot(snapshot, entries = playlistEntries,
   updatePlaylistUI();
   let succeeded = false;
   try {
-    const response = await fetch('/api/state/save', { method: 'POST' });
+    const response = await fetch('/api/state/save', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || response.statusText);
     succeeded = true;
@@ -1163,7 +1163,7 @@ function setParam(effectId, paramId, val) {
 }
 
 async function saveState() {
-  const response = await fetch('/api/state/save', { method: 'POST' });
+  const response = await fetch('/api/state/save', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
   if (!response.ok) { showToast('Save failed: ' + response.status, 'var(--red)'); return false; }
   showToast('Settings saved to flash', 'var(--green)');
   setTimeout(clearToast, 2000);
@@ -1172,7 +1172,7 @@ async function saveState() {
 
 async function clearState() {
   if (confirm('Clear saved settings?')) {
-    const response = await fetch('/api/state/clear', { method: 'POST' });
+    const response = await fetch('/api/state/clear', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
     if (!response.ok) { showToast('Clear failed: ' + response.status, 'var(--red)'); return; }
     showToast('Saved settings cleared', 'var(--muted)');
     setTimeout(clearToast, 2000);
@@ -1270,7 +1270,7 @@ async function savePanelConfig() {
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' },
       body: JSON.stringify(payload)
     });
     const res = await r.json();

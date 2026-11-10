@@ -32,6 +32,17 @@ function harness(failLoad = false) {
   vm.createContext(sandbox); vm.runInContext(script, sandbox);
   return {sandbox, element, requests};
 }
+test('all browser control POSTs opt in to the firmware same-origin guard', () => {
+  for (const name of ['restartDevice', 'postCommand', 'saveNetworkConfig', 'persistSavedPlaylistSnapshot', 'saveState', 'clearState', 'savePanelConfig']) {
+    const start = script.indexOf('async function ' + name + '(');
+    assert.notEqual(start, -1, 'missing control function ' + name);
+    const next = script.indexOf('\nasync function ', start + 1);
+    const block = script.slice(start, next < 0 ? script.length : next);
+    assert.match(block, /method:\s*['\"]POST['\"]/);
+    assert.match(block, /X-Matrix-Control/);
+  }
+});
+
 test('configuration round trips all editable fields and preserves other settings', async () => {
   const h=harness(); await h.sandbox.loadPanelConfig();
   assert.equal(h.element('cfgSaveBtn').disabled, false);

@@ -110,7 +110,15 @@ pub fn start_mqtt_client(
             while !shutdown_poller.load(Ordering::Relaxed) {
                 match connection.recv_timeout(Duration::from_millis(50)) {
                     Ok(Ok(event)) => {
-                        let _ = event_tx.send(event);
+                        if matches!(
+                            &event,
+                            Event::Incoming(
+                                Incoming::ConnAck(_) | Incoming::Publish(_) | Incoming::Disconnect
+                            )
+                        ) && event_tx.send(event).is_err()
+                        {
+                            break;
+                        }
                     }
                     _ => {
                         // Timeout or connection error; connection handles reconnects

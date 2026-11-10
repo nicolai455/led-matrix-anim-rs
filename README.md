@@ -239,7 +239,8 @@ espflash flash --chip esp32 target/xtensa-esp32-espidf/release/matrix-firmware
 Once running on your network, update firmware wirelessly without plugging in USB:
 
 ```sh
-curl -X POST --data-binary @firmware/target/xtensa-esp32-espidf/release/matrix-firmware.bin \
+# Update-Client muss den Kontrollmarker senden; er ist CSRF-Schutz, keine Authentifizierung.
+curl -X POST -H 'X-Matrix-Control: 1' --data-binary @firmware/target/xtensa-esp32-espidf/release/matrix-firmware.bin \
   http://<device-ip>/update
 ```
 

@@ -34,13 +34,15 @@ fn lava_lamp_maximum_audio_parameters_do_not_panic() {
     for p in effect.parameters().to_vec() {
         effect.set_parameter(p.id, p.max).unwrap();
     }
-    let mut audio = AudioSnapshot::default();
-    audio.available = true;
-    audio.level = 1.0;
-    audio.peak = 1.0;
-    audio.beat = true;
-    audio.bands = [1.0; 16];
-    audio.waveform = [1.0; 128];
+    let audio = AudioSnapshot {
+        available: true,
+        level: 1.0,
+        peak: 1.0,
+        beat: true,
+        bands: [1.0; 16],
+        waveform: [1.0; 128],
+        ..AudioSnapshot::default()
+    };
     let mut frame = Frame::default();
     for _ in 0..35 {
         effect.render(&mut frame, &context(0.1, &audio));

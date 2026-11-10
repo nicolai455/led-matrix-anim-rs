@@ -308,6 +308,11 @@ impl FirmwareHttpServer {
         let ctx = api_ctx.clone();
         server
             .fn_handler("/api/*", Method::Post, move |mut req| {
+                if !crate::request_guard::trusted_control(
+                    req.header("Origin"), req.header("Host"), req.header("X-Matrix-Control"),
+                ) {
+                    return send_response(req, HttpResponse::err_json(403, "Untrusted control request"));
+                }
                 if api_admission("POST", req.uri(), memory_is_low()) == ApiAdmission::Shed {
                     return send_response(
                         req,
@@ -356,6 +361,11 @@ impl FirmwareHttpServer {
         let ota_mgr = ota_manager.clone();
         server
             .fn_handler("/update", Method::Post, move |mut req| {
+                if !crate::request_guard::trusted_control(
+                    req.header("Origin"), req.header("Host"), req.header("X-Matrix-Control"),
+                ) {
+                    return send_response(req, HttpResponse::err_json(403, "Untrusted firmware update request"));
+                }
                 let mut ota = match ota_mgr.lock() {
                     Ok(guard) => guard,
                     Err(_) => {

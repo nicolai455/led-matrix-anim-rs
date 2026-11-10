@@ -1,27 +1,33 @@
-# Verification notes for network/audio/playlist work
+# Verifikationsnotizen: Netzwerk, Audio und Playlist
 
-## Current host verification
+## Offline-Prüfungen dieser Runde
 
-- `cargo test -p matrix-effects`: 25 unit tests plus catalog, timing, render/validation and lifecycle integration suites passed. The Space Invaders regressions cover the removed bunker and lower green invader row, live-alien shot origin, hit-frame removal, and edge-reversal march/wave reset.
-- `cargo test -p matrix-core -p matrix-effects -p matrix-control` passed, including 10 playlist tests (explicit Play powers on, boot/restore remain off), 15 Control hardening tests and all Core/Effects suites.
-- Firmware host tests: 35 unit tests and all integration suites passed; only existing `fetch_update` deprecation warnings. Heap-pressure regression tests confirm the direct `/api/network` POST route is shed under low internal/DMA memory before buffering its body.
-- Node UI/preview suite: 24 tests passed. Chromium browser smoke passed (448 px desktop canvas; 309 px canvas on 375 px viewport; 1 WASM request, 0 frame requests, no exceptions).
-- `cargo build --target wasm32-unknown-unknown --release -p matrix-preview` and `scripts/build-preview.py` passed after supplying Binaryen/Zopfli from a temporary Nix shell; checked-in `preview.wasm.gz` was rebuilt.
-- Host simulator `/api/network` returned 503 as designed; it has no radio adapter.
+- `cargo test --workspace`: bestanden (22 Testgruppen, 117 Tests).
+- `cargo test --manifest-path firmware/Cargo.toml --offline`: bestanden: 37 Firmware-Unit-Tests und sämtliche Firmware-Host-Integrationstests (insgesamt 84 Testfälle über alle Firmware-Testtargets). Die Compile-Ausgabe enthält vorhandene `Atomic::fetch_update`-Deprecation-Warnungen.
+- `cargo test --manifest-path tests/Cargo.toml --offline`: bestanden: 8 Tests.
+- `python3 -m unittest discover -s scripts -p 'test_*.py'`: 12 bestanden.
+- `node --test scripts/test-config-ui.cjs scripts/test-preview-ui.cjs`: 30 bestanden.
+- `./firmware/build_firmware.sh esp32s3 release`: bestanden auf dem aktuellen Quellstand; App-Image 2.747.440 Byte, OTA-Slot 4.194.304 Byte, Reserve 1.446.864 Byte (65,5 % belegt). Ein vorheriger Wiederholungsversuch scheiterte an der Laufzeit-Suche nach `libpython3.14.so.1.0`; erneut ausgeführt mit `LD_LIBRARY_PATH=/usr/lib` erfolgreich. Bestehende Warnung: ungenutzte Methode `ConnectingTimer::elapsed_secs`.
+- `cargo clippy --workspace --all-targets -- -D warnings`: bestanden nach gezielten Lintkorrekturen im betroffenen Effektcode/Testfixtures und lokalem Typalias.
+- `cargo clippy --manifest-path tests/Cargo.toml --offline --all-targets -- -D warnings`: bestanden.
+- Firmware-Clippy (`cargo clippy --manifest-path firmware/Cargo.toml --offline --all-targets -- -D warnings`) bleibt blockiert durch `fetch_update`-Deprecations in `firmware/src/output.rs:176,213` und Test-Fixture-`field_reassign_with_default` in `firmware/src/mic.rs` und `firmware/src/net/wifi.rs`.
+- Firmware-Hosttests nach CSRF-Härtung: 37 Unit-Tests (darin zwei Request-Guard-Tests) und alle Firmware-Host-Integrationstests bestanden.
+- UI nach Aufnahme des CSRF-Kontrollheaders: Node-Konfigurations-/Preview-Suite 30/30 bestanden; `scripts/test-preview-browser.cjs` sendet ebenfalls den Header.
+- `cargo fmt --all -- --check` und Firmware-Rustfmt sind nicht sauber: Rustfmt-Output umfasst 89 einzigartige Workspace-Dateien und 16 Firmware-Dateien. Kein globaler Formatierungslauf ausgeführt. Das ausgeschlossene Integrationstestpaket (`cargo fmt --manifest-path tests/Cargo.toml -- --check`) ist sauber.
+- `tests/system_test.py` gegen einen isolierten Loopback-Mosquitto-Broker bestand nach dem gezielten MQTT-Fix zweimal hintereinander. Die Läufe deckten 82 Effekte, 365 retained Discovery-Entitäten, HTTP 413 bei zu großem Body, HTTP-Reaktionsfähigkeit während Broker-Ausfall (max. rund 33 ms), MQTT-Reconnect und Home-Assistant-Onlinezustand ab.
 
-`cargo clippy -p matrix-core -p matrix-effects -p matrix-control --all-targets -- -D warnings` is blocked by existing `field_reassign_with_default` findings in effect tests. Firmware Clippy also flags existing deprecations and new style lint findings; resolve/classify before release.
+### MQTT-Ursache und Korrektur
 
-Core PCM tests cover deterministic 80/120/160 BPM, multiple sample rates, tempo change, silence/BPM expiry and non-finite samples. Playlist tests cover validation, timed transitions, loop/fake-time, pause/resume/power-off, auto-cycle coordination, persistence and boot OFF. Shooter collision ordering has a regression test.
+Root Cause: Der MQTT-Poller leitete alle `rumqttc::Event`s einschließlich Outgoing-, SubAck- und PubAck-Events in denselben begrenzten Kanal wie eingehende Befehle. Die retained Discovery-Ausgabe füllte den Kanal, sodass der Poller beim Weiterleiten blockierte und nachfolgende MQTT-Publishes nicht mehr verarbeitete. `crates/matrix-control/src/mqtt.rs` leitet nun nur eingehende ConnAck-, Publish- und Disconnect-Events weiter. `tests/system_test.py` wartet zusätzlich auf die retained `online`-Nachricht als Subscription-Startbarriere. Nachweis ist Simulator/Broker, kein ESP.
 
-## Known gaps / blockers
+## Offline-Befunde und offene Arbeit
 
-- Standard ESP32 release cross-build generated an image of 2,120,064 bytes, 153,984 bytes over the 1,966,080-byte OTA slot. ESP32-bare generated 2,101,776 bytes, 135,696 bytes over the same slot. Firmware release acceptance remains blocked on those profiles; only S3 is currently supported.
-- The ESP32-S3 release cross-build completed; the current generated image is 2,733,296 bytes and fits the 4,194,304-byte app slot with 1,461,008 bytes headroom (65.2% used). The active hardware uses S3. This verifies compilation and partition fit only—not device startup, LED behavior, networking, microphone, or OTA at runtime. No hardware flash or runtime test was done.
-- Firmware simulator has no radio-backed configuration adapter; `/api/network` returns 503 in host mode rather than fabricating Wi-Fi status.
-- Boot code now converts stored ordered profiles and explicit AP config through `WifiConfig::from_network_config`; final source build/runtime verification remains target-blocked.
-- A fresh unprovisioned device has no fallback AP until an owner provisioned WPA2 passphrase exists. No secure bootstrap mechanism is implemented; manufacturing or private local provisioning must cover first boot.
-- Workspace `cargo fmt --check` is not clean due to existing formatting drift; only the touched effect was formatted. The combined formatter/test pipeline was re-run with targeted formatting; all tests passed.
-- Workspace Clippy baseline has pre-existing effect-test `field_reassign_with_default` findings; earlier targeted core Clippy passed. Re-run and classify before release.
-- `AUDIO_EFFECT_REVIEW.md` is a static source inventory, not per-effect signal-quality approval. Unified selectable reaction modes remain unimplemented.
+- Firmware-CSRF-Härtung: Der ESP-HTTP-Handler prüft jetzt `X-Matrix-Control: 1` und bei Browsern `Origin == http://Host` für generische `POST /api/*`-Routen sowie `POST /update`. Die Browser-UI und der Preview-Smoke senden den Marker. Das ist CSRF-Schutz, keine Authentifizierung: Ein anderer Client im LAN kann den Marker selbst setzen; OTA bleibt daher gegen LAN-Angreifer unauthentifiziert und ist vor netzwerkweiter Exposition abzusichern.
 
-The matrix engine stays OFF on power-up and never automatically resumes a saved playlist; an explicit playlist `Play` turns it on. Hardware release support is currently ESP32-S3 only; classic ESP32 release images exceed OTA slots. Automated builds/tests do not replace an on-device test; no device runtime was tested or flashed.
+- `firmware/src/net/wifi.rs` erhält Runtime-Profile in der stabil nach Priorität sortierten Reihenfolge aus `NetworkConfig`; weder dieser Adapter noch der WifiManager sortieren nach RSSI. `client_configuration` setzt jeweils ausdrücklich die SSID. ESP-IDF `esp-idf-svc 0.51` bildet das in `wifi_sta_config_t.ssid` ab und nutzt bei der normalen Verbindung eine gezielte SSID-Suche. Hidden-Metadatum bleibt erhalten und ist kein Scanfilter. Hosttests prüfen sortierte Reihenfolge und Hidden-Metadaten. Das ist Code-/Hostevidenz, kein Funk-, Assoziations- oder DHCP-Test.
+- `AUDIO_EFFECT_REVIEW.md` inventarisiert 73 eindeutige audiozugriffsrelevante Builtins unter 82. Es ist keine 73-fache Signalqualitätsfreigabe. Gemeinsame auswählbare per-Effekt-Modi `Auto/Beat/Bass/Spectrum/Waveform/Off`, Fähigkeiten-Metadaten und die vollständige Effekt-Signalmatrix sind nicht implementiert.
+- `Starship` ist im Issue-Verlauf als Space-Invaders-/`arcade_invaders`-Story identifiziert. Es wurde kein eigenständiger Starship-ID-/Label-Defekt reproduziert; die Behauptung einer eigenen Starship-Reparatur wäre nicht belegt.
+- Sichere Erstbereitstellung bleibt offen: ohne out-of-band provisioniertes, gerätespezifisches WPA2-AP-Passwort gibt es auf einem fabrikneuen Gerät keinen Setup-AP. Kein universelles Passwort und keine ungeschützte Bootstrap-Route ergänzt.
+- Der ESP32 ist laut Nutzer aktuell unerreichbar. Kein Flash/OTA, keine physische Panel-/Lane-Zuordnung, kein WLAN-/DHCP-/Mikrofon-/Hör- oder Geräte-Neustartpersistenztest. Der S3-Crossbuild ist kein Gerätenachweis; `disabled_panels` bleibt standardmäßig aus.
+
+Issue #12 bleibt offen. Weitere geräteabhängige Akzeptanz ist blockiert, bis Gerät und Versorgung sicher zugänglich sind; die Audio-Modusanforderung und sichere Erstbereitstellung erfordern separate Implementierung/Entscheidung.

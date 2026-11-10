@@ -189,6 +189,9 @@ impl WifiManager {
 
         let shutdown = std::sync::Arc::new(AtomicBool::new(false));
         let config = config.unwrap_or_default();
+        // Prefer the user's ordered, configured profile list to arbitrary scan RSSI.
+        // A hidden SSID that is absent from a full scan remains eligible: the
+        // explicit client configuration still targets that SSID directly.
         let profiles = if config.profiles.is_empty() && !config.ssid.is_empty() {
             vec![WifiProfile {
                 ssid: config.ssid,

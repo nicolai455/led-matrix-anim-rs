@@ -27,4 +27,13 @@ mod tests {
         ));
         assert!(trusted_control(None, None, Some("1")));
     }
+
+    #[test]
+    fn generic_api_control_requires_marker_and_same_origin() {
+        assert!(!trusted_control(Some("http://evil.test"), Some("matrix.local"), Some("1")));
+        assert!(!trusted_control(Some("null"), Some("matrix.local"), Some("1")));
+        assert!(!trusted_control(Some("http://matrix.local.attacker.test"), Some("matrix.local"), Some("1")));
+        assert!(trusted_control(Some("http://matrix.local"), Some("matrix.local"), Some("1")));
+        assert!(trusted_control(None, Some("matrix.local"), Some("1")));
+    }
 }

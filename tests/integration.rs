@@ -78,10 +78,12 @@ fn each_effect_can_render_after_a_long_pause_and_time_reset() {
     engine
         .apply("light", r#"{"state":"ON","brightness":255}"#)
         .unwrap();
-    let mut audio = AudioSnapshot::default();
-    audio.available = true;
-    audio.level = 0.7;
-    audio.peak = 0.9;
+    let mut audio = AudioSnapshot {
+        available: true,
+        level: 0.7,
+        peak: 0.9,
+        ..AudioSnapshot::default()
+    };
     audio.bands.fill(0.7);
     audio.waveform.fill(0.3);
     for effect in catalog.as_array().unwrap() {

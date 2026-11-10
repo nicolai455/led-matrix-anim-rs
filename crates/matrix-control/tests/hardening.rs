@@ -590,8 +590,9 @@ fn test_handle_api_request_panic_guard() {
 #[test]
 fn concurrent_config_updates_preserve_both_changes() {
     use std::sync::Condvar;
+    type BackendState = Arc<(Mutex<(usize, bool, String)>, Condvar)>;
     struct BlockingBackend {
-        state: Arc<(Mutex<(usize, bool, String)>, Condvar)>,
+        state: BackendState,
     }
     impl StorageBackend for BlockingBackend {
         fn load(&self) -> Result<Option<String>, String> {
