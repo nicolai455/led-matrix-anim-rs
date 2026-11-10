@@ -175,8 +175,7 @@ impl WifiManager {
         use esp_idf_svc::ipv4;
         use esp_idf_svc::netif::{EspNetif, NetifStack};
         use esp_idf_svc::wifi::{
-            AccessPointConfiguration, AuthMethod, Configuration, EspWifi,
-            WifiDriver,
+            AccessPointConfiguration, AuthMethod, Configuration, EspWifi, WifiDriver,
         };
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::time::{Duration, Instant};
@@ -473,8 +472,10 @@ mod tests {
 
     #[test]
     fn test_fallback_ap_validation_rejects_invalid_credentials() {
-        let mut ap = FallbackApConfig::default();
-        ap.ssid = String::new();
+        let mut ap = FallbackApConfig {
+            ssid: String::new(),
+            ..FallbackApConfig::default()
+        };
         assert!(ap.validate().is_err());
 
         ap.ssid = "ValidSSID".to_string();
