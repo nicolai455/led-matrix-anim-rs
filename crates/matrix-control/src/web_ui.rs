@@ -205,7 +205,7 @@ select option, .param-select option { background:var(--card); color:var(--text);
   </div>
   <div class="btn-row"><button class="btn" id="playlistAddBtn" onclick="addPlaylistEntry()">Add effect</button></div>
   <div class="playlist-list" id="playlistEntries" aria-live="polite"></div>
-  <label class="config-check"><input type="checkbox" id="playlistLoop" onchange="playlistLoopDraft=this.checked; playlistDraftDirty=true; playlistAwaitingSnapshot=false; updatePlaylistUI()"> Loop playlist</label>
+  <label class="config-check"><input type="checkbox" id="playlistLoop"> Loop playlist</label>
   <div class="btn-row"><button class="btn btn-primary" id="playlistApplyBtn" onclick="applyPlaylistConfig()">Save queue</button></div>
   <div class="btn-row">
     <button class="btn btn-primary" id="playlistStartBtn" onclick="controlPlaylist('start')">Start</button>
@@ -311,7 +311,7 @@ select option, .param-select option { background:var(--card); color:var(--text);
 <details class="card config-card" id="configCard">
   <summary><span><span class="config-title">Hardware configuration</span><span class="config-subtitle">Output pins, panel wiring &amp; power</span></span></summary>
   <div class="config-body">
-    <div class="config-notice">Wiring and layout changes need a device restart. Check your board's pinout before saving: reserved, input-only or microphone pins cannot be used for LED output.</div>
+    <div class="config-notice">Wiring and layout changes need a device restart. Check your board's pinout before saving: reserved, input-only or microphone pins cannot be used for LED output. Disabling an output only blacks out its LEDs; it does not disconnect or repair the panel electrically.</div>
     <section class="config-section">
       <h3>LED output</h3><span class="config-help">Choose a single data line or one output per panel. GPIO availability depends on your board.</span>
       <label class="config-check"><input type="checkbox" id="cfgParallelOutput" onchange="updateOutputMode()"> Use four parallel outputs</label>
@@ -384,6 +384,10 @@ let playlistEntries = [];
 let playlistDraftDirty = false;
 let playlistLoopDraft = false;
 let playlistAwaitingSnapshot = false;
+let playlistStatePersisting = false;
+let playlistSaveVersion = 0;
+let playlistPendingPersistence = null;
+let playlistPersistenceNotice = '';
 let lastRenderedPlaylistView = '';
 const MAX_PLAYLIST_ENTRIES = 32;
 const MIN_PLAYLIST_ENTRY_MS = 1000;
@@ -728,15 +732,18 @@ async function loadNetworkConfig() {
     const response = await fetch('/api/network', { cache: 'no-store' });
     const value = await response.json();
     if (!response.ok) throw new Error(value.error || response.statusText);
+    const profiles = Array.isArray(value.wifiProfiles) ? value.wifiProfiles : [];
     state.networkConfig = value;
     document.getElementById('fallbackApSsid').value = value.fallbackApSsid || 'JDJLIGHT';
     document.getElementById('fallbackApPasswordClear').checked = false;
     renderNetworkProfiles();
     status.textContent = value.networkAvailable === false
       ? 'Wi-Fi configuration loaded; hardware networking unavailable in this host adapter.'
-      : value.fallbackApEnabled === false
-        ? 'Configuration loaded; fallback AP is disabled until an AP passphrase is set.'
-        : 'Configuration loaded; credentials remain masked.';
+      : profiles.length
+        ? 'Loaded ' + profiles.length + ' saved Wi-Fi profile(s); credentials remain masked.'
+        : value.fallbackApEnabled === false
+          ? 'No saved Wi-Fi profiles. Fallback AP is disabled until an AP passphrase is set.'
+          : 'No saved Wi-Fi profiles. Fallback AP is enabled; AP credentials remain masked.';
   } catch (error) {
     status.textContent = 'Wi-Fi configuration unavailable: ' + String(error.message || error);
   }
@@ -939,6 +946,9 @@ function addPlaylistEntry() {
     return;
   }
   playlistEntries.push({ effectId, durationMs: Number(duration) });
+  playlistSaveVersion++;
+  playlistPersistenceNotice = '';
+  document.getElementById('playlistNotice').textContent = '';
   playlistDraftDirty = true;
   playlistAwaitingSnapshot = false;
   notice.textContent = '';
@@ -948,6 +958,8 @@ function addPlaylistEntry() {
 function removePlaylistEntry(index) {
   if (!Number.isInteger(index) || index < 0 || index >= playlistEntries.length) return;
   playlistEntries.splice(index, 1);
+  playlistSaveVersion++;
+  playlistPersistenceNotice = '';
   playlistDraftDirty = true;
   playlistAwaitingSnapshot = false;
   updatePlaylistUI();
@@ -957,6 +969,8 @@ function movePlaylistEntry(index, offset) {
   const target = index + offset;
   if (!Number.isInteger(index) || !Number.isInteger(offset) || target < 0 || target >= playlistEntries.length) return;
   [playlistEntries[index], playlistEntries[target]] = [playlistEntries[target], playlistEntries[index]];
+  playlistSaveVersion++;
+  playlistPersistenceNotice = '';
   playlistDraftDirty = true;
   playlistAwaitingSnapshot = false;
   updatePlaylistUI();
@@ -973,6 +987,8 @@ function setPlaylistDuration(index, value, input) {
     return;
   }
   entry.durationMs = Number(trimmed);
+  playlistSaveVersion++;
+  playlistPersistenceNotice = '';
   playlistDraftDirty = true;
   playlistAwaitingSnapshot = false;
   notice.textContent = '';
@@ -988,11 +1004,23 @@ async function applyPlaylistConfig() {
     notice.textContent = 'Queue contains an invalid effect or duration. Correct the queue before saving.';
     return;
   }
+  const submittedEntries = playlistEntries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
+  const submittedLoop = playlistLoopDraft;
+  const submittedVersion = playlistSaveVersion;
   try {
-    const result = await postCommand('playlist_config', { entries: playlistEntries, loop: playlistLoopDraft });
+    const result = await postCommand('playlist_config', { entries: submittedEntries, loop: submittedLoop });
     if (result && result.error) throw new Error(result.error);
+    if (submittedVersion !== playlistSaveVersion) {
+      playlistPersistenceNotice = 'Queue changed while save was pending; save the current draft again.';
+      playlistDraftDirty = true;
+      playlistAwaitingSnapshot = false;
+      document.getElementById('playlistLoop').checked = playlistLoopDraft;
+      updatePlaylistUI();
+      return;
+    }
     playlistDraftDirty = true;
     playlistAwaitingSnapshot = true;
+    playlistPersistenceNotice = '';
     notice.textContent = 'Queue command accepted' + (result && result.pending ? ' (queued)' : '') + '; waiting for device snapshot.';
     updatePlaylistUI();
   } catch (error) {
@@ -1006,8 +1034,10 @@ async function controlPlaylist(action) {
   try {
     const result = await postCommand('playlist_control', { action });
     if (result && result.error) throw new Error(result.error);
+    playlistPersistenceNotice = '';
     notice.textContent = '';
   } catch (error) {
+    playlistPersistenceNotice = '';
     notice.textContent = 'Playlist ' + action + ' failed.';
   }
 }
@@ -1020,6 +1050,49 @@ function formatPlaylistTime(value) {
   const seconds = totalSeconds % 60;
   return hours ? hours + 'h ' + String(minutes).padStart(2, '0') + 'm ' + String(seconds).padStart(2, '0') + 's'
     : minutes ? minutes + 'm ' + String(seconds).padStart(2, '0') + 's' : seconds + 's';
+}
+
+function playlistSnapshotMatchesDraft(snapshot, entries = playlistEntries, loop = playlistLoopDraft) {
+  if (!snapshot || !Array.isArray(snapshot.entries) || snapshot.entries.length !== entries.length || loop !== !!snapshot.loop) return false;
+  return entries.every((entry, index) => {
+    const saved = snapshot.entries[index];
+    return !!saved && entry.effectId === saved.effectId && entry.durationMs === saved.durationMs;
+  });
+}
+
+async function persistSavedPlaylistSnapshot(snapshot, entries = playlistEntries, loop = playlistLoopDraft, version = playlistSaveVersion) {
+  if (!playlistSnapshotMatchesDraft(snapshot, entries, loop)) return;
+  if (playlistStatePersisting) {
+    playlistPendingPersistence = { snapshot, entries, loop, version };
+    return;
+  }
+  playlistStatePersisting = true;
+  const notice = document.getElementById('playlistNotice');
+  updatePlaylistUI();
+  let succeeded = false;
+  try {
+    const response = await fetch('/api/state/save', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || response.statusText);
+    succeeded = true;
+    if (version === playlistSaveVersion && playlistSnapshotMatchesDraft(snapshot, entries, loop)) {
+      playlistPersistenceNotice = 'Queue saved to device storage. Playback remains stopped until Start.';
+    }
+  } catch (error) {
+    if (version === playlistSaveVersion) {
+      playlistPersistenceNotice = 'Queue is active but could not be saved to device storage. Use Save runtime state to retry.';
+    }
+  } finally {
+    playlistStatePersisting = false;
+    const pending = playlistPendingPersistence;
+    playlistPendingPersistence = null;
+    if (pending && pending.version === playlistSaveVersion && playlistSnapshotMatchesDraft(pending.snapshot, pending.entries, pending.loop)) {
+      persistSavedPlaylistSnapshot(pending.snapshot, pending.entries, pending.loop, pending.version);
+    } else if (succeeded && version === playlistSaveVersion && !playlistPersistenceNotice) {
+      playlistPersistenceNotice = 'Queue save completed, but the current draft changed; save the current queue again.';
+    }
+    updatePlaylistUI();
+  }
 }
 
 function updatePlaylistUI() {
@@ -1035,10 +1108,17 @@ function updatePlaylistUI() {
     document.getElementById('playlistLoop').checked = playlistLoopDraft;
     playlistDraftDirty = false;
     playlistAwaitingSnapshot = false;
-  } else if (JSON.stringify(playlistEntries) === JSON.stringify(snapshot.entries) && playlistLoopDraft === !!snapshot.loop) {
+  } else if (playlistSnapshotMatchesDraft(snapshot)) {
+    const shouldPersist = playlistAwaitingSnapshot;
     playlistDraftDirty = false;
     playlistAwaitingSnapshot = false;
     document.getElementById('playlistLoop').checked = playlistLoopDraft;
+    if (shouldPersist) {
+      const savedEntries = snapshot.entries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
+      const savedLoop = !!snapshot.loop;
+      const savedVersion = playlistSaveVersion;
+      persistSavedPlaylistSnapshot(snapshot, savedEntries, savedLoop, savedVersion);
+    }
   }
   renderPlaylistEntries(snapshot);
   const index = Number.isInteger(snapshot.index) ? snapshot.index : -1;
@@ -1058,14 +1138,18 @@ function updatePlaylistUI() {
   if (playlistDraftDirty) messages.push(playlistAwaitingSnapshot
     ? 'Queue save pending; waiting for device snapshot before playback controls are enabled.'
     : 'Unsaved queue changes; save the queue before using playback controls.');
+  if (playlistStatePersisting) messages.push('Queue matched the device snapshot; saving it to persistent device storage.');
   if (!playlistDraftDirty && status === 'stopped' && snapshot.entries.length && state.effect_id && snapshot.entries.some(entry => entry.effectId === state.effect_id))
     messages.push('Playback is stopped; the current effect matches a queued entry. Start the playlist to play the queue.');
   else if (!playlistDraftDirty && status === 'stopped' && snapshot.entries.length && state.effect_id)
     messages.push('Playback stopped; manual effect selection is active and is not part of this queue.');
   if (status === 'running' && index < 0) messages.push('Playlist status is inconsistent: running without a current entry.');
-  notice.textContent = messages.length ? messages.join(' ') :
-    notice.textContent.startsWith('Queue save failed') || notice.textContent.startsWith('Playlist ') || notice.textContent.startsWith('Queue command accepted')
-      ? notice.textContent : '';
+  if (playlistPersistenceNotice) messages.unshift(playlistPersistenceNotice);
+  if (messages.length) notice.textContent = messages.join(' ');
+  else if (playlistPersistenceNotice) notice.textContent = playlistPersistenceNotice;
+  else if (notice.textContent.startsWith('Queue save failed') || notice.textContent.startsWith('Playlist ') || notice.textContent.startsWith('Queue command accepted')) {
+    // Preserve a transient command status until replaced by the next operation.
+  } else notice.textContent = '';
   document.getElementById('playlistStartBtn').disabled = playlistDraftDirty || status === 'running' || !snapshot.entries.length;
   document.getElementById('playlistPauseBtn').disabled = playlistDraftDirty || status !== 'running';
   document.getElementById('playlistResumeBtn').disabled = playlistDraftDirty || status !== 'paused';
@@ -1080,9 +1164,10 @@ function setParam(effectId, paramId, val) {
 
 async function saveState() {
   const response = await fetch('/api/state/save', { method: 'POST' });
-  if (!response.ok) { showToast('Save failed: ' + response.status, 'var(--red)'); return; }
+  if (!response.ok) { showToast('Save failed: ' + response.status, 'var(--red)'); return false; }
   showToast('Settings saved to flash', 'var(--green)');
   setTimeout(clearToast, 2000);
+  return true;
 }
 
 async function clearState() {
@@ -1110,7 +1195,8 @@ async function loadPanelConfig() {
       '<div class="panel-tile"><strong>Panel ' + i + '</strong>' +
       '<label class="config-field">GPIO<input type="number" min="0" max="48" step="1" id="cfgPin' + i + '"></label>' +
       '<label class="config-field">Rotation<select id="cfgRotation' + i + '"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>' +
-      '<label class="config-check"><input type="checkbox" id="cfgSerpentine' + i + '"> Zigzag</label></div>').join('');
+      '<label class="config-check"><input type="checkbox" id="cfgSerpentine' + i + '"> Zigzag</label>' +
+      '<label class="config-check"><input type="checkbox" id="cfgDisabledPanel' + i + '"> Disable output</label></div>').join('');
     document.getElementById('cfgStartCorner').value = cfg.startCorner;
     document.getElementById('cfgPanelLayout').value = cfg.panelLayout;
     document.getElementById('cfgPanelOrder').value = cfg.panelOrder.join(', ');
@@ -1127,6 +1213,8 @@ async function loadPanelConfig() {
       document.getElementById('cfgPin' + i).value = cfg.panelPins[i];
       document.getElementById('cfgRotation' + i).value = cfg.panelRotation[i];
       document.getElementById('cfgSerpentine' + i).checked = cfg.serpentine[i];
+      document.getElementById('cfgDisabledPanel' + i).checked = !!cfg.disabledPanels?.[i];
+      document.getElementById('cfgPin' + i).disabled = !cfg.parallelOutput;
     }
     updateOutputMode();
     document.getElementById('cfgSaveBtn').disabled = false;
@@ -1150,8 +1238,10 @@ async function savePanelConfig() {
     const parts = document.getElementById('cfgPanelOrder').value.split(',').map(s => s.trim());
     if (parts.length !== 4 || parts.some(s => !/^[0-3]$/.test(s)) || new Set(parts).size !== 4) throw new Error('Panel order must contain 0, 1, 2 and 3 exactly once.');
     const panelPins = Array.from({length: 4}, (_, i) => number('cfgPin' + i, 0, 48));
+    const disabledPanels = Array.from({length: 4}, (_, i) => document.getElementById('cfgDisabledPanel' + i).checked);
     const parallel = document.getElementById('cfgParallelOutput').checked;
     if (parallel && new Set(panelPins).size !== 4) throw new Error('Parallel output GPIOs must be unique.');
+    if (!parallel && disabledPanels.some(Boolean)) throw new Error('Disable a panel only when four parallel outputs are enabled.');
     const effect = document.getElementById('cfgBootEffect').value.trim();
     const path = document.getElementById('cfgBootPath').value.trim();
     if (!effect) throw new Error('Default effect ID cannot be empty.');
@@ -1163,7 +1253,7 @@ async function savePanelConfig() {
       serpentine: Array.from({length: 4}, (_, i) => document.getElementById('cfgSerpentine' + i).checked),
       panelSerpentine: document.getElementById('cfgPanelSerpentine').checked,
       mirrorX: document.getElementById('cfgMirrorX').checked,
-      dataPin: number('cfgDataPin', 0, 48), parallelOutput: parallel,
+      dataPin: number('cfgDataPin', 0, 48), parallelOutput: parallel, disabledPanels,
       ledMaxMilliamps: number('cfgMaxMilliamps', 1000, 60000),
       ledBrightness: number('cfgBootBrightness', 0, 255), defaultAnimation: effect,
       autoCycleMs: number('cfgBootCycle', 0, 4294967295), fsAnimationPath: path
@@ -1489,6 +1579,15 @@ async function loop() {
 }
 
 async function init() {
+  document.getElementById('playlistLoop').addEventListener('change', () => {
+    playlistLoopDraft = document.getElementById('playlistLoop').checked;
+    playlistSaveVersion++;
+    playlistPersistenceNotice = '';
+    playlistDraftDirty = true;
+    playlistAwaitingSnapshot = false;
+    document.getElementById('playlistNotice').textContent = '';
+    updatePlaylistUI();
+  });
   loadPreviewRenderer();
   requestAnimationFrame(animatePreview);
   previewLoop();

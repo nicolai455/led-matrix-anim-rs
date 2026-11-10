@@ -63,6 +63,9 @@ fn default_data_pin() -> u8 {
 fn default_panel_pins() -> [u8; NUM_PANELS] {
     [4, 16, 17, 18]
 }
+fn default_disabled_panels() -> [bool; NUM_PANELS] {
+    [false; NUM_PANELS]
+}
 fn default_led_brightness() -> u8 {
     128
 }
@@ -112,6 +115,10 @@ pub struct PanelConfig {
     pub data_pin: u8,
     #[serde(default = "default_panel_pins")]
     pub panel_pins: [u8; NUM_PANELS],
+    /// Suppress pixel output on selected physical panel lanes without changing
+    /// GPIO allocation, effect rendering, or logical geometry.
+    #[serde(default = "default_disabled_panels")]
+    pub disabled_panels: [bool; NUM_PANELS],
     #[serde(default = "default_led_brightness")]
     pub led_brightness: u8,
     #[serde(default = "default_led_max_milliamps")]
@@ -143,6 +150,7 @@ impl Default for PanelConfig {
             parallel_output: default_parallel_output(),
             data_pin: default_data_pin(),
             panel_pins: default_panel_pins(),
+            disabled_panels: default_disabled_panels(),
             led_brightness: default_led_brightness(),
             led_max_milliamps: default_led_max_milliamps(),
             default_animation: default_animation(),
@@ -158,6 +166,9 @@ impl PanelConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.matrix_width != 2 || self.matrix_height != 2 {
             return Err("matrix dimensions must be 2x2 panels for 32x32 matrix");
+        }
+        if !self.parallel_output && self.disabled_panels.iter().any(|disabled| *disabled) {
+            return Err("disabling a panel output requires four parallel outputs");
         }
         let mut seen = [false; NUM_PANELS];
         for &order in &self.panel_order {
@@ -402,8 +413,9 @@ mod tests {
     }
 
     #[test]
-    fn test_power_budget_zero_and_range_limits() {
+    fn power_budget_zero_and_range_limits() {
         let mut cfg = PanelConfig::default();
+        assert_eq!(cfg.disabled_panels, [false; NUM_PANELS]);
         assert!(cfg.validate().is_ok());
 
         // Zero budget is strictly rejected
@@ -428,9 +440,22 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_config_validation() {
+    fn panel_config_validation() {
         let valid = PanelConfig::default();
         assert!(valid.validate().is_ok());
+        let mut disabled = valid.clone();
+        disabled.parallel_output = true;
+        disabled.disabled_panels[1] = true;
+        assert!(disabled.validate().is_ok());
+        let mut disabled_without_parallel = valid.clone();
+        disabled_without_parallel.disabled_panels[1] = true;
+        assert_eq!(
+            disabled_without_parallel.validate(),
+            Err("disabling a panel output requires four parallel outputs")
+        );
+        let serialized = serde_json::to_value(&disabled).unwrap();
+        let restored: PanelConfig = serde_json::from_value(serialized).unwrap();
+        assert_eq!(restored.disabled_panels, [false, true, false, false]);
 
         let mut invalid_width = valid.clone();
         invalid_width.matrix_width = 4;
