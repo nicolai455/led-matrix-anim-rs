@@ -185,7 +185,8 @@ fn handle_api_request_inner(
                         || old_cfg.mirror_x != updated.mirror_x
                         || old_cfg.data_pin != updated.data_pin
                         || old_cfg.parallel_output != updated.parallel_output
-                        || old_cfg.panel_pins != updated.panel_pins;
+                        || old_cfg.panel_pins != updated.panel_pins
+                        || old_cfg.disabled_panels != updated.disabled_panels;
 
                     let outcome = ctx.hub.submit_sync(
                         "power_limit",

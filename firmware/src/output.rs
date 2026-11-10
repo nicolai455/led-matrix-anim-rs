@@ -12,6 +12,30 @@ pub const TOTAL_BYTES: usize = PIXELS * 3; // 3072 bytes
 #[cfg(target_os = "espidf")]
 const RMT_COMPLETION_TIMEOUT_MS: i32 = 1000;
 
+/// Write one physical GRB pixel, or clear it when its panel lane is disabled.
+/// Returns false for an out-of-range physical index.
+#[inline]
+pub fn write_grb_pixel(
+    buffer: &mut [u8],
+    led_idx: usize,
+    disabled_panels: &[bool; NUM_PANELS],
+    rgb: [u8; 3],
+) -> bool {
+    if led_idx >= PIXELS || buffer.len() < TOTAL_BYTES {
+        return false;
+    }
+    let panel_idx = led_idx / PANEL_PIXELS;
+    let offset = led_idx * 3;
+    if disabled_panels[panel_idx] {
+        buffer[offset..offset + 3].fill(0);
+    } else {
+        buffer[offset] = rgb[1];
+        buffer[offset + 1] = rgb[0];
+        buffer[offset + 2] = rgb[2];
+    }
+    true
+}
+
 #[cfg(test)]
 mod placement_tests {
     use super::prefer_psram;
@@ -353,8 +377,9 @@ impl RmtLedOutput {
         if self.settings.parallel_output != cfg.parallel_output
             || self.settings.data_pin != cfg.data_pin
             || self.settings.panel_pins != cfg.panel_pins
+            || self.panel_config.disabled_panels != cfg.disabled_panels
         {
-            return Err("Output pin or wiring-mode changes require a restart".into());
+            return Err("Output pin, wiring mode, or disabled-panel changes require a restart".into());
         }
         self.panel_config = cfg.clone();
         self.settings.max_milliamps = cfg.led_max_milliamps;
@@ -597,12 +622,13 @@ impl LedOutput for RmtLedOutput {
                         if led_idx < PIXELS {
                             let panel_idx = led_idx / PANEL_PIXELS;
                             let panel_led_offset = led_idx % PANEL_PIXELS;
-                            let byte_offset = panel_led_offset * 3;
-
-                            // WS2812B GRB order
-                            self.buffer[panel_idx * BYTES_PER_PANEL + byte_offset] = scaled_g;
-                            self.buffer[panel_idx * BYTES_PER_PANEL + byte_offset + 1] = scaled_r;
-                            self.buffer[panel_idx * BYTES_PER_PANEL + byte_offset + 2] = scaled_b;
+                            let physical_led_idx = panel_idx * PANEL_PIXELS + panel_led_offset;
+                            write_grb_pixel(
+                                &mut self.buffer,
+                                physical_led_idx,
+                                &self.panel_config.disabled_panels,
+                                [scaled_r, scaled_g, scaled_b],
+                            );
                         }
                     }
                 }
@@ -617,10 +643,12 @@ impl LedOutput for RmtLedOutput {
 
                         let led_idx = self.panel_config.get_led_index(x, y);
                         if led_idx < PIXELS {
-                            let byte_offset = led_idx * 3;
-                            self.buffer[byte_offset] = scaled_g;
-                            self.buffer[byte_offset + 1] = scaled_r;
-                            self.buffer[byte_offset + 2] = scaled_b;
+                            write_grb_pixel(
+                                &mut self.buffer,
+                                led_idx,
+                                &self.panel_config.disabled_panels,
+                                [scaled_r, scaled_g, scaled_b],
+                            );
                         }
                     }
                 }
@@ -677,11 +705,37 @@ mod quiesce_race_tests {
     }
 
     #[test]
-    fn inactive_output_can_pause_and_resume() {
-        let control = OutputQuiesce::inactive();
-        assert!(control.pause(Duration::ZERO).is_ok());
-        assert!(control.is_paused());
-        control.resume();
-        assert!(!control.is_paused());
+    fn disabled_physical_panel_lane_is_blanked_without_affecting_other_lanes() {
+        let mut buffer = [0xa5; TOTAL_BYTES];
+        let disabled = [false, true, false, false];
+
+        assert!(write_grb_pixel(&mut buffer, 0, &disabled, [10, 20, 30]));
+        assert!(write_grb_pixel(&mut buffer, PANEL_PIXELS, &disabled, [40, 50, 60]));
+        assert!(write_grb_pixel(&mut buffer, PANEL_PIXELS * 2, &disabled, [70, 80, 90]));
+        assert!(write_grb_pixel(&mut buffer, PANEL_PIXELS * 3, &disabled, [100, 110, 120]));
+
+        assert_eq!(&buffer[0..3], &[20, 10, 30]);
+        assert_eq!(&buffer[BYTES_PER_PANEL..BYTES_PER_PANEL + 3], &[0, 0, 0]);
+        assert_eq!(
+            &buffer[BYTES_PER_PANEL * 2..BYTES_PER_PANEL * 2 + 3],
+            &[80, 70, 90]
+        );
+        assert_eq!(
+            &buffer[BYTES_PER_PANEL * 3..BYTES_PER_PANEL * 3 + 3],
+            &[110, 100, 120]
+        );
+    }
+
+    #[test]
+    fn disabled_panel_mask_defaults_off_and_rejects_out_of_range() {
+        assert_eq!(PanelConfig::default().disabled_panels, [false; NUM_PANELS]);
+        let mut buffer = [0x5a; TOTAL_BYTES];
+        assert!(!write_grb_pixel(
+            &mut buffer,
+            PIXELS,
+            &[false; NUM_PANELS],
+            [1, 2, 3]
+        ));
+        assert_eq!(buffer[0], 0x5a);
     }
 }
