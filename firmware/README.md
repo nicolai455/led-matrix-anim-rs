@@ -116,7 +116,7 @@ However:
 7. **Web UI & REST API**:
    - Server configured with `uri_match_wildcard: true`.
    - Dispatches `GET /`, wildcard `GET /api/*`, and wildcard `POST /api/*` with bounded reads (4KB cap) to `matrix_control::api::handle_api_request`.
-   - Firmware wildcard API POSTs and OTA updates require `X-Matrix-Control: 1`; browser Origin must match Host when present. This is CSRF protection, not authentication against LAN clients. `/update` remains unauthenticated to local-network peers that can send the marker.
+   - Firmware API mutation routes and OTA updates require `X-Matrix-Control: 1`, a same-origin browser Origin when present, and a TCP peer IPv4 in `192.168.4.2–192.168.4.254`. This is an additional source-address filter, not authentication or proof that traffic entered through the WPA2 AP: the HTTP server has no verified ingress-interface binding, overlapping/routed STA networks are not excluded, and device-level negative tests remain outstanding. Do not expose the service to untrusted networks; the security gate is not considered closed.
    - Streaming OTA endpoint at `POST /update`.
    - `GET /api/firmware` reports the running app version, `elfSha256` (SHA-256 of the ELF, not the .bin), partition label/address and `otaState` (`null` if no OTA state is recorded). Compare `elfSha256` with `sha256sum firmware/target/xtensa-esp32s3-espidf/release/matrix-firmware`; `valid` indicates that ESP-IDF has confirmed the running image.
 
@@ -129,7 +129,7 @@ However:
 
 An independent progress guard restarts stalled render/output work after five seconds (acknowledged OTA output pauses are exempt). A 60-second startup guard covers initialization after the NVS journal is armed. Three consecutive unplanned/incomplete runs latch recovery mode on the next boot. Recovery skips LED/microphone peripheral initialization while retaining network recovery; it cannot clear LEDs already latched before reset.
 
-Control POST requests require `X-Matrix-Control: 1`; browser Origin must match Host when present. This applies to generic API POSTs and `/update`, preventing cross-origin forms/fetches, not unauthorized LAN clients. OTA is not authenticated against other LAN peers. Recovery OTA grants the repaired image one normal-output startup trial without discarding failure history.
+Control POST requests and `/update` also require a peer IPv4 in `192.168.4.2–192.168.4.254`. This additional filter is not authentication and does not establish AP ingress because the HTTP server is not bound to a verified interface; overlapping/routed STA subnet access has not been ruled out. OTA security remains a release blocker pending independent review and device/network validation. Recovery OTA grants the repaired image one normal-output startup trial without discarding failure history.
 
 Read `GET /api/recovery` for state. Use `POST /api/recovery/retry` to clear the latch and restart normal initialization; ordinary `POST /api/reboot` preserves it. Unplanned power cuts conservatively count toward the threshold. Failures before NVS initialization cannot be journaled. Physical fault-injection testing remains required; see `../RESILIENCE_PROGRESS.md` for commissioning gates.
 

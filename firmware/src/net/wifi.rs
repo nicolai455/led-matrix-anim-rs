@@ -153,10 +153,6 @@ impl ConnectingTimer {
         self.ready = false;
     }
 
-    #[cfg(target_os = "espidf")]
-    fn elapsed_secs(&self, now: std::time::Instant) -> u64 {
-        now.duration_since(self.started).as_secs()
-    }
 }
 
 pub struct WifiManager {

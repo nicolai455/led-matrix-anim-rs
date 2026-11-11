@@ -1,3 +1,4 @@
+use matrix_core::PlaylistCollection;
 use serde_json::{json, Value};
 use std::fs;
 use std::io::{Read, Write};
@@ -5,8 +6,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::RwLock;
 
-/// Maximum size allowed for loading storage files (1 MB).
-pub const MAX_STORAGE_LOAD_BYTES: u64 = 1024 * 1024;
+use matrix_core::engine::MAX_RUNTIME_STATE_BYTES;
+
+/// Maximum size allowed for loading storage files, matching the NVS state bound.
+pub const MAX_STORAGE_LOAD_BYTES: u64 = MAX_RUNTIME_STATE_BYTES as u64;
 
 static TEMP_FILE_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -177,8 +180,20 @@ pub fn normalize_runtime_state(val: &Value) -> Value {
         out.insert("audio".to_string(), json!(audio));
     } else if let Some(audio_src) = obj.get("audio_source").and_then(|v| v.as_str()) {
         out.insert("audio".to_string(), json!(audio_src));
+    } else if let Some(audio_src) = obj.get("audioSource").and_then(|v| v.as_str()) {
+        out.insert("audio".to_string(), json!(audio_src));
     }
 
+    if let Some(collection) = obj.get("playlistCollection") {
+        if collection.is_object() {
+            out.insert("playlistCollection".to_string(), collection.clone());
+        }
+    }
+    if let Some(config) = obj.get("playlistConfig").or_else(|| obj.get("playlist")) {
+        if config.is_object() {
+            out.insert("playlistConfig".to_string(), config.clone());
+        }
+    }
     if let Some(mic) = obj.get("mic") {
         if mic.is_object() {
             out.insert("mic".to_string(), mic.clone());
@@ -224,34 +239,45 @@ pub fn normalize_runtime_state(val: &Value) -> Value {
 
 /// Normalize scalars while passing the parameter object through without a Value tree.
 pub fn normalize_json(input: &str) -> Result<String, String> {
-    let mut fields: std::collections::BTreeMap<&str, &serde_json::value::RawValue> = serde_json::from_str(input).map_err(|e| format!("invalid state JSON: {e}"))?;
-    let params = fields.remove("params");
-    let effects = fields.remove("effects");
-    let params = params.or(effects);
-    let playlist = fields.remove("playlist");
-    let scalar = serde_json::to_value(fields).map_err(|e| e.to_string())?;
-    let mut normalized = normalize_runtime_state(&scalar);
+    let value: Value = serde_json::from_str(input).map_err(|e| format!("invalid state JSON: {e}"))?;
+    let obj = value.as_object().ok_or("runtime state must be a JSON object")?;
+    let mut normalized = normalize_runtime_state(&value);
+
+    if let Some(collection) = obj.get("playlistCollection") {
+        let collection: PlaylistCollection = serde_json::from_value(collection.clone())
+            .map_err(|e| format!("invalid playlistCollection: {e}"))?;
+        collection.validate()?;
+        normalized.as_object_mut().ok_or("invalid normalized state")?
+            .insert("playlistCollection".into(), serde_json::to_value(collection).map_err(|e| e.to_string())?);
+    }
+
+    let playlist = obj.get("playlistConfig").or_else(|| obj.get("playlist"));
     if let Some(playlist) = playlist {
-        if playlist.get().starts_with('{') {
-            let value: Value = serde_json::from_str(playlist.get()).map_err(|e| e.to_string())?;
-            let entries_valid = value.get("entries").and_then(Value::as_array).is_some_and(|entries| {
-                entries.len() <= 32 && entries.iter().all(|entry| {
-                    entry.get("effectId").and_then(Value::as_str).is_some_and(|id| !id.is_empty() && id.len() <= 64)
-                        && entry.get("durationMs").and_then(Value::as_u64).is_some_and(|duration| (1_000..=86_400_000).contains(&duration))
-                })
-            });
-            if entries_valid && value.get("loop").and_then(Value::as_bool).is_some() {
-                normalized.as_object_mut().ok_or("invalid normalized state")?.insert("playlist".into(), value);
-            }
+        let entries_valid = playlist.get("entries").and_then(Value::as_array).is_some_and(|entries| {
+            entries.len() <= 73 && entries.iter().all(|entry| {
+                entry.get("effectId").and_then(Value::as_str).is_some_and(|id| !id.is_empty() && id.len() <= 64)
+                    && entry.get("durationMs").and_then(Value::as_u64).is_some_and(|duration| (1_000..=86_400_000).contains(&duration))
+            })
+        });
+        if entries_valid && playlist.get("loop").and_then(Value::as_bool).is_some() {
+            normalized.as_object_mut().ok_or("invalid normalized state")?.insert("playlistConfig".into(), playlist.clone());
         }
     }
+
     let mut result = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
-    if let Some(params) = params {
-        // Validate structure in the restore path; preserve original parameter representations.
-        if params.get().starts_with('{') {
+    if let Some(params) = obj.get("params").or_else(|| obj.get("effects")) {
+        if params.is_object() {
+            let mut params = params.clone();
+            if let Some(id) = obj.get("effect_id").and_then(Value::as_str) {
+                if let Some(current) = params.as_object_mut().and_then(|all| all.remove(id)) {
+                    params = json!({id: current});
+                }
+            }
             result.pop();
-            if normalized.as_object_mut().is_some_and(|o| !o.is_empty()) { result.push(','); }
-            result.push_str("\"params\":"); result.push_str(params.get()); result.push('}');
+            if normalized.as_object().is_some_and(|o| !o.is_empty()) { result.push(','); }
+            result.push_str("\"params\":");
+            result.push_str(&params.to_string());
+            result.push('}');
         }
     }
     Ok(result)
@@ -302,6 +328,9 @@ impl StateStore {
     }
 
     pub fn save_json(&self, snapshot: &[u8]) -> Result<(), String> {
+        if snapshot.len() > MAX_STORAGE_LOAD_BYTES as usize {
+            return Err(format!("runtime state exceeds {} byte limit", MAX_STORAGE_LOAD_BYTES));
+        }
         let text = std::str::from_utf8(snapshot).map_err(|e| e.to_string())?;
         let json = normalize_json(text)?;
         if let Some(ref backend) = self.backend { backend.store(&json)?; }
@@ -333,5 +362,53 @@ impl StateStore {
             *lock = None;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod large_playlist_tests {
+    use super::*;
+
+    #[test]
+    fn runtime_state_normalization_preserves_a_73_entry_playlist_with_ten_second_durations() {
+        let entries = (0..73)
+            .map(|index| serde_json::json!({"effectId": format!("effect-{index}"), "durationMs": 10_000}))
+            .collect::<Vec<_>>();
+        let input = serde_json::json!({
+            "playlistConfig": {"entries": entries.clone(), "loop": true},
+            "playlistCollection": {
+                "playlists": [{"id":"sound-default","name":"Sound reactive","entries":entries,"loop":true}],
+                "selectedId":"sound-default"
+            }
+        });
+        let normalized = normalize_json(&input.to_string()).unwrap();
+        let output: Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(output["playlistConfig"]["entries"].as_array().unwrap().len(), 73);
+        assert_eq!(output["playlistCollection"]["playlists"][0]["entries"].as_array().unwrap().len(), 73);
+        assert!(output["playlistConfig"]["entries"].as_array().unwrap().iter().all(|entry| entry["durationMs"] == 10_000));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn state_normalization_keeps_valid_large_playlists() {
+        let entries = (0..73)
+            .map(|index| serde_json::json!({"effectId": format!("effect-{index}"), "durationMs": 10_000}))
+            .collect::<Vec<_>>();
+        let input = serde_json::json!({
+            "playlistConfig": {"entries": entries.clone(), "loop": true},
+            "playlistCollection": {
+                "playlists": [{"id":"sound-default","name":"Sound reactive","entries":entries,"loop":true}],
+                "selectedId":"sound-default"
+            }
+        });
+        let normalized = normalize_json(&input.to_string()).unwrap();
+        let output: Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(output["playlistConfig"]["entries"].as_array().unwrap().len(), 73);
+        assert_eq!(output["playlistCollection"]["playlists"][0]["entries"].as_array().unwrap().len(), 73);
+        assert!(output["playlistConfig"]["entries"].as_array().unwrap().iter().all(|entry| entry["durationMs"] == 10_000));
     }
 }

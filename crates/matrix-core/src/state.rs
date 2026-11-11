@@ -15,7 +15,9 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
         let mut effect_params = serde_json::Map::new();
         for param in effect.parameters() {
             if let Some(val) = effect.parameter(param.id) {
-                effect_params.insert(param.id.to_string(), json!(val));
+                if (val - param.default).abs() > f32::EPSILON {
+                    effect_params.insert(param.id.to_string(), json!(val));
+                }
             }
         }
         if !effect_params.is_empty() {
@@ -47,7 +49,8 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
             "b": engine.color().b
         },
         "audio": audio_str,
-        "playlist": engine.playlist_persistence(),
+        "playlistCollection": engine.playlist_collection(),
+        "playlistConfig": engine.playlist_persistence(),
         "mic": {
             "gainDb": mic.gain_db,
             "squelchDb": mic.squelch_db,
@@ -71,6 +74,14 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
     }
 
     // Parse large parameter sets as borrowed raw JSON; allocate only one effect at a time.
+    let serialized_doc: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| format!("invalid JSON: {e}"))?;
+    let auto_cycle = serialized_doc.get("autoCycle").and_then(|value| value.as_bool());
+    let audio = serialized_doc.get("audio").and_then(|value| value.as_str()).map(str::to_owned);
+    let audio_source = serialized_doc.get("audioSource").and_then(|value| value.as_str()).map(str::to_owned);
+    let audio_status = serialized_doc.get("audioStatus").and_then(|value| value.as_str()).map(str::to_owned);
+    let speed = serialized_doc.get("speed").and_then(|value| value.as_u64());
+    let mic = serialized_doc.get("mic").cloned();
     let mut fields: std::collections::BTreeMap<&str, &serde_json::value::RawValue> =
         serde_json::from_str(json_str).map_err(|e| format!("invalid JSON: {e}"))?;
     let params = fields.remove("params");
@@ -100,60 +111,67 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
     }
     let val = serde_json::to_value(fields).map_err(|e| e.to_string())?;
     let doc = val.as_object().ok_or("expected JSON object")?;
-
-    // 2. Restore mic settings
-    if let Some(mic_val) = doc.get("mic") {
-        let _ = engine.apply("mic", &mic_val.to_string());
-    }
-
-    // 3. Restore text (may select TextScroll in engine, so effect is restored after)
-    if let Some(text) = doc.get("text").and_then(|v| v.as_str()) {
+    if let Some(text) = doc.get("text").and_then(|value| value.as_str()) {
         if text.len() <= 128 {
             let _ = engine.apply("text", text);
         }
     }
-
-    // 4. Restore speed
-    if let Some(speed) = doc.get("speed").and_then(|v| v.as_u64()) {
+    if let Some(speed) = speed {
         let _ = engine.apply("speed", &speed.to_string());
     }
-
-    // 5. Restore audio mode
-    if let Some(audio) = doc.get("audio").and_then(|v| v.as_str()) {
+    if let Some(audio) = audio_source.as_deref().or(audio.as_deref()) {
         let _ = engine.apply("audio_source", audio);
     }
-
-    // 6. Restore light settings (brightness, color, saved effect) LAST after text
-    let mut light_obj = serde_json::Map::new();
-    if let Some(b) = doc.get("brightness").and_then(|v| v.as_u64()) {
-        light_obj.insert("brightness".to_string(), json!(b));
+    if let Some(mic) = mic {
+        let _ = engine.apply("mic", &mic.to_string());
     }
-    if let Some(eff_name) = doc.get("effect").and_then(|v| v.as_str()) {
-        // Only set if effect is known
-        if engine.effects().iter().any(|e| {
-            e.name().eq_ignore_ascii_case(eff_name) || e.id().eq_ignore_ascii_case(eff_name)
-        }) {
-            light_obj.insert("effect".to_string(), json!(eff_name));
-            if let Some(color) = doc.get("color") {
-                light_obj.insert("color".to_string(), color.clone());
-            }
+
+    let restored_collection = doc.get("playlistCollection")
+        .and_then(|value| serde_json::from_value::<crate::engine::PlaylistCollection>(value.clone()).ok())
+        .filter(|collection| engine.restore_named_playlist_state(collection).is_ok());
+    let selected_restored = restored_collection.as_ref()
+        .and_then(|collection| collection.selected_id.as_deref())
+        .is_some_and(|id| engine.apply("playlist_select", &json!({"id":id}).to_string()).is_ok());
+    if !selected_restored {
+        if let Some(playlist) = doc.get("playlistConfig").or_else(|| doc.get("playlist")) {
+            let _ = engine.apply("playlist_config", &playlist.to_string());
         }
     }
-    if !light_obj.is_empty() {
-        let _ = engine.apply("light", &serde_json::Value::Object(light_obj).to_string());
+    if let Some(cycle) = auto_cycle {
+        engine.set_auto_cycle_restored(cycle);
+    } else if let Some(cycle) = doc.get("autoCycle").and_then(|value| value.as_bool()) {
+        engine.set_auto_cycle_restored(cycle);
     }
 
-    // Restore playlist configuration only; playback state intentionally never resumes.
-    if let Some(playlist) = doc.get("playlist") {
-        let _ = engine.apply("playlist_config", &playlist.to_string());
+    // Reapply light values after playlist/auto-cycle restoration, without restoring ON.
+    let mut light = serde_json::Map::new();
+    if let Some(brightness) = doc.get("brightness").and_then(|value| value.as_u64()) {
+        light.insert("brightness".into(), json!(brightness));
     }
-
-    // Auto-cycle has precedence when both persisted settings are enabled; enabling
-    // it stops playlist playback while retaining the saved playlist configuration.
-    if let Some(cycle) = doc.get("autoCycle").and_then(|v| v.as_bool()) {
-        let _ = engine.apply("cycle", if cycle { "ON" } else { "OFF" });
+    if let Some(color) = doc.get("color").filter(|value| value.is_object()) {
+        light.insert("color".into(), color.clone());
     }
-
+    if let Some(effect) = doc.get("effect").and_then(|value| value.as_str()) {
+        if engine.effects().iter().any(|candidate| candidate.name().eq_ignore_ascii_case(effect) || candidate.id().eq_ignore_ascii_case(effect)) {
+            light.insert("effect".into(), json!(effect));
+        }
+    }
+    if !light.is_empty() {
+        let _ = engine.apply("light", &serde_json::Value::Object(light).to_string());
+    }
+    // Match both the canonical runtime snapshot key and legacy persisted key.
+    if let Some(audio) = doc.get("audio").and_then(|value| value.as_str()) {
+        let _ = engine.apply("audio_source", audio);
+    }
+    if let Some(audio) = audio_source.as_deref() {
+        let _ = engine.apply("audio_source", audio);
+    }
+    if let Some(status) = audio_status.as_deref() {
+        let _ = engine.apply("audio_status", status);
+    }
+    if let Some(cycle) = auto_cycle {
+        engine.set_auto_cycle_restored(cycle);
+    }
     Ok(())
 }
 
@@ -209,6 +227,24 @@ mod tests {
     }
 
     #[test]
+    fn test_save_emits_only_overridden_parameters_for_bounded_persistence() {
+        let engine = Engine::new(vec![Box::new(TestEffect {
+            id: "fx1", name: "Effect 1", val: 10.0,
+        })]).unwrap();
+        let state: serde_json::Value = serde_json::from_str(&serialize_runtime_state(&engine)).unwrap();
+        assert_eq!(state["params"], json!({}));
+
+        let mut changed = Engine::new(vec![Box::new(TestEffect {
+            id: "fx1", name: "Effect 1", val: 25.0,
+        })]).unwrap();
+        let state: serde_json::Value = serde_json::from_str(&serialize_runtime_state(&changed)).unwrap();
+        assert_eq!(state["params"]["fx1"]["p1"], 25.0);
+        changed.apply("light", r#"{"state":"ON"}"#).unwrap();
+        let state: serde_json::Value = serde_json::from_str(&serialize_runtime_state(&changed)).unwrap();
+        assert!(state.get("state").is_none());
+    }
+
+    #[test]
     fn test_state_serialization_roundtrip() {
         let mut engine = Engine::new(vec![Box::new(TestEffect {
             id: "fx1",
@@ -219,6 +255,7 @@ mod tests {
 
         engine.apply("speed", "45").unwrap();
         engine.apply("cycle", "ON").unwrap();
+        engine.apply("audio_source", "Synthetic").unwrap();
         engine.apply("text", "WORLD").unwrap();
 
         let json = serialize_runtime_state(&engine);
@@ -234,6 +271,7 @@ mod tests {
             val: 10.0,
         })])
         .unwrap();
+        new_engine.apply("text", "HELLO").unwrap();
 
         assert!(!new_engine.is_on()); // Always boots OFF
         assert_eq!(new_engine.speed(), 30);
@@ -330,6 +368,7 @@ mod tests {
             val: 0.0,
         });
         let mut restored_engine = Engine::new(vec![e1_new, e2_new]).unwrap();
+        restored_engine.apply("text", "PLACEHOLDER").unwrap();
         restore_runtime_state(&mut restored_engine, &serialized).unwrap();
 
         // Must still be Fire, not TextScroll!

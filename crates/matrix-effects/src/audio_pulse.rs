@@ -264,3 +264,22 @@ impl Effect for AudioPulseEffect {
         }
     }
 }
+
+#[cfg(test)]
+mod default_playlist_audio_tests {
+    use super::*;
+    use matrix_core::AudioSnapshot;
+
+    #[test]
+    fn audio_pulse_frame_changes_with_available_audio_reactivity() {
+        let mut reactive = AudioPulseEffect::new();
+        let mut static_effect = AudioPulseEffect::new();
+        reactive.set_parameter("reactivity",100.0).unwrap();
+        static_effect.set_parameter("reactivity",10.0).unwrap();
+        let active = AudioSnapshot {available:true,level:0.95,peak:1.0,beat:true,bands:[0.9;16],..AudioSnapshot::default()};
+        let context = RenderContext {now_ms:100,delta_seconds:0.033,audio:&active,color:Rgb::WHITE,text:"",scroll_speed:1.0};
+        let mut a=Frame::default(); let mut b=Frame::default();
+        reactive.render(&mut a,&context); static_effect.render(&mut b,&context);
+        assert_ne!(a.pixels,b.pixels);
+    }
+}

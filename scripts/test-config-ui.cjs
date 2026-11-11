@@ -78,6 +78,59 @@ test('load failure disables save; output mode switches editable pins', async () 
   assert.equal(h.element('cfgDataPin').disabled,false); assert.equal(h.element('cfgPin0').disabled,true);
 });
 
+test('wifi editor includes a valid new profile in Save even without Add profile first', async () => {
+  const h = harness();
+  vm.runInContext("state={networkConfig:{wifiProfiles:[]}}", h.sandbox);
+  h.element('networkSsid').value='open-network';
+  h.element('networkPassword').value='';
+  h.element('networkPriority').value='7';
+  h.element('networkHidden').checked=false;
+  await h.sandbox.saveNetworkConfig();
+  assert.equal(h.requests.length, 1);
+  assert.deepEqual(JSON.parse(h.requests[0].options.body).wifiProfiles, [{ssid:'open-network',priority:7,hidden:false}]);
+  assert.match(h.element('networkStatus').textContent,/Saved/);
+});
+
+test('wifi editor saves typed password and profile fields without pre-adding', async () => {
+  const h = harness();
+  vm.runInContext("state={networkConfig:{wifiProfiles:[]}}", h.sandbox);
+  h.element('networkSsid').value='saved-network';
+  h.element('networkPassword').value='fake-test-password';
+  h.element('networkPriority').value='12';
+  h.element('networkHidden').checked=true;
+  await h.sandbox.saveNetworkConfig();
+  assert.deepEqual(JSON.parse(h.requests[0].options.body).wifiProfiles, [{ssid:'saved-network',priority:12,hidden:true,password:'fake-test-password'}]);
+});
+
+test('saving wifi configuration does not erase the saved MQTT password', async () => {
+  const h = harness();
+  vm.runInContext("state={networkConfig:{wifiProfiles:[],mqttHost:'broker.local',mqttPort:1883,mqttUser:'client',mqttPasswordConfigured:true}}", h.sandbox);
+  h.element('networkSsid').value='saved-network';
+  h.element('networkPassword').value='fake-test-password';
+  h.element('networkPriority').value='12';
+  await h.sandbox.saveNetworkConfig();
+  const payload=JSON.parse(h.requests[0].options.body);
+  assert.equal(payload.mqttHost,'broker.local');
+  assert.equal(payload.mqttPort,1883);
+  assert.equal(payload.mqttUser,'client');
+  assert.equal(payload.mqttPassword,undefined);
+});
+
+test('both password inputs have accessible names in non-nested forms', () => {
+  for (const [id, label, accessible] of [
+    ['networkPassword', 'New profile password', 'New profile password'],
+    ['fallbackApPassword', 'New AP password', 'New AP password']
+  ]) {
+    const inputAt = body.indexOf(`id="${id}"`);
+    const before = body.slice(Math.max(0, inputAt - 300), inputAt);
+    const after = body.slice(inputAt, inputAt + 220);
+    assert.match(before, new RegExp(`<form class="password-field"[^>]*><div class="config-field"><label for="${id}">${label}<\\/label>`));
+    assert.match(after, new RegExp(`type="password"[^>]*aria-label="${accessible}"[^>]*><\\/div><\\/form>`));
+    assert.doesNotMatch(before + after, /<form\\b[^>]*>[\\s\\S]*<form\\b/);
+  }
+});
+
+
 test('wifi API UI exposes editable profile fields without echoing saved passphrases', () => {
   for (const id of ['networkSsid','networkPassword','networkPriority','networkHidden','networkAddProfileBtn','networkProfiles','fallbackApSsid','fallbackApPassword','fallbackApPasswordClear','networkSaveBtn','networkStatus']) {
     assert.match(body, new RegExp('id="' + id + '"'), 'missing network control ' + id);
@@ -85,9 +138,36 @@ test('wifi API UI exposes editable profile fields without echoing saved passphra
   assert.match(script, /fetch\('\/api\/network'/);
   assert.match(script, /fallbackApEnabled/);
   assert.match(script, /keepPassword\s*=\s*true/);
-  assert.match(script, /target\.password\s*=\s*networkPassword/);
+  assert.match(script, /profile\.password\s*=\s*networkPassword/);
   assert.match(body, /Clear saved AP password and disable fallback AP/);
   assert.match(script, /192\.168\.4\.1/);
+});
+
+test('effects can be filtered by visible name or stable ID without hiding playlist catalog options', () => {
+  const h = harness();
+  vm.runInContext("catalog=[{id:'audio_pulse',name:'Audio Pulse'},{id:'matrix_rain',name:'Matrix Rain'},{id:'spectrum_orb',name:'Spectrum Orb'}]", h.sandbox);
+  h.sandbox.renderCatalog();
+  assert.equal(h.element('effectsGrid').children.length, 3);
+  h.element('effectSearch').value = 'MATRIX_RAIN';
+  h.sandbox.filterEffects();
+  assert.deepEqual(h.element('effectsGrid').children.map(button => button.hidden), [true, false, true]);
+  assert.match(h.element('effectSearchStatus').textContent, /1 effect shown/i);
+  assert.equal(h.element('playlistEffectSelect').children.length, 3);
+  h.element('effectSearch').value = 'not-a-real-effect';
+  h.sandbox.filterEffects();
+  assert.ok(h.element('effectsGrid').children.every(button => button.hidden));
+  assert.match(h.element('effectSearchStatus').textContent, /no effects match/i);
+  h.element('effectSearch').value = '';
+  h.sandbox.filterEffects();
+  assert.ok(h.element('effectsGrid').children.every(button => !button.hidden));
+  assert.match(h.element('effectSearchStatus').textContent, /3 effects shown/i);
+});
+
+test('major UI sections use native accessible disclosures', () => {
+  for (const id of ['globalDisclosure','effectsDisclosure','playlistDisclosure','paramsDisclosure','audioDisclosure','micCard','networkCard','configCard','diagCard','previewDisclosure','persistenceDisclosure']) {
+    assert.match(body, new RegExp('<details[^>]*id="' + id + '"'), 'missing collapsible section ' + id);
+  }
+  assert.match(body, /type="search"[^>]*id="effectSearch"/);
 });
 
 test('custom playlist UI exposes queue editing, playback, and snapshot telemetry', () => {
@@ -103,11 +183,23 @@ test('custom playlist UI exposes queue editing, playback, and snapshot telemetry
 
 test('playlist inputs enforce engine limits and dynamic entry text uses safe DOM APIs', () => {
   assert.match(body, /id="playlistDurationInput"[^>]*min="1000"[^>]*max="86400000"/);
-  assert.match(script, /MAX_PLAYLIST_ENTRIES\s*=\s*32/);
+  assert.match(script, /MAX_PLAYLIST_ENTRIES\s*=\s*73/);
   assert.match(script, /MIN_PLAYLIST_ENTRY_MS\s*=\s*1000/);
   assert.match(script, /MAX_PLAYLIST_ENTRY_MS\s*=\s*86400000/);
   assert.match(script, /label\.textContent\s*=/);
   assert.doesNotMatch(script, /playlistEntries(?:\.innerHTML|\.insertAdjacentHTML)/);
+});
+
+test('default sound playlist loads all 73 audio inventory effects at ten seconds and remains stopped until saved/started', () => {
+  const h = harness();
+  h.sandbox.loadDefaultSoundPlaylist();
+  const entries = vm.runInContext('playlistEntries', h.sandbox);
+  assert.equal(entries.length, 73);
+  assert.ok(entries.every(entry => entry.durationMs === 10000));
+  assert.equal(vm.runInContext('playlistLoopDraft', h.sandbox), true);
+  assert.equal(vm.runInContext('playlistDraftId', h.sandbox), 'sound-default');
+  assert.match(h.element('playlistNotice').textContent, /73 audio-inventory effects at 10 seconds each/);
+  assert.match(body, /Load sound-reactive default \(10 s each\)/);
 });
 
 test('playlist queue edits validate bounds, reorder safely, and post the Engine command shape', async () => {
@@ -133,15 +225,15 @@ test('playlist queue edits validate bounds, reorder safely, and post the Engine 
   assert.equal(h.requests.length,1);
   assert.equal(h.requests[0].url,'/api/command');
   assert.deepEqual(JSON.parse(h.requests[0].options.body), {kind:'playlist_config',payload:{entries:[{effectId:'safe-id',durationMs:1000}],loop:true}});
-  vm.runInContext("playlistEntries=Array.from({length:32},()=>({effectId:'safe-id',durationMs:1000}))", h.sandbox);
+  vm.runInContext("playlistEntries=Array.from({length:73},()=>({effectId:'safe-id',durationMs:1000})); playlistDraftId='queue-test'", h.sandbox);
   h.element('playlistEffectSelect').value='safe-id'; h.element('playlistDurationInput').value='1000'; h.sandbox.addPlaylistEntry();
-  assert.equal(vm.runInContext('playlistEntries.length', h.sandbox), 32);
-  assert.match(h.element('playlistNotice').textContent,/at most 32/);
+  assert.equal(vm.runInContext('playlistEntries.length', h.sandbox), 73);
+  assert.match(h.element('playlistNotice').textContent,/at most 73/);
 });
 
 test('playlist Save queue response waits for a field-order-independent matching snapshot', async () => {
   const h=harness();
-  vm.runInContext("catalog=[{id:'safe-id',name:'Safe effect'},{id:'second',name:'Second'}]; playlistEntries=[{effectId:'safe-id',durationMs:30000},{effectId:'second',durationMs:45000}]; playlistLoopDraft=true; playlistDraftDirty=true; state={cycle:'OFF',effect_id:'safe-id',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0}}", h.sandbox);
+  vm.runInContext("catalog=[{id:'safe-id',name:'Safe effect'},{id:'second',name:'Second'}]; playlistEntries=[{effectId:'safe-id',durationMs:30000},{effectId:'second',durationMs:45000}]; playlistLoopDraft=true; playlistDraftDirty=true; playlistAwaitingSnapshot=false; playlistDraftId=null; state={cycle:'OFF',effect_id:'safe-id',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0}}", h.sandbox);
   h.element('playlistLoop').checked = true;
   await h.sandbox.applyPlaylistConfig();
   assert.equal(vm.runInContext('playlistAwaitingSnapshot', h.sandbox), true);
@@ -238,8 +330,21 @@ test('Wi-Fi settings status reports an empty saved profile list without throwing
   assert.equal(h.element('networkStatus').textContent,'No saved Wi-Fi profiles. Fallback AP is enabled; AP credentials remain masked.');
 });
 
+test('playlist save reports persistence failure instead of claiming success', async () => {
+  const h = harness();
+  vm.runInContext("playlistCollection={playlists:[],selectedId:null}; playlistEntries=[{effectId:'safe-id',durationMs:10000}]; playlistDraftId='queue-1'; playlistLoopDraft=true; playlistDraftDirty=true; playlistAwaitingSnapshot=false; playlistSaveVersion=1; catalog=[{id:'safe-id',name:'Safe'}]; state={playlist:{entries:[],loop:false,status:'stopped'},playlistCollection:{playlists:[],selectedId:null}}", h.sandbox);
+  h.element('playlistNameInput').value='Test queue';
+  h.sandbox.fetch = async (url) => url === '/api/state/save' ? {ok:false,status:500,json:async()=>({error:'storage full'})} : {ok:true,status:200,json:async()=>({ok:true})};
+  const saving = h.sandbox.saveNamedPlaylist();
+  await new Promise(resolve => setImmediate(resolve));
+  vm.runInContext("state={...state,playlist:{entries:[{effectId:'safe-id',durationMs:10000}],loop:true,status:'stopped'},playlistCollection:{playlists:[{id:'queue-1',name:'Test queue',entries:[{effectId:'safe-id',durationMs:10000}],loop:true}],selectedId:'queue-1'}}; playlistCollection=state.playlistCollection; playlistDraftDirty=true; updatePlaylistUI()", h.sandbox);
+  await new Promise(resolve => setImmediate(resolve));
+  await saving;
+  assert.equal(vm.runInContext('playlistDraftDirty', h.sandbox), true);
+});
+
 test('saving a playlist persists the matching device snapshot across reboot', async () => {
-  const h=harness();
+  const h = harness();
   vm.runInContext("catalog=[{id:'safe-id',name:'Safe effect'}]; state={cycle:'OFF',effect_id:'safe-id',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0}}; playlistEntries=[{effectId:'safe-id',durationMs:30000}]; playlistLoopDraft=true; playlistDraftDirty=true", h.sandbox);
   h.sandbox.renderCatalog();
   h.element('playlistLoop').checked=true;

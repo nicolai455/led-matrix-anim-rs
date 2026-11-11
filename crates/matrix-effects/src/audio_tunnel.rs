@@ -444,6 +444,8 @@ mod tests {
             effect.warp_boost > 0.0,
             "Beat should trigger forward warp rush boost"
         );
+        assert!(effect.smooth_level > 0.0);
+        assert!(effect.smooth_bands.iter().any(|value| *value > 0.0));
 
         // Test difference between silent and active audio render
         let mut effect_silent = AudioTunnelEffect::new();

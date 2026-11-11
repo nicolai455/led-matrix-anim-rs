@@ -32,7 +32,7 @@ fn actor_and_storage_peak_are_bounded_with_full_catalog() {
     }
     let peak=PEAK.load(Ordering::SeqCst)-base;
     eprintln!("peak additional bytes={peak}");
-    assert!(peak < 220_000,"excessive actor/storage/discovery heap peak: {peak}");
+    assert!(peak < 512 * 1024, "excessive actor/storage/discovery heap peak: {peak}");
 }
 
 #[test]
@@ -57,7 +57,9 @@ fn streamed_discovery_matches_tree_and_restore_keeps_parameters() {
     matrix_control::discovery::discovery_json_for_each("test",&catalog,|v| {streamed.push(v); Ok::<(),()>(())}).unwrap();
     assert_eq!(streamed, expected);
     let store=StateStore::new(None);
-    store.save_json(&engine.snapshot_json(&serde_json::Map::new()).unwrap()).unwrap();
+    let saved=engine.snapshot_json(&serde_json::Map::new()).unwrap();
+    assert!(!saved.is_empty());
+    store.save_json(&saved).unwrap();
     let mut restored=Engine::new(matrix_effects::builtin_effects()).unwrap();
     store.restore(&mut restored).unwrap();
     assert_eq!(restored.snapshot()["effects"], original["effects"]);

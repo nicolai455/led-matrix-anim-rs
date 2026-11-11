@@ -585,7 +585,7 @@ fn test_simulator_save_restart_persistence_and_frame_playback() {
     assert_eq!(restored_state["text"], "RESTART_VERIFIED");
     assert_eq!(restored_state["speed"], 42);
     assert_eq!(restored_state["cycle"], "ON");
-    assert_eq!(restored_state["audio_source"], "Synthetic");
+    assert_eq!(restored_state["audioSource"], "Synthetic");
 
     // Turn ON and verify frame animation playback resumes
     let (c, _) = http_post_json(

@@ -6,6 +6,25 @@ use std::sync::{Arc, Mutex};
 
 pub const MAX_API_BODY_BYTES: usize = 4096;
 
+#[cfg(target_os = "espidf")]
+fn trusted_request(
+    req: &mut embedded_svc::http::server::Request<
+        &mut esp_idf_svc::http::server::EspHttpConnection<'_>,
+    >,
+) -> bool {
+    let (headers, _) = req.split();
+    let origin = headers.header("Origin").map(str::to_owned);
+    let host = headers.header("Host").map(str::to_owned);
+    let marker = headers.header("X-Matrix-Control").map(str::to_owned);
+    let peer = req
+        .connection()
+        .raw_connection()
+        .ok()
+        .and_then(|raw| raw.source_ipv4().ok());
+    crate::request_guard::trusted_management_peer(peer)
+        && crate::request_guard::trusted_control(origin.as_deref(), host.as_deref(), marker.as_deref())
+}
+
 pub struct FirmwareHttpServer {
     #[cfg(target_os = "espidf")]
     _server: esp_idf_svc::http::server::EspHttpServer<'static>,
@@ -118,9 +137,7 @@ impl FirmwareHttpServer {
         let ota_for_network = Arc::clone(&ota_manager);
         server
             .fn_handler("/api/network", Method::Post, move |mut req| {
-                if !crate::request_guard::trusted_control(
-                    req.header("Origin"), req.header("Host"), req.header("X-Matrix-Control"),
-                ) {
+                if !trusted_request(&mut req) {
                     return send_response(req, HttpResponse::err_json(403, "Untrusted control request"));
                 }
                 if api_admission("POST", "/api/network", memory_is_low()) == ApiAdmission::Shed {
@@ -255,12 +272,8 @@ impl FirmwareHttpServer {
             .map_err(|e| e.to_string())?;
 
         server
-            .fn_handler("/api/recovery/retry", Method::Post, move |req| {
-                if !crate::request_guard::trusted_control(
-                    req.header("Origin"),
-                    req.header("Host"),
-                    req.header("X-Matrix-Control"),
-                ) {
+            .fn_handler("/api/recovery/retry", Method::Post, move |mut req| {
+                if !trusted_request(&mut req) {
                     return send_response(
                         req,
                         HttpResponse::err_json(403, "Untrusted control request"),
@@ -283,12 +296,8 @@ impl FirmwareHttpServer {
         // Recovery must not depend on the render actor or its command queue.
         // Register before the wildcard /api/* POST handler.
         server
-            .fn_handler("/api/reboot", Method::Post, move |req| {
-                if !crate::request_guard::trusted_control(
-                    req.header("Origin"),
-                    req.header("Host"),
-                    req.header("X-Matrix-Control"),
-                ) {
+            .fn_handler("/api/reboot", Method::Post, move |mut req| {
+                if !trusted_request(&mut req) {
                     return send_response(
                         req,
                         HttpResponse::err_json(403, "Untrusted control request"),
@@ -308,9 +317,7 @@ impl FirmwareHttpServer {
         let ctx = api_ctx.clone();
         server
             .fn_handler("/api/*", Method::Post, move |mut req| {
-                if !crate::request_guard::trusted_control(
-                    req.header("Origin"), req.header("Host"), req.header("X-Matrix-Control"),
-                ) {
+                if !trusted_request(&mut req) {
                     return send_response(req, HttpResponse::err_json(403, "Untrusted control request"));
                 }
                 if api_admission("POST", req.uri(), memory_is_low()) == ApiAdmission::Shed {
@@ -361,9 +368,7 @@ impl FirmwareHttpServer {
         let ota_mgr = ota_manager.clone();
         server
             .fn_handler("/update", Method::Post, move |mut req| {
-                if !crate::request_guard::trusted_control(
-                    req.header("Origin"), req.header("Host"), req.header("X-Matrix-Control"),
-                ) {
+                if !trusted_request(&mut req) {
                     return send_response(req, HttpResponse::err_json(403, "Untrusted firmware update request"));
                 }
                 let mut ota = match ota_mgr.lock() {
