@@ -420,6 +420,7 @@ let effectSearchQuery = '';
 let playlistEntries = [];
 let playlistCollection = { playlists: [], selectedId: null };
 let playlistDraftId = null;
+let playlistSelectionDraftId = null;
 let playlistDraftDirty = false;
 let playlistLoopDraft = false;
 let playlistAwaitingSnapshot = false;
@@ -1080,13 +1081,60 @@ async function controlPlaylist(action) {
   if (!['start', 'pause', 'resume', 'stop', 'next', 'previous'].includes(action)) return;
   const notice = document.getElementById('playlistNotice');
   try {
+    if (action === 'start') {
+      const collection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
+        ? state.playlistCollection : {playlists:[], selectedId:null};
+      let selectedId = document.getElementById('playlistSavedSelect').value || playlistSelectionDraftId || collection.selectedId;
+      if (selectedId && !collection.playlists.some(item => item.id === selectedId)) selectedId = collection.selectedId;
+      let selected = collection.playlists.find(item => item.id === selectedId);
+      const selectionDirty = !!selected && selectedId !== collection.selectedId;
+      if (playlistDraftDirty && playlistEntries.length) {
+        const entries = playlistEntries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
+        const loop = document.getElementById('playlistLoop').checked;
+        const builtInPreset = playlistDraftId === 'sound-default' && collection.playlists.some(item => item.id === 'sound-default');
+        if (builtInPreset) {
+          playlistDraftDirty = false;
+          playlistAwaitingSnapshot = false;
+          playlistLoopDraft = loop;
+          selectedId = 'sound-default';
+          selected = collection.playlists.find(item => item.id === selectedId);
+        } else if (selectionDirty) {
+          if (!selected || !playlistSnapshotMatchesDraft({entries:selected.entries,loop:selected.loop}, entries, loop)) {
+            throw new Error('Selected playlist has unsaved edits; save it before starting.');
+          }
+          playlistDraftDirty = false;
+          playlistAwaitingSnapshot = false;
+        } else {
+          const config = await postCommand('playlist_config', { entries, loop });
+          if (config && config.error) throw new Error(config.error);
+          await waitForPlaylistSnapshot(snapshot => playlistSnapshotMatchesDraft(snapshot.playlist, entries, loop));
+          playlistDraftDirty = false;
+          playlistAwaitingSnapshot = false;
+          playlistLoopDraft = loop;
+          selectedId = null;
+          selected = null;
+        }
+      }
+      const active = state.playlist && Array.isArray(state.playlist.entries) ? state.playlist : {entries:[]};
+      const selectedIsActive = selected && collection.selectedId === selected.id &&
+        playlistSnapshotMatchesDraft(active, selected.entries, selected.loop);
+      if (selected && !selectedIsActive) {
+        const selection = await postCommand('playlist_select', { id: selected.id });
+        if (selection && selection.error) throw new Error(selection.error);
+        await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+          snapshot.playlistCollection.selectedId === selected.id &&
+          playlistSnapshotMatchesDraft(snapshot.playlist, selected.entries, selected.loop));
+      } else if (!active.entries.length) {
+        throw new Error('Select a saved playlist or load and save a queue before starting.');
+      }
+    }
     const result = await postCommand('playlist_control', { action });
     if (result && result.error) throw new Error(result.error);
     playlistPersistenceNotice = '';
     notice.textContent = '';
   } catch (error) {
     playlistPersistenceNotice = '';
-    notice.textContent = 'Playlist ' + action + ' failed.';
+    notice.textContent = 'Playlist ' + action + ' failed: ' + String(error.message || error);
   }
 }
 
@@ -1112,7 +1160,7 @@ async function waitForPlaylistSnapshot(predicate, timeoutMs = 5000) {
 function renderPlaylistSelector() {
   const select = document.getElementById('playlistSavedSelect');
   if (!select) return;
-  const selected = playlistCollection.selectedId;
+  const selected = playlistSelectionDraftId || playlistCollection.selectedId || select.value;
   while (select.firstChild) select.removeChild(select.firstChild);
   playlistCollection.playlists.forEach(playlist => {
     const option = document.createElement('option');
@@ -1120,6 +1168,12 @@ function renderPlaylistSelector() {
     option.selected = playlist.id === selected;
     select.appendChild(option);
   });
+  if (selected && playlistCollection.playlists.some(playlist => playlist.id === selected)) {
+    select.value = selected;
+  } else {
+    playlistSelectionDraftId = null;
+    select.value = playlistCollection.selectedId || '';
+  }
 }
 
 function markPlaylistDraftDirty() {
@@ -1154,6 +1208,7 @@ function loadSelectedPlaylistDraft() {
   const id = document.getElementById('playlistSavedSelect').value;
   const saved = playlistCollection.playlists.find(item => item.id === id);
   if (!saved) return;
+  playlistSelectionDraftId = saved.id;
   playlistDraftId = saved.id;
   playlistEntries = saved.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
   playlistLoopDraft = saved.loop;
@@ -1175,6 +1230,7 @@ function loadSelectedPlaylistDraft() {
     await saveState();
     playlistDraftDirty = false;
     playlistCollection.selectedId = saved.id;
+    playlistSelectionDraftId = saved.id;
     document.getElementById('playlistNotice').textContent = 'Switched to ' + saved.name + '; playback remains stopped.';
     updatePlaylistUI();
   }).catch(error => { document.getElementById('playlistNotice').textContent = 'Playlist switch failed: ' + String(error.message || error); });
@@ -1323,23 +1379,18 @@ function updatePlaylistUI() {
   }
   playlistCollection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
     ? state.playlistCollection : {playlists:[], selectedId:null};
-  if (!playlistDraftDirty) playlistDraftId = playlistCollection.selectedId;
+  if (!playlistDraftDirty && !playlistSelectionDraftId) playlistDraftId = playlistCollection.selectedId;
   renderPlaylistSelector();
-  const selected = playlistCollection.playlists.find(item => item.id === playlistCollection.selectedId);
+  const selected = playlistCollection.playlists.find(item => item.id === (playlistSelectionDraftId || playlistCollection.selectedId));
+  const selectedPlaylist = playlistCollection.playlists.find(item => item.id === playlistDraftId);
   document.getElementById('playlistNameInput').value = selected ? selected.name : '';
-  document.getElementById('playlistSavedSelect').value = playlistCollection.selectedId || '';
-  if (!playlistDraftDirty && playlistDraftId) {
-    const selectedPlaylist = playlistCollection.playlists.find(item => item.id === playlistDraftId);
-    if (selectedPlaylist) {
-      playlistEntries = selectedPlaylist.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
-      playlistLoopDraft = !!selectedPlaylist.loop;
-      document.getElementById('playlistLoop').checked = playlistLoopDraft;
-    } else {
-      playlistEntries = snapshot.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
-      playlistLoopDraft = !!snapshot.loop;
-      document.getElementById('playlistLoop').checked = playlistLoopDraft;
-    }
-  } else if (playlistDraftDirty && !playlistDraftId) {
+  if (!playlistDraftDirty && selectedPlaylist) {
+    playlistEntries = selectedPlaylist.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
+    playlistLoopDraft = !!selectedPlaylist.loop;
+    document.getElementById('playlistLoop').checked = playlistLoopDraft;
+    renderPlaylistEntries(snapshot);
+  }
+  if (playlistDraftDirty && !playlistDraftId) {
     document.getElementById('playlistNotice').textContent = 'Unsaved changes in a new playlist.';
   }
   if (playlistAwaitingSnapshot && playlistSnapshotMatchesDraft(snapshot)) {
@@ -1384,7 +1435,15 @@ function updatePlaylistUI() {
   else if (notice.textContent.startsWith('Queue save failed') || notice.textContent.startsWith('Playlist ') || notice.textContent.startsWith('Queue command accepted')) {
     // Preserve a transient command status until replaced by the next operation.
   } else notice.textContent = '';
-  document.getElementById('playlistStartBtn').disabled = playlistDraftDirty || status === 'running' || !snapshot.entries.length;
+  if (playlistDraftDirty && playlistEntries.length &&
+      (!playlistDraftId || playlistCollection.playlists.some(item => item.id === playlistDraftId))) {
+    document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot;
+  } else {
+    const selectedId = document.getElementById('playlistSavedSelect').value;
+    const hasSelectedPlaylist = playlistCollection.playlists.some(item => item.id === selectedId);
+    document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot ||
+      (playlistDraftDirty && !!playlistEntries.length) || (!snapshot.entries.length && !hasSelectedPlaylist);
+  }
   document.getElementById('playlistPauseBtn').disabled = playlistDraftDirty || status !== 'running';
   document.getElementById('playlistResumeBtn').disabled = playlistDraftDirty || status !== 'paused';
   document.getElementById('playlistStopBtn').disabled = playlistDraftDirty || status === 'stopped';
@@ -1841,6 +1900,17 @@ async function init() {
     if (!playlistDraftId) await createNewPlaylistDraft();
     markPlaylistDraftDirty();
     document.getElementById('playlistNotice').textContent = '';
+    updatePlaylistUI();
+  });
+  document.getElementById('playlistSavedSelect').addEventListener('change', event => {
+    playlistSelectionDraftId = event.target.value || null;
+    if (!playlistDraftDirty) {
+      playlistDraftId = null;
+      playlistEntries = [];
+      playlistLoopDraft = false;
+      playlistAwaitingSnapshot = false;
+      playlistPersistenceNotice = '';
+    }
     updatePlaylistUI();
   });
   loadPreviewRenderer();

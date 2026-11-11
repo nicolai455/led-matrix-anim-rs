@@ -192,6 +192,7 @@ test('playlist inputs enforce engine limits and dynamic entry text uses safe DOM
 
 test('default sound playlist loads all 73 audio inventory effects at ten seconds and remains stopped until saved/started', () => {
   const h = harness();
+  vm.runInContext("playlistCollection={playlists:[{id:'sound-default',name:'Sound reactive',entries:defaultSoundPlaylistEntries().map(effectId=>({effectId,durationMs:10000})),loop:true}],selectedId:null}", h.sandbox);
   h.sandbox.loadDefaultSoundPlaylist();
   const entries = vm.runInContext('playlistEntries', h.sandbox);
   assert.equal(entries.length, 73);
@@ -356,6 +357,72 @@ test('saving a playlist persists the matching device snapshot across reboot', as
   assert.equal(h.requests[1].options.method, 'POST');
   await new Promise(resolve => setImmediate(resolve));
   assert.match(h.element('playlistNotice').textContent,/Queue saved to device storage/);
+});
+
+test('saved playlist choice survives state refresh and enables Start when runtime queue is empty', () => {
+  const h=harness();
+  vm.runInContext("playlistCollection={playlists:[{id:'saved',name:'Saved playlist',entries:[{effectId:'safe-id',durationMs:10000}],loop:true}],selectedId:null}; state={effect:'Rainbow',effect_id:'rainbow',cycle:'OFF',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0},playlistCollection}; catalog=[{id:'safe-id',name:'Safe effect'}]", h.sandbox);
+  h.sandbox.renderPlaylistSelector();
+  h.element('playlistSavedSelect').value='saved';
+  h.element('playlistSavedSelect').dispatchEvent?.({type:'change',target:h.element('playlistSavedSelect')});
+  vm.runInContext("playlistSelectionDraftId='saved'", h.sandbox);
+  h.sandbox.updatePlaylistUI();
+  assert.equal(h.element('playlistSavedSelect').value, 'saved');
+  assert.equal(vm.runInContext('playlistEntries.length', h.sandbox), 0);
+  assert.equal(h.element('playlistStartBtn').disabled, false);
+});
+
+test('Start selects the built-in 73-effect preset without resending its oversized queue', async () => {
+  const h=harness();
+  vm.runInContext("const entries=defaultSoundPlaylistEntries().map(effectId=>({effectId,durationMs:10000})); catalog=entries.map(entry=>({id:entry.effectId,name:entry.effectId})); playlistCollection={playlists:[{id:'sound-default',name:'Sound reactive',entries,loop:true}],selectedId:null}; state={cycle:'OFF',effect_id:'rainbow',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0},playlistCollection}; playlistEntries=entries; playlistLoopDraft=true; playlistDraftId='sound-default'; playlistDraftDirty=true; renderCatalog(); renderPlaylistSelector(); document.getElementById('playlistSavedSelect').value='sound-default';", h.sandbox);
+  vm.runInContext("playlistSelectionDraftId='sound-default'", h.sandbox);
+  h.sandbox.waitForPlaylistSnapshot = async predicate => {
+    vm.runInContext("state={...state,playlist:{entries:playlistCollection.playlists[0].entries,loop:true,status:'stopped',index:null,effectId:null,remainingMs:0},playlistCollection:{...playlistCollection,selectedId:'sound-default'}}", h.sandbox);
+    assert.equal(predicate(vm.runInContext('state', h.sandbox)), true);
+    return vm.runInContext('state', h.sandbox);
+  };
+  h.element('playlistStartBtn').disabled = false;
+  await h.sandbox.controlPlaylist('start');
+  assert.equal(vm.runInContext('playlistDraftDirty', h.sandbox), false);
+  assert.deepEqual(h.requests.map(request => JSON.parse(request.options.body).kind), ['playlist_select','playlist_control']);
+  assert.deepEqual(JSON.parse(h.requests[1].options.body), {kind:'playlist_control',payload:{action:'start'}});
+});
+
+test('Start applies a non-empty unsaved queue before starting it', async () => {
+  const h=harness();
+  vm.runInContext("catalog=[{id:'safe-id',name:'Safe effect'}]; playlistCollection={playlists:[],selectedId:null}; state={cycle:'OFF',effect_id:'manual',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0},playlistCollection}; playlistEntries=[{effectId:'safe-id',durationMs:10000}]; playlistLoopDraft=true; playlistDraftId='sound-default'; playlistDraftDirty=true; renderCatalog();", h.sandbox);
+  h.element('playlistLoop').checked = true;
+  h.sandbox.waitForPlaylistSnapshot = async predicate => {
+    const expected = [{effectId:'safe-id',durationMs:10000}];
+    assert.equal(vm.runInContext('playlistSnapshotMatchesDraft({entries:JSON.parse(' + JSON.stringify(JSON.stringify(expected)) + '),loop:true}, JSON.parse(' + JSON.stringify(JSON.stringify(expected)) + '), true)', h.sandbox), true);
+    vm.runInContext("state={...state,playlist:{entries:playlistEntries,loop:true,status:'stopped',index:null,effectId:null,remainingMs:0}}", h.sandbox);
+    assert.equal(predicate(vm.runInContext('state', h.sandbox)), true);
+    return vm.runInContext('state', h.sandbox);
+  };
+  h.element('playlistStartBtn').disabled = false;
+  await h.sandbox.controlPlaylist('start');
+  assert.deepEqual(h.requests.map(request => request.url), ['/api/command','/api/command'], h.element('playlistNotice').textContent);
+  assert.deepEqual(JSON.parse(h.requests[0].options.body), {kind:'playlist_config',payload:{entries:[{effectId:'safe-id',durationMs:10000}],loop:true}});
+  assert.deepEqual(JSON.parse(h.requests[1].options.body), {kind:'playlist_control',payload:{action:'start'}});
+});
+
+test('Start switches to a saved playlist that is not yet selected in runtime state', async () => {
+  const h=harness();
+  vm.runInContext("catalog=[{id:'safe-id',name:'Safe effect'},{id:'second',name:'Second effect'}]; playlistCollection={playlists:[{id:'saved',name:'Saved playlist',entries:[{effectId:'safe-id',durationMs:1000},{effectId:'second',durationMs:1000}],loop:true}],selectedId:null}; state={cycle:'OFF',effect_id:'manual',playlist:{entries:[],loop:false,status:'stopped',index:null,effectId:null,remainingMs:0},playlistCollection}; renderPlaylistSelector();", h.sandbox);
+  h.sandbox.renderCatalog();
+  h.sandbox.renderPlaylistSelector();
+  h.element('playlistSavedSelect').value='saved';
+  vm.runInContext("playlistSelectionDraftId='saved'", h.sandbox);
+  assert.equal(h.element('playlistStartBtn').disabled, false);
+  h.sandbox.waitForPlaylistSnapshot = async predicate => {
+    vm.runInContext("state={...state,playlist:{entries:playlistCollection.playlists[0].entries,loop:true,status:'stopped',index:null,effectId:null,remainingMs:0},playlistCollection:{...playlistCollection,selectedId:'saved'}}", h.sandbox);
+    assert.equal(predicate(vm.runInContext('state', h.sandbox)), true);
+    return vm.runInContext('state', h.sandbox);
+  };
+  await h.sandbox.controlPlaylist('start');
+  assert.deepEqual(h.requests.map(request => request.url), ['/api/command','/api/command']);
+  assert.deepEqual(JSON.parse(h.requests[0].options.body), {kind:'playlist_select',payload:{id:'saved'}});
+  assert.deepEqual(JSON.parse(h.requests[1].options.body), {kind:'playlist_control',payload:{action:'start'}});
 });
 
 test('playlist controls send Engine actions and display snapshot time without a client timer', async () => {
