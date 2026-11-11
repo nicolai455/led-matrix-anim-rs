@@ -188,7 +188,7 @@ impl ArcadeInvadersEffect {
                         let pixel_x = alien_x + dx;
                         let pixel_y = alien_y + dy;
                         if pixel_x == laser_x
-                            && Self::alien_pixel_on(row as usize, anim_frame, dx, dy)
+                            && Self::alien_pixel_on(row, anim_frame, dx, dy)
                             && path_max_y >= pixel_y as f32 - 0.5
                             && path_min_y <= pixel_y as f32 + 0.5
                         {
@@ -605,9 +605,11 @@ mod tests {
 
     #[test]
     fn emptied_or_descended_formation_restarts_at_top() {
-        let mut effect = ArcadeInvadersEffect::default();
-        effect.aliens_alive = [false; ALIEN_COUNT];
-        effect.values[1] = 0.0;
+        let mut effect = ArcadeInvadersEffect {
+            aliens_alive: [false; ALIEN_COUNT],
+            values: [35.0, 0.0, 0.0, 1.0],
+            ..Default::default()
+        };
         let audio = AudioSnapshot::default();
         let context = RenderContext {
             now_ms: 0,

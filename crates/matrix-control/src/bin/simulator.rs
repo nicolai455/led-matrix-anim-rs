@@ -141,19 +141,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         engine.apply("cycle", "ON")?;
     }
 
-    // 6. Restore saved runtime settings if state file exists
     let state_store = Arc::new(StateStore::new(args.state));
-    state_store
-        .restore(&mut engine)
-        .map_err(|e| format!("failed to restore state: {e}"))?;
-
-    // CRITICAL SAFETY INVARIANT: simulator always boots with LEDs OFF
-    let _ = engine.apply("light", "{\"state\":\"OFF\"}");
-
-    // 7. Spawn actor ControlHub
+    let saved_state = state_store.load();
+    if let Some(saved_state) = saved_state.as_ref() {
+        matrix_core::restore_runtime_state(&mut engine, &saved_state.to_string())?;
+    }
+    let has_default = saved_state.as_ref().and_then(|state| state.get("playlistCollection"))
+        .and_then(|collection| collection.get("playlists"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|playlists| playlists.iter().any(|playlist| playlist.get("id").and_then(serde_json::Value::as_str) == Some("sound-default")));
+    if !has_default {
+        engine.install_default_sound_playlist(matrix_effects::default_sound_playlist())?;
+    }
+    if !engine.is_on() {
+        engine.apply("light", r#"{"state":"OFF"}"#)?;
+    }
     let sink = Ws2812PacedSink::new();
     let hub =
         ControlHub::spawn(engine, sink, None).map_err(|e| format!("hub spawn failed: {e}"))?;
+    if saved_state.is_none() {
+        hub.set_default_sound_playlist(matrix_effects::default_sound_playlist())
+            .map_err(|error| format!("default sound playlist install failed: {error}"))?;
+    }
 
     let mic_controller = Arc::new(MicController::new(false));
     let api_ctx = Arc::new(ApiContext {

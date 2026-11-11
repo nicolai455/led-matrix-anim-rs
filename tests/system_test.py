@@ -95,6 +95,21 @@ def main():
             simulator = launch("simulator", [str(binary), "--listen", f"127.0.0.1:{http_port}", "--device-id", device, "--network", str(network)])
             state = eventually(lambda: read("/api/state"))
             assert state["state"] == "OFF", state
+            # A start-up barrier: wait for the retained online announcement before MQTT assertions.
+            online = eventually(
+                lambda: mqtt(
+                    "mosquitto_sub",
+                    "-t",
+                    base_topic + "/availability",
+                    "-C",
+                    "1",
+                    "-W",
+                    "3",
+                ).strip()
+                == "online",
+                timeout=20,
+            )
+            assert online
             oversized = urllib.request.Request(http + "/api/command", b"x" * 4097, {"Content-Type":"application/json"}, method="POST")
             try:
                 urllib.request.urlopen(oversized,timeout=2)

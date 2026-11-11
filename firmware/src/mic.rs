@@ -1,8 +1,8 @@
 use matrix_control::AudioInput;
+use matrix_core::AudioSnapshot;
 #[cfg(target_os = "espidf")]
 use matrix_core::audio::MicDsp;
 use matrix_core::audio::MicSettings;
-use matrix_core::AudioSnapshot;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -157,7 +157,8 @@ impl I2sMicAudioInput {
         &mut self,
         spawn: impl FnOnce(Arc<CaptureShared>) -> std::io::Result<std::thread::JoinHandle<()>>,
     ) {
-        if !self.available || self.worker_handle.is_some()
+        if !self.available
+            || self.worker_handle.is_some()
             || !self.shared.capture_enabled.load(Ordering::SeqCst)
         {
             return;
@@ -166,7 +167,9 @@ impl I2sMicAudioInput {
         let mut state = self.shared.quiesce.lock().unwrap();
         if !state.services_initialized
             || state.requested
-            || self.last_spawn_attempt.is_some_and(|at| at.elapsed() < Duration::from_secs(1))
+            || self
+                .last_spawn_attempt
+                .is_some_and(|at| at.elapsed() < Duration::from_secs(1))
         {
             return;
         }
@@ -382,7 +385,11 @@ impl I2sMicAudioInput {
                     .unwrap_or(false);
                 shared.reconfigure_channel.store(false, Ordering::SeqCst);
                 rx_chan = Self::init_hardware_channel(right_channel_active);
-                crate::memory_diagnostics::log_heap(if rx_chan.is_some() { "mic-started" } else { "mic-start-failed" });
+                crate::memory_diagnostics::log_heap(if rx_chan.is_some() {
+                    "mic-started"
+                } else {
+                    "mic-start-failed"
+                });
                 if rx_chan.is_some() {
                     log::info!("Microphone capture started");
                 }
@@ -671,8 +678,10 @@ mod quiesce_regressions {
 
     #[test]
     fn disable_failure_never_acknowledges_and_retries() {
-        let mut state = QuiesceState::default();
-        state.requested = true;
+        let mut state = QuiesceState {
+            requested: true,
+            ..Default::default()
+        };
         assert_eq!(state.step(|| false, || true), QuiesceStep::Paused);
         assert!(!state.confirmed);
         assert_eq!(state.step(|| true, || true), QuiesceStep::Paused);
@@ -681,8 +690,10 @@ mod quiesce_regressions {
 
     #[test]
     fn resume_enable_failure_is_retried_without_reading() {
-        let mut state = QuiesceState::default();
-        state.requested = true;
+        let mut state = QuiesceState {
+            requested: true,
+            ..Default::default()
+        };
         state.step(|| true, || true);
         state.resume();
         assert_eq!(state.step(|| true, || false), QuiesceStep::EnableFailed);
@@ -696,8 +707,10 @@ mod quiesce_regressions {
 
     #[test]
     fn resumed_request_cannot_inherit_previous_ack() {
-        let mut state = QuiesceState::default();
-        state.requested = true;
+        let mut state = QuiesceState {
+            requested: true,
+            ..Default::default()
+        };
         state.step(|| true, || true);
         state.resume();
         state.requested = true;

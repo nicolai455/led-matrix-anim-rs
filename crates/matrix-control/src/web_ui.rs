@@ -43,11 +43,25 @@ h2 { font-size:0.8rem; font-weight:600; margin-bottom:10px; color:var(--muted); 
 .status-dot.connected { background:var(--green); box-shadow:0 0 8px var(--green); }
 
 .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:14px; }
+summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
+summary::-webkit-details-marker { display:none; }
 .config-card { padding:0; overflow:hidden; }
 .config-card > summary { cursor:pointer; list-style:none; padding:18px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .config-card > summary::-webkit-details-marker { display:none; }
 .config-card > summary:after { content:'+'; color:var(--accent); font-size:1.4rem; }
 .config-card[open] > summary:after { content:'−'; }
+.config-card > summary[open] > .config-title { color:var(--text); }
+.section-disclosure { min-width:0; }
+.section-summary { cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 0 10px; }
+.section-summary::-webkit-details-marker { display:none; }
+.section-summary:after { content:'+'; color:var(--accent); font-size:1.4rem; }
+.section-disclosure[open] > .section-summary:after { content:'−'; }
+.section-summary strong { display:block; font-size:0.8rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+.section-summary small { display:block; color:var(--muted); font-size:0.78rem; line-height:1.5; margin-top:4px; }
+.effect-search-label { margin:2px 0 10px; }
+.effect-search-label input { min-height:40px; }
+.effects-grid[hidden] { display:none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
 .config-title { display:block; font-weight:600; font-size:1rem; }
 .config-subtitle, .config-help { display:block; color:var(--muted); font-size:0.78rem; line-height:1.5; margin-top:4px; }
 .config-body { padding:0 18px 18px; }
@@ -144,11 +158,12 @@ select option, .param-select option { background:var(--card); color:var(--text);
   </div>
 </div>
 
-<!-- Preview -->
+<!-- Live Preview -->
 <div class="card preview-wrap">
-  <h2>Live Preview</h2>
-  <canvas class="matrix-preview" id="previewCanvas" width="32" height="32" aria-label="LED matrix preview"></canvas>
-  <div class="preview-controls">
+  <details class="section-disclosure" id="previewDisclosure" open>
+    <summary class="section-summary"><span><strong>Live Preview</strong><small>Matrix output preview and rendering mode.</small></span></summary>
+    <canvas class="matrix-preview" id="previewCanvas" width="32" height="32" aria-label="LED matrix preview"></canvas>
+    <div class="preview-controls">
     <label for="previewMode">Preview rendering</label>
     <select id="previewMode" class="param-select" onchange="changePreviewMode()">
       <option value="browser">Browser · smooth, low ESP load</option>
@@ -156,95 +171,112 @@ select option, .param-select option { background:var(--card); color:var(--text);
       <option value="off">Off</option>
     </select>
     <p class="preview-note" id="previewStatus" role="status">Loading browser renderer…</p>
-  </div>
+    </div>
+  </details>
 </div>
 
 <!-- Brightness & Global Settings -->
 <div class="card">
-  <h2>Brightness & Global Settings</h2>
-  <div class="slider-row">
-    <label style="min-width:70px; font-size:0.85rem">Brightness</label>
-    <input type="range" id="brightnessSlider" min="0" max="255" value="128" oninput="brightVal.textContent=this.value" onchange="setBrightness(this.value)">
-    <span class="slider-val" id="brightVal">128</span>
-  </div>
-  <div class="slider-row" style="margin-top:12px">
-    <label style="min-width:70px; font-size:0.85rem">Color</label>
-    <input type="color" id="colorPicker" value="#ffffff" onchange="setColorHex(this.value)">
-  </div>
-  <div class="slider-row" style="margin-top:12px">
-    <label style="min-width:70px; font-size:0.85rem">Message</label>
-    <input type="text" id="textInput" style="flex:1; background:var(--card-hover); border:1px solid var(--border); border-radius:6px; padding:6px 8px; color:var(--text)" placeholder="HELLO" onchange="setText(this.value)">
-  </div>
-  <div class="slider-row" style="margin-top:12px">
-    <label style="min-width:70px; font-size:0.85rem">Speed (px/s)</label>
-    <input type="range" id="speedSlider" min="0" max="120" value="30" oninput="speedVal.textContent=this.value" onchange="setSpeed(this.value)">
-    <span class="slider-val" id="speedVal">30</span>
-  </div>
-  <div class="slider-row" style="margin-top:12px">
-    <label style="min-width:70px; font-size:0.85rem">Auto Cycle</label>
-    <label class="toggle">
-      <input type="checkbox" id="cycleToggle" onchange="setCycle(this.checked)">
-      <span class="toggle-track"></span>
-    </label>
-  </div>
+  <details class="section-disclosure" id="globalDisclosure" open>
+    <summary class="section-summary"><span><strong>Brightness &amp; global settings</strong><small>Set output intensity, color, message, and auto cycle.</small></span></summary>
+    <div class="slider-row">
+      <label style="min-width:70px; font-size:0.85rem">Brightness</label>
+      <input type="range" id="brightnessSlider" min="0" max="255" value="128" oninput="brightVal.textContent=this.value" onchange="setBrightness(this.value)">
+      <span class="slider-val" id="brightVal">128</span>
+    </div>
+    <div class="slider-row" style="margin-top:12px">
+      <label style="min-width:70px; font-size:0.85rem">Color</label>
+      <input type="color" id="colorPicker" value="#ffffff" onchange="setColorHex(this.value)">
+    </div>
+    <div class="slider-row" style="margin-top:12px">
+      <label style="min-width:70px; font-size:0.85rem">Message</label>
+      <input type="text" id="textInput" style="flex:1; background:var(--card-hover); border:1px solid var(--border); border-radius:6px; padding:6px 8px; color:var(--text)" placeholder="HELLO" onchange="setText(this.value)">
+    </div>
+    <div class="slider-row" style="margin-top:12px">
+      <label style="min-width:70px; font-size:0.85rem">Speed (px/s)</label>
+      <input type="range" id="speedSlider" min="0" max="120" value="30" oninput="speedVal.textContent=this.value" onchange="setSpeed(this.value)">
+      <span class="slider-val" id="speedVal">30</span>
+    </div>
+    <div class="slider-row" style="margin-top:12px">
+      <label style="min-width:70px; font-size:0.85rem">Auto Cycle</label>
+      <label class="toggle">
+        <input type="checkbox" id="cycleToggle" onchange="setCycle(this.checked)">
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+  </details>
 </div>
 
 <!-- Effects -->
-<div class="card">
-  <h2>Effects</h2>
-  <div class="effects-grid" id="effectsGrid"></div>
+<div class="card" id="effectsCard">
+  <details class="section-disclosure" id="effectsDisclosure" open>
+    <summary class="section-summary"><span><strong>Effects</strong><small>Find and select an effect from the catalog.</small></span></summary>
+    <label class="config-field effect-search-label" for="effectSearch">Search effects<input type="search" id="effectSearch" placeholder="Name or effect ID" autocomplete="off" aria-controls="effectsGrid"></label>
+    <p id="effectSearchStatus" class="playlist-status" role="status" aria-live="polite"></p>
+    <div class="effects-grid" id="effectsGrid"></div>
+  </details>
 </div>
 
 <!-- Custom effect playlist -->
 <div class="card" id="playlistCard">
-  <h2>Custom Effect Playlist</h2>
-  <p class="config-help">Select effects by stable catalog ID and set each duration from 1 second to 24 hours. Saving the queue stops current playback. The device snapshot is authoritative for current entry and time remaining.</p>
-  <div class="config-grid">
-    <label class="config-field" for="playlistEffectSelect">Effect<select id="playlistEffectSelect"></select></label>
-    <label class="config-field" for="playlistDurationInput">Duration (ms)<input type="number" id="playlistDurationInput" min="1000" max="86400000" step="1" value="30000" inputmode="numeric"></label>
-  </div>
-  <div class="btn-row"><button class="btn" id="playlistAddBtn" onclick="addPlaylistEntry()">Add effect</button></div>
-  <div class="playlist-list" id="playlistEntries" aria-live="polite"></div>
-  <label class="config-check"><input type="checkbox" id="playlistLoop"> Loop playlist</label>
-  <div class="btn-row"><button class="btn btn-primary" id="playlistApplyBtn" onclick="applyPlaylistConfig()">Save queue</button></div>
-  <div class="btn-row">
-    <button class="btn btn-primary" id="playlistStartBtn" onclick="controlPlaylist('start')">Start</button>
-    <button class="btn" id="playlistPauseBtn" onclick="controlPlaylist('pause')">Pause</button>
-    <button class="btn" id="playlistResumeBtn" onclick="controlPlaylist('resume')">Resume</button>
-    <button class="btn btn-danger" id="playlistStopBtn" onclick="controlPlaylist('stop')">Stop</button>
-    <button class="btn" id="playlistPreviousBtn" onclick="controlPlaylist('previous')">Previous</button>
-    <button class="btn" id="playlistNextBtn" onclick="controlPlaylist('next')">Next</button>
-  </div>
-  <div class="playlist-status" id="playlistCurrent" role="status">Current entry: —</div>
-  <div class="playlist-status" id="playlistRemaining">Time remaining: —</div>
-  <div class="playlist-status" id="playlistNotice" role="status" aria-live="polite"></div>
+  <details class="section-disclosure" id="playlistDisclosure">
+    <summary class="section-summary"><span><strong>Custom Effect Playlist</strong><small>Build queues, save playlists, and control playback.</small></span></summary>
+    <p class="config-help">Save multiple named playlists, switch between them, and configure each effect by stable catalog ID. The looping sound-reactive preset loads all 73 inventoried effects for 10 seconds each. Saving or selecting a playlist does not start playback; use Start explicitly. The device snapshot remains authoritative for current entry and time remaining.</p>
+    <div class="config-grid">
+      <label class="config-field" for="playlistSavedSelect">Saved playlist<select id="playlistSavedSelect"></select></label>
+      <label class="config-field" for="playlistNameInput">Playlist name<input type="text" id="playlistNameInput" maxlength="64" placeholder="My playlist"></label>
+      <label class="config-field" for="playlistEffectSelect">Effect<select id="playlistEffectSelect"></select></label>
+      <label class="config-field" for="playlistDurationInput">Duration (ms)<input type="number" id="playlistDurationInput" min="1000" max="86400000" step="1" value="30000" inputmode="numeric"></label>
+    </div>
+    <div class="btn-row"><button class="btn" id="playlistNewBtn">New playlist</button><button class="btn" id="playlistSelectBtn">Switch playlist</button><button class="btn" id="playlistDeleteBtn">Delete playlist</button><button class="btn" id="playlistDefaultBtn">Load sound-reactive default (10 s each)</button></div>
+    <div class="btn-row"><button class="btn" id="playlistAddBtn" onclick="addPlaylistEntry()">Add effect</button></div>
+    <div class="playlist-list" id="playlistEntries" aria-live="polite"></div>
+    <label class="config-check"><input type="checkbox" id="playlistLoop"> Loop playlist</label>
+    <div class="btn-row"><button class="btn btn-primary" id="playlistApplyBtn" onclick="applyPlaylistConfig()">Save queue</button></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="playlistStartBtn" onclick="controlPlaylist('start')">Start</button>
+      <button class="btn" id="playlistPauseBtn" onclick="controlPlaylist('pause')">Pause</button>
+      <button class="btn" id="playlistResumeBtn" onclick="controlPlaylist('resume')">Resume</button>
+      <button class="btn btn-danger" id="playlistStopBtn" onclick="controlPlaylist('stop')">Stop</button>
+      <button class="btn" id="playlistPreviousBtn" onclick="controlPlaylist('previous')">Previous</button>
+      <button class="btn" id="playlistNextBtn" onclick="controlPlaylist('next')">Next</button>
+    </div>
+    <div class="playlist-status" id="playlistCurrent" role="status">Current entry: —</div>
+    <div class="playlist-status" id="playlistRemaining">Time remaining: —</div>
+    <div class="playlist-status" id="playlistNotice" role="status" aria-live="polite"></div>
+  </details>
 </div>
 
 <!-- Dynamic Effect Parameters -->
 <div class="card" id="paramsCard" style="display:none">
-  <h2 id="paramsTitle">Effect Parameters</h2>
-  <div id="paramsContainer"></div>
+  <details class="section-disclosure" id="paramsDisclosure">
+    <summary class="section-summary"><span><strong id="paramsTitle">Effect Parameters</strong><small>Adjust the selected effect.</small></span></summary>
+    <div id="paramsContainer"></div>
+  </details>
 </div>
 
 <!-- Audio -->
-<div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-    <h2 style="margin:0">Audio Reactivity</h2>
-    <button class="btn" id="audioSoundBtn" style="padding:4px 10px; font-size:0.8rem; display:none" onclick="toggleAudioPreviewSound()">🔊 Listen to Synth</button>
-  </div>
-  <div class="audio-btns">
-    <div class="audio-btn" id="audioOff" onclick="setAudio('Off')">Off</div>
-    <div class="audio-btn" id="audioSynthetic" onclick="setAudio('Synthetic')">Synthetic</div>
-    <div class="audio-btn" id="audioMic" onclick="setAudio('Mic')">Microphone</div>
-  </div>
-  <div id="audioVisualizer" style="display:none">
-    <div class="bands-grid" id="bandsGrid"></div>
-  </div>
+<div class="card" id="audioCard">
+  <details class="section-disclosure" id="audioDisclosure" open>
+    <summary class="section-summary"><span><strong>Audio Reactivity</strong><small>Choose the signal source and inspect frequency bands.</small></span></summary>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <span></span>
+      <button class="btn" id="audioSoundBtn" style="padding:4px 10px; font-size:0.8rem; display:none" onclick="toggleAudioPreviewSound()">🔊 Listen to Synth</button>
+    </div>
+    <div class="audio-btns">
+      <div class="audio-btn" id="audioOff" onclick="setAudio('Off')">Off</div>
+      <div class="audio-btn" id="audioSynthetic" onclick="setAudio('Synthetic')">Synthetic</div>
+      <div class="audio-btn" id="audioMic" onclick="setAudio('Mic')">Microphone</div>
+    </div>
+    <div id="audioVisualizer" style="display:none">
+      <div class="bands-grid" id="bandsGrid"></div>
+    </div>
+  </details>
 </div>
 
 <!-- Microphone Tuning & DSP -->
 <details class="card" id="micCard">
-  <summary style="cursor:pointer; font-weight:600; color:var(--text); font-size:0.9rem;">MICROPHONE TUNING & DSP</summary>
+  <summary class="section-summary"><span><strong>Microphone tuning &amp; DSP</strong><small>Input levels, sensitivity, and microphone channel.</small></span></summary>
   <div style="margin-top:12px">
     <div style="display:flex; gap:6px; margin-bottom:10px">
       <button class="btn" style="flex:1" onclick="applyMicPreset('balanced')">Balanced</button>
@@ -298,10 +330,12 @@ select option, .param-select option { background:var(--card); color:var(--text);
   <summary><span><span class="config-title">Wi-Fi and fallback access point</span><span class="config-subtitle">Configure prioritized station profiles and local setup access</span></span></summary>
   <div class="config-body">
     <p class="config-notice">The AP WPA2 passphrase protects local configuration; the UI has no separate login. Stored passphrases are never returned by the API. Blank fields keep existing secrets; use the explicit clear action to remove one. Changes trigger a controlled restart after save; reconnect at <code>http://192.168.4.1/</code>.</p>
-    <div class="config-grid"><label class="config-field">New profile SSID<input id="networkSsid" maxlength="32" autocomplete="off"></label><label class="config-field">New profile password<input id="networkPassword" type="password" autocomplete="new-password"></label><label class="config-field">Priority<input id="networkPriority" type="number" min="0" max="255" value="0"></label><label class="config-check"><input id="networkHidden" type="checkbox"> Hidden SSID</label></div>
+    <div class="config-grid"><label class="config-field">New profile SSID<input id="networkSsid" maxlength="32" autocomplete="off"></label><label class="config-field">Priority<input id="networkPriority" type="number" min="0" max="255" value="0"></label><label class="config-check"><input id="networkHidden" type="checkbox"> Hidden SSID</label></div>
+    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="networkPassword">New profile password</label><input id="networkPassword" type="password" autocomplete="new-password" aria-label="New profile password"></div></form>
     <div class="btn-row"><button class="btn" id="networkAddProfileBtn" type="button">Add Wi-Fi profile</button></div>
     <div class="playlist-list" id="networkProfiles" aria-live="polite"></div>
-    <div class="config-grid"><label class="config-field">Fallback AP SSID<input id="fallbackApSsid" maxlength="32"></label><label class="config-field">New AP password<input id="fallbackApPassword" type="password" autocomplete="new-password"></label></div>
+    <div class="config-grid"><label class="config-field">Fallback AP SSID<input id="fallbackApSsid" maxlength="32"></label></div>
+    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="fallbackApPassword">New AP password</label><input id="fallbackApPassword" type="password" autocomplete="new-password" aria-label="New AP password"></div></form>
     <label class="config-check"><input id="fallbackApPasswordClear" type="checkbox"> Clear saved AP password and disable fallback AP</label>
     <div class="btn-row"><button class="btn btn-primary" id="networkSaveBtn" type="button">Save Wi-Fi settings</button><span id="networkStatus" role="status" aria-live="polite"></span></div>
   </div>
@@ -347,7 +381,7 @@ select option, .param-select option { background:var(--card); color:var(--text);
 
 <!-- Diagnostics & Telemetry -->
 <details class="card" id="diagCard">
-  <summary style="cursor:pointer; font-weight:600; color:var(--text); font-size:0.9rem;">DIAGNOSTICS & TELEMETRY</summary>
+  <summary class="section-summary"><span><strong>Diagnostics &amp; telemetry</strong><small>Firmware, output status, and performance information.</small></span></summary>
   <div style="margin-top:10px; font-size:0.85rem; display:grid; grid-template-columns:1fr 1fr; gap:8px">
     <div>FPS: <strong id="diagFps">--</strong></div>
     <div>Uptime: <strong id="diagUptime">--</strong></div>
@@ -362,13 +396,15 @@ select option, .param-select option { background:var(--card); color:var(--text);
 
 <!-- Persistence & Config -->
 <div class="card">
-  <h2>Runtime state &amp; device</h2>
-  <p class="config-help" style="margin-bottom:10px">Save or clear the current runtime state separately from hardware configuration.</p>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="saveState()">Save runtime state</button>
-    <button class="btn btn-danger" onclick="clearState()">Clear runtime state</button>
-    <button class="btn" id="restartBtn" onclick="restartDevice()">Restart Device</button>
-  </div>
+  <details class="section-disclosure" id="persistenceDisclosure">
+    <summary class="section-summary"><span><strong>Runtime state &amp; device</strong><small>Save settings to device storage or restart.</small></span></summary>
+    <p class="config-help" style="margin-bottom:10px">Save or clear the current runtime state separately from hardware configuration.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveState()">Save runtime state</button>
+      <button class="btn btn-danger" onclick="clearState()">Clear runtime state</button>
+      <button class="btn" id="restartBtn" onclick="restartDevice()">Restart Device</button>
+    </div>
+  </details>
 </div>
 
 <div class="footer" id="footer">
@@ -380,7 +416,10 @@ select option, .param-select option { background:var(--card); color:var(--text);
 <script>
 let state = {};
 let catalog = [];
+let effectSearchQuery = '';
 let playlistEntries = [];
+let playlistCollection = { playlists: [], selectedId: null };
+let playlistDraftId = null;
 let playlistDraftDirty = false;
 let playlistLoopDraft = false;
 let playlistAwaitingSnapshot = false;
@@ -389,7 +428,7 @@ let playlistSaveVersion = 0;
 let playlistPendingPersistence = null;
 let playlistPersistenceNotice = '';
 let lastRenderedPlaylistView = '';
-const MAX_PLAYLIST_ENTRIES = 32;
+const MAX_PLAYLIST_ENTRIES = 73;
 const MIN_PLAYLIST_ENTRY_MS = 1000;
 const MAX_PLAYLIST_ENTRY_MS = 86400000;
 let loadedConfig = {};
@@ -665,7 +704,7 @@ async function postCommand(kind, payload) {
   try {
     const r = await fetch('/api/command', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' },
       body: JSON.stringify({ kind, payload })
     });
     const data = await r.json();
@@ -810,24 +849,36 @@ async function saveNetworkConfig() {
     mqttHost: config.mqttHost || '', mqttPort: config.mqttPort || 1883,
     mqttUser: config.mqttUser || '',
   };
-  if (password) payload.fallbackApPassword = password;
-  if (networkPassword) {
-    const ssid = document.getElementById('networkSsid').value;
-    const index = Number(document.getElementById('networkSsid').dataset.editIndex);
-    let target = Number.isInteger(index) && index >= 0 ? payload.wifiProfiles[index] : null;
-    if (!target) {
-      const priority = Number(document.getElementById('networkPriority').value);
-      const hidden = document.getElementById('networkHidden').checked;
-      target = { ssid, priority, hidden };
-      payload.wifiProfiles.push(target);
-    }
-    if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || new TextEncoder().encode(networkPassword).length < 8 || !Number.isInteger(target.priority) || target.priority < 0 || target.priority > 255) {
-      status.textContent = 'Finish the Wi-Fi profile fields with a valid SSID, password, and priority before saving.';
+  const ssidEl = document.getElementById('networkSsid');
+  const editIndex = Number(ssidEl.dataset.editIndex);
+  if (ssidEl.value || networkPassword || ssidEl.dataset.editIndex !== undefined) {
+    const ssid = ssidEl.value;
+    const priority = Number(document.getElementById('networkPriority').value);
+    const hidden = document.getElementById('networkHidden').checked;
+    const existing = Number.isInteger(editIndex) && editIndex >= 0 ? payload.wifiProfiles[editIndex] : null;
+    const profile = existing || {};
+    if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || !Number.isInteger(priority) || priority < 0 || priority > 255 || (networkPassword && new TextEncoder().encode(networkPassword).length < 8)) {
+      status.textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes.';
       return;
     }
-    target.password = networkPassword;
-    delete target.keepPassword;
+    if (!existing && payload.wifiProfiles.length >= 5) {
+      status.textContent = 'At most five Wi-Fi profiles are supported.';
+      return;
+    }
+    if (!existing && payload.wifiProfiles.some(item => item.ssid === ssid)) {
+      status.textContent = 'That SSID is already configured; edit its existing entry.';
+      return;
+    }
+    Object.assign(profile, { ssid, priority, hidden });
+    if (networkPassword) {
+      profile.password = networkPassword;
+      delete profile.keepPassword;
+    } else if (existing && existing.passwordConfigured) {
+      profile.keepPassword = true;
+    }
+    if (!existing) payload.wifiProfiles.push(profile);
   }
+  if (password) payload.fallbackApPassword = password;
   if (document.getElementById('fallbackApPasswordClear').checked) payload.clearFallbackApPassword = true;
   try {
     const response = await fetch('/api/network', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' }, body: JSON.stringify(payload) });
@@ -928,7 +979,13 @@ function renderPlaylistEntries(snapshot) {
   }
 }
 
-function addPlaylistEntry() {
+function ensurePlaylistDraft() {
+  if (playlistDraftId) return;
+  playlistDraftId = 'playlist-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  document.getElementById('playlistNameInput').value = '';
+}
+
+async function addPlaylistEntry() {
   const select = document.getElementById('playlistEffectSelect');
   const duration = document.getElementById('playlistDurationInput').value.trim();
   const effectId = select.value;
@@ -942,41 +999,34 @@ function addPlaylistEntry() {
     return;
   }
   if (playlistEntries.length >= MAX_PLAYLIST_ENTRIES) {
-    notice.textContent = 'A playlist can contain at most 32 entries.';
+    notice.textContent = 'A playlist can contain at most 73 entries.';
     return;
   }
+  ensurePlaylistDraft();
   playlistEntries.push({ effectId, durationMs: Number(duration) });
-  playlistSaveVersion++;
-  playlistPersistenceNotice = '';
-  document.getElementById('playlistNotice').textContent = '';
-  playlistDraftDirty = true;
-  playlistAwaitingSnapshot = false;
+  markPlaylistDraftDirty();
   notice.textContent = '';
   updatePlaylistUI();
 }
 
-function removePlaylistEntry(index) {
+async function removePlaylistEntry(index) {
   if (!Number.isInteger(index) || index < 0 || index >= playlistEntries.length) return;
   playlistEntries.splice(index, 1);
-  playlistSaveVersion++;
-  playlistPersistenceNotice = '';
-  playlistDraftDirty = true;
-  playlistAwaitingSnapshot = false;
+  ensurePlaylistDraft();
+  markPlaylistDraftDirty();
   updatePlaylistUI();
 }
 
-function movePlaylistEntry(index, offset) {
+async function movePlaylistEntry(index, offset) {
   const target = index + offset;
   if (!Number.isInteger(index) || !Number.isInteger(offset) || target < 0 || target >= playlistEntries.length) return;
   [playlistEntries[index], playlistEntries[target]] = [playlistEntries[target], playlistEntries[index]];
-  playlistSaveVersion++;
-  playlistPersistenceNotice = '';
-  playlistDraftDirty = true;
-  playlistAwaitingSnapshot = false;
+  ensurePlaylistDraft();
+  markPlaylistDraftDirty();
   updatePlaylistUI();
 }
 
-function setPlaylistDuration(index, value, input) {
+async function setPlaylistDuration(index, value, input) {
   const entry = playlistEntries[index];
   if (!entry) return;
   const trimmed = String(value).trim();
@@ -987,10 +1037,8 @@ function setPlaylistDuration(index, value, input) {
     return;
   }
   entry.durationMs = Number(trimmed);
-  playlistSaveVersion++;
-  playlistPersistenceNotice = '';
-  playlistDraftDirty = true;
-  playlistAwaitingSnapshot = false;
+  ensurePlaylistDraft();
+  markPlaylistDraftDirty();
   notice.textContent = '';
   lastRenderedPlaylistView = '';
   updatePlaylistUI();
@@ -1052,6 +1100,177 @@ function formatPlaylistTime(value) {
     : minutes ? minutes + 'm ' + String(seconds).padStart(2, '0') + 's' : seconds + 's';
 }
 
+async function waitForPlaylistSnapshot(predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate(state)) return state;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error('Timed out waiting for the device playlist snapshot.');
+}
+
+function renderPlaylistSelector() {
+  const select = document.getElementById('playlistSavedSelect');
+  if (!select) return;
+  const selected = playlistCollection.selectedId;
+  while (select.firstChild) select.removeChild(select.firstChild);
+  playlistCollection.playlists.forEach(playlist => {
+    const option = document.createElement('option');
+    option.value = playlist.id; option.textContent = playlist.name;
+    option.selected = playlist.id === selected;
+    select.appendChild(option);
+  });
+}
+
+function markPlaylistDraftDirty() {
+  playlistSaveVersion++;
+  playlistPersistenceNotice = '';
+  playlistDraftDirty = true;
+  playlistAwaitingSnapshot = false;
+}
+
+async function createNewPlaylistDraft() {
+  if (!playlistDraftDirty && playlistDraftId) {
+    const selected = playlistCollection.playlists.find(item => item.id === playlistDraftId);
+    if (selected) {
+      playlistEntries = selected.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
+      playlistLoopDraft = !!selected.loop;
+    }
+  }
+  playlistDraftId = 'playlist-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  playlistEntries = [];
+  playlistLoopDraft = true;
+  document.getElementById('playlistNameInput').value = '';
+  document.getElementById('playlistLoop').checked = true;
+  markPlaylistDraftDirty();
+  updatePlaylistUI();
+}
+
+function loadSelectedPlaylistDraft() {
+  if (playlistDraftDirty) {
+    document.getElementById('playlistNotice').textContent = 'Save or discard the current unsaved playlist before switching.';
+    return;
+  }
+  const id = document.getElementById('playlistSavedSelect').value;
+  const saved = playlistCollection.playlists.find(item => item.id === id);
+  if (!saved) return;
+  playlistDraftId = saved.id;
+  playlistEntries = saved.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
+  playlistLoopDraft = saved.loop;
+  document.getElementById('playlistNameInput').value = saved.name;
+  document.getElementById('playlistLoop').checked = saved.loop;
+  markPlaylistDraftDirty();
+  document.getElementById('playlistSavedSelect').value = saved.id;
+  postCommand('playlist_select', {id:saved.id}).then(async result => {
+    if (result && result.error) throw new Error(result.error);
+    if (result && result.pending) {
+      playlistDraftDirty = true;
+      playlistAwaitingSnapshot = true;
+      playlistPersistenceNotice = 'Switch queued; waiting for matching device snapshot before saving.';
+      updatePlaylistUI();
+      return;
+    }
+    await waitForPlaylistSnapshot(s => s.playlistCollection && s.playlistCollection.selectedId === saved.id &&
+      playlistSnapshotMatchesDraft(s.playlist, saved.entries, saved.loop));
+    await saveState();
+    playlistDraftDirty = false;
+    playlistCollection.selectedId = saved.id;
+    document.getElementById('playlistNotice').textContent = 'Switched to ' + saved.name + '; playback remains stopped.';
+    updatePlaylistUI();
+  }).catch(error => { document.getElementById('playlistNotice').textContent = 'Playlist switch failed: ' + String(error.message || error); });
+  updatePlaylistUI();
+}
+
+function loadDefaultSoundPlaylist() {
+  playlistDraftId = 'sound-default';
+  document.getElementById('playlistNameInput').value = 'Sound reactive';
+  playlistEntries = defaultSoundPlaylistEntries().map(effectId => ({effectId,durationMs:10000}));
+  playlistLoopDraft = true;
+  document.getElementById('playlistLoop').checked = true;
+  markPlaylistDraftDirty();
+  updatePlaylistUI();
+  document.getElementById('playlistNotice').textContent = 'Loaded ' + playlistEntries.length + ' audio-inventory effects at 10 seconds each. Save queue to store it.';
+}
+
+async function saveNamedPlaylist() {
+  const name = document.getElementById('playlistNameInput').value.trim();
+  if (!name || new TextEncoder().encode(name).length > 64 || !playlistEntries.length || playlistEntries.length > MAX_PLAYLIST_ENTRIES) {
+    document.getElementById('playlistNotice').textContent = 'Give the playlist a 1–64 byte name and add 1–73 valid entries.';
+    return;
+  }
+  if (playlistEntries.some(entry => !playlistEffect(entry.effectId) || !Number.isSafeInteger(entry.durationMs) || entry.durationMs < MIN_PLAYLIST_ENTRY_MS || entry.durationMs > MAX_PLAYLIST_ENTRY_MS)) {
+    document.getElementById('playlistNotice').textContent = 'Playlist contains an invalid effect or duration.';
+    return;
+  }
+  if (!playlistDraftId) await createNewPlaylistDraft();
+  const version = playlistSaveVersion;
+  const payload = {id:playlistDraftId,name,entries:playlistEntries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs})),loop:playlistLoopDraft};
+  playlistDraftDirty = true;
+  const response = await postCommand('playlist_save', payload);
+  if (response && response.error) {
+    document.getElementById('playlistNotice').textContent = 'Playlist save failed: ' + response.error;
+    return;
+  }
+  playlistAwaitingSnapshot = true;
+  if (response && response.pending) {
+    playlistPersistenceNotice = 'Playlist save queued; waiting for matching device snapshot.';
+  }
+  try {
+    await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+      snapshot.playlistCollection.selectedId === payload.id &&
+      snapshot.playlistCollection.playlists && snapshot.playlistCollection.playlists.some(item =>
+        item.id === payload.id && item.name === payload.name && item.loop === payload.loop &&
+        playlistSnapshotMatchesDraft({entries:item.entries,loop:item.loop}, payload.entries, payload.loop)) &&
+      playlistSnapshotMatchesDraft(snapshot.playlist, payload.entries, payload.loop));
+    if (version !== playlistSaveVersion || !playlistDraftDirty) throw new Error('Playlist draft changed while save was pending.');
+    if (state.playlistCollection && state.playlistCollection.selectedId === payload.id &&
+      state.playlistCollection.playlists.some(item => item.id === payload.id && item.name === payload.name && item.loop === payload.loop &&
+        playlistSnapshotMatchesDraft({entries:item.entries,loop:item.loop}, payload.entries, payload.loop))) {
+      playlistCollection = state.playlistCollection;
+      await saveState();
+      playlistDraftDirty = false;
+      playlistAwaitingSnapshot = false;
+      renderPlaylistSelector();
+      document.getElementById('playlistNotice').textContent = 'Saved playlist “' + name + '”. Playback remains stopped.';
+    } else {
+      throw new Error('Matching playlist snapshot was not reflected in the editor.');
+    }
+  } catch (error) {
+    playlistDraftDirty = true;
+    playlistAwaitingSnapshot = false;
+    playlistPersistenceNotice = '';
+    document.getElementById('playlistNotice').textContent = 'Playlist active but persistent state save failed: ' + String(error.message || error);
+  }
+  updatePlaylistUI();
+}
+
+function deleteSelectedPlaylist() {
+  const id = document.getElementById('playlistSavedSelect').value;
+  if (!id) return;
+  postCommand('playlist_delete', {id}).then(async result => {
+    if (result && result.error) throw new Error(result.error);
+    if (result && result.pending) {
+      document.getElementById('playlistNotice').textContent = 'Delete queued; waiting for matching device snapshot.';
+      await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+        !snapshot.playlistCollection.playlists.some(item => item.id === id) &&
+        snapshot.playlistCollection.selectedId !== id);
+    } else {
+      await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+        !snapshot.playlistCollection.playlists.some(item => item.id === id) &&
+        snapshot.playlistCollection.selectedId !== id);
+    }
+    playlistCollection = state.playlistCollection;
+    renderPlaylistSelector();
+    await saveState();
+    document.getElementById('playlistNotice').textContent = 'Playlist deleted.';
+  }).catch(error => { document.getElementById('playlistNotice').textContent = 'Playlist delete failed: ' + String(error.message || error); });
+}
+
+function defaultSoundPlaylistEntries() {
+  // Kept in sync with AUDIO_EFFECT_REVIEW.md's 73-ID inventory and the Rust catalogue.
+  return ['arcade_invaders','audio_mesh','audio_pulse','audio_tunnel','audio_waveform','black_hole','bongo_cat','bouncing_speakers','chaser_cannons','cyber_rain','cyber_tunnel','dancing_banana','dancing_skeleton','derby_flower','disco_ball','disco_floor','disco_pinwheel','dna_spiral','doge_wow','domain_warp','equalizer_city','fire','fire_tornado','fireworks','freq_bars','flappy_bird','galaxy_spiral','game_of_life','hamster_dance','hazard_pulsar','hypno_spirals','julia_orbit','kaleidoscope','laser_harp','laser_scanner','laser_show','lava_lamp','liquid_oil','lissajous','mario_stomp','matrix_rain','metaballs','mirror_cavern','moving_heads','neon_heart','nyan_cat','octopus_scanner','outrun_drive','pacman_chase','party_dancers','party_duck','party_minion','plasma','polar_lights','police_strobe','popcat','pulse_ball','radial_spectrum','retro_breakout','ripple','rotating_fish','rotozoom','spectrogram','spectrum_orb','spinning_vinyl','starfield','strobe_blinder','stroboscope','supernova','text_effects','ufo_abduction','water_caustics','yin_yang'];
+}
+
 function playlistSnapshotMatchesDraft(snapshot, entries = playlistEntries, loop = playlistLoopDraft) {
   if (!snapshot || !Array.isArray(snapshot.entries) || snapshot.entries.length !== entries.length || loop !== !!snapshot.loop) return false;
   return entries.every((entry, index) => {
@@ -1071,7 +1290,7 @@ async function persistSavedPlaylistSnapshot(snapshot, entries = playlistEntries,
   updatePlaylistUI();
   let succeeded = false;
   try {
-    const response = await fetch('/api/state/save', { method: 'POST' });
+    const response = await fetch('/api/state/save', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || response.statusText);
     succeeded = true;
@@ -1102,13 +1321,28 @@ function updatePlaylistUI() {
     document.getElementById('playlistRemaining').textContent = 'Time remaining: unavailable';
     return;
   }
-  if (!playlistDraftDirty) {
-    playlistEntries = snapshot.entries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
-    playlistLoopDraft = !!snapshot.loop;
-    document.getElementById('playlistLoop').checked = playlistLoopDraft;
-    playlistDraftDirty = false;
-    playlistAwaitingSnapshot = false;
-  } else if (playlistSnapshotMatchesDraft(snapshot)) {
+  playlistCollection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
+    ? state.playlistCollection : {playlists:[], selectedId:null};
+  if (!playlistDraftDirty) playlistDraftId = playlistCollection.selectedId;
+  renderPlaylistSelector();
+  const selected = playlistCollection.playlists.find(item => item.id === playlistCollection.selectedId);
+  document.getElementById('playlistNameInput').value = selected ? selected.name : '';
+  document.getElementById('playlistSavedSelect').value = playlistCollection.selectedId || '';
+  if (!playlistDraftDirty && playlistDraftId) {
+    const selectedPlaylist = playlistCollection.playlists.find(item => item.id === playlistDraftId);
+    if (selectedPlaylist) {
+      playlistEntries = selectedPlaylist.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
+      playlistLoopDraft = !!selectedPlaylist.loop;
+      document.getElementById('playlistLoop').checked = playlistLoopDraft;
+    } else {
+      playlistEntries = snapshot.entries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs}));
+      playlistLoopDraft = !!snapshot.loop;
+      document.getElementById('playlistLoop').checked = playlistLoopDraft;
+    }
+  } else if (playlistDraftDirty && !playlistDraftId) {
+    document.getElementById('playlistNotice').textContent = 'Unsaved changes in a new playlist.';
+  }
+  if (playlistAwaitingSnapshot && playlistSnapshotMatchesDraft(snapshot)) {
     const shouldPersist = playlistAwaitingSnapshot;
     playlistDraftDirty = false;
     playlistAwaitingSnapshot = false;
@@ -1163,8 +1397,11 @@ function setParam(effectId, paramId, val) {
 }
 
 async function saveState() {
-  const response = await fetch('/api/state/save', { method: 'POST' });
-  if (!response.ok) { showToast('Save failed: ' + response.status, 'var(--red)'); return false; }
+  const response = await fetch('/api/state/save', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
+  if (!response.ok) {
+    showToast('Save failed: ' + response.status, 'var(--red)');
+    throw new Error('Runtime state save failed with HTTP ' + response.status);
+  }
   showToast('Settings saved to flash', 'var(--green)');
   setTimeout(clearToast, 2000);
   return true;
@@ -1172,7 +1409,7 @@ async function saveState() {
 
 async function clearState() {
   if (confirm('Clear saved settings?')) {
-    const response = await fetch('/api/state/clear', { method: 'POST' });
+    const response = await fetch('/api/state/clear', { method: 'POST', headers: { 'X-Matrix-Control': '1' } });
     if (!response.ok) { showToast('Clear failed: ' + response.status, 'var(--red)'); return; }
     showToast('Saved settings cleared', 'var(--muted)');
     setTimeout(clearToast, 2000);
@@ -1270,7 +1507,7 @@ async function savePanelConfig() {
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' },
       body: JSON.stringify(payload)
     });
     const res = await r.json();
@@ -1416,6 +1653,21 @@ function updateUI() {
   renderParameters();
 }
 
+function filterEffects() {
+  effectSearchQuery = document.getElementById('effectSearch').value.trim().toLocaleLowerCase();
+  const buttons = Array.from(document.getElementById('effectsGrid').children);
+  let visible = 0;
+  buttons.forEach(button => {
+    const matches = !effectSearchQuery || (button.dataset.name + ' ' + (button.dataset.effectId || '')).toLocaleLowerCase().includes(effectSearchQuery);
+    button.hidden = !matches;
+    if (matches) visible++;
+  });
+  const status = document.getElementById('effectSearchStatus');
+  status.textContent = effectSearchQuery
+    ? visible ? visible + ' effect' + (visible === 1 ? '' : 's') + ' shown.' : 'No effects match that search.'
+    : visible + ' effects shown.';
+}
+
 function renderCatalog() {
   const grid = document.getElementById('effectsGrid');
   grid.innerHTML = '';
@@ -1423,6 +1675,7 @@ function renderCatalog() {
     const btn = document.createElement('div');
     btn.className = 'effect-btn';
     btn.dataset.name = eff.name;
+    btn.dataset.effectId = eff.id || '';
     btn.textContent = eff.name;
     btn.onclick = () => selectEffect(eff.name);
     grid.appendChild(btn);
@@ -1437,12 +1690,16 @@ function renderCatalog() {
     select.appendChild(option);
   });
   lastRenderedPlaylistView = '';
+  filterEffects();
 }
 
 function renderParameters() {
   const card = document.getElementById('paramsCard');
   const container = document.getElementById('paramsContainer');
   const currentEff = catalog.find(e => e.name === state.effect);
+  if (currentEff) {
+    document.getElementById('paramsTitle').textContent = currentEff.name + ' Parameters';
+  }
 
   if (!currentEff || !currentEff.parameters || currentEff.parameters.length === 0) {
     card.style.display = 'none';
@@ -1579,12 +1836,10 @@ async function loop() {
 }
 
 async function init() {
-  document.getElementById('playlistLoop').addEventListener('change', () => {
+  document.getElementById('playlistLoop').addEventListener('change', async () => {
     playlistLoopDraft = document.getElementById('playlistLoop').checked;
-    playlistSaveVersion++;
-    playlistPersistenceNotice = '';
-    playlistDraftDirty = true;
-    playlistAwaitingSnapshot = false;
+    if (!playlistDraftId) await createNewPlaylistDraft();
+    markPlaylistDraftDirty();
     document.getElementById('playlistNotice').textContent = '';
     updatePlaylistUI();
   });
@@ -1595,6 +1850,12 @@ async function init() {
     if (document.getElementById('diagCard').open) loadFirmwareInfo();
   });
   document.getElementById('playlistNextBtn').onclick = () => controlPlaylist('next');
+  document.getElementById('playlistNewBtn').onclick = () => createNewPlaylistDraft();
+  document.getElementById('playlistSelectBtn').onclick = loadSelectedPlaylistDraft;
+  document.getElementById('playlistDeleteBtn').onclick = deleteSelectedPlaylist;
+  document.getElementById('playlistDefaultBtn').onclick = loadDefaultSoundPlaylist;
+  document.getElementById('effectSearch').addEventListener('input', filterEffects);
+  document.getElementById('playlistApplyBtn').onclick = saveNamedPlaylist;
   document.getElementById('networkAddProfileBtn').onclick = addNetworkProfile;
   document.getElementById('networkSaveBtn').onclick = saveNetworkConfig;
 

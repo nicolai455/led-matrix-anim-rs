@@ -37,7 +37,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     }
     assert.ok(ready, 'browser renderer initialized');
     const command = async (kind, payload) => {
-      const r = await fetch(base + '/api/command', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({kind,payload})});
+      const r = await fetch(base + '/api/command', {method:'POST', headers:{'Content-Type':'application/json', 'X-Matrix-Control':'1'}, body:JSON.stringify({kind,payload})});
       assert.ok(r.ok, await r.text());
     };
     await command('light', { effect:'Plasma', state:'ON' });

@@ -179,6 +179,9 @@ fn run_firmware() {
             panic!("Engine creation failure");
         }
     };
+    if let Err(error) = engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()) {
+        log::warn!("Default sound playlist not installed: {error}");
+    }
 
     if !engine.switch_to_effect(&panel_config.default_animation) {
         log::warn!("Unknown configured default effect; retaining initial effect");
@@ -194,14 +197,32 @@ fn run_firmware() {
         engine.apply("cycle", "ON").expect("valid cycle command");
     }
 
-    // 6. Restore persistent runtime state from NVS if present
-    if let Some(state_val) = nvs.load_saved_state_json() {
-        let normalized = normalize_json(&state_val).unwrap_or_default();
-        if let Err(e) = restore_runtime_state(&mut engine, &normalized) {
-            log::warn!("Runtime state restore non-fatal error: {e}");
+    let mut saved_state = nvs.get_saved_state().unwrap_or_else(|error| {
+        log::warn!("Cannot load saved runtime state: {error}");
+        None
+    });
+    if let Some(state_val) = saved_state.as_ref() {
+        let normalized = normalize_json(state_val).unwrap_or_default();
+        if let Err(error) = restore_runtime_state(&mut engine, &normalized) {
+            log::warn!("Runtime state restore non-fatal error: {error}");
         } else {
             log::info!("Restored persistent state successfully");
+            saved_state = Some(normalized);
         }
+    }
+    if let Some(state_val) = saved_state.as_ref() {
+        let has_default = serde_json::from_str::<serde_json::Value>(state_val)
+            .ok()
+            .and_then(|state| state.get("playlistCollection").cloned())
+            .and_then(|collection| serde_json::from_value::<matrix_core::PlaylistCollection>(collection).ok())
+            .is_some_and(|collection| collection.playlists.iter().any(|playlist| playlist.id == "sound-default"));
+        if !has_default {
+            if let Err(error) = engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()) {
+                log::warn!("Default sound playlist not installed: {error}");
+            }
+        }
+    } else if let Err(error) = engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()) {
+        log::warn!("Default sound playlist not installed: {error}");
     }
 
     // CRITICAL HARDWARE & SAFETY INVARIANT: Boots OFF including restore!

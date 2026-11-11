@@ -444,6 +444,7 @@ mod tests {
 
         effect.render(&mut frame, &ctx1);
         assert!(effect.kick_vel > 0.0, "Beat should trigger kick velocity");
+        let active_frame = frame.clone();
 
         // Next frame without beat
         audio.beat = false;
@@ -461,6 +462,11 @@ mod tests {
             effect.kick_vel < prev_kick,
             "Kick velocity should decay over time"
         );
+        let mut baseline = MetaballsEffect::new();
+        let mut baseline_frame = Frame::default();
+        let baseline_context = RenderContext {now_ms:533,delta_seconds:0.033,audio:&audio,color:Rgb::WHITE,text:"",scroll_speed:1.0};
+        baseline.render(&mut baseline_frame,&baseline_context);
+        assert_ne!(active_frame.pixels,baseline_frame.pixels);
     }
 
     #[test]

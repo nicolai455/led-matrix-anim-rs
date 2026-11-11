@@ -153,10 +153,6 @@ impl ConnectingTimer {
         self.ready = false;
     }
 
-    #[cfg(target_os = "espidf")]
-    fn elapsed_secs(&self, now: std::time::Instant) -> u64 {
-        now.duration_since(self.started).as_secs()
-    }
 }
 
 pub struct WifiManager {
@@ -175,8 +171,7 @@ impl WifiManager {
         use esp_idf_svc::ipv4;
         use esp_idf_svc::netif::{EspNetif, NetifStack};
         use esp_idf_svc::wifi::{
-            AccessPointConfiguration, AuthMethod, Configuration, EspWifi,
-            WifiDriver,
+            AccessPointConfiguration, AuthMethod, Configuration, EspWifi, WifiDriver,
         };
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::time::{Duration, Instant};
@@ -189,6 +184,9 @@ impl WifiManager {
 
         let shutdown = std::sync::Arc::new(AtomicBool::new(false));
         let config = config.unwrap_or_default();
+        // Prefer the user's ordered, configured profile list to arbitrary scan RSSI.
+        // A hidden SSID that is absent from a full scan remains eligible: the
+        // explicit client configuration still targets that SSID directly.
         let profiles = if config.profiles.is_empty() && !config.ssid.is_empty() {
             vec![WifiProfile {
                 ssid: config.ssid,
@@ -470,8 +468,10 @@ mod tests {
 
     #[test]
     fn test_fallback_ap_validation_rejects_invalid_credentials() {
-        let mut ap = FallbackApConfig::default();
-        ap.ssid = String::new();
+        let mut ap = FallbackApConfig {
+            ssid: String::new(),
+            ..FallbackApConfig::default()
+        };
         assert!(ap.validate().is_err());
 
         ap.ssid = "ValidSSID".to_string();

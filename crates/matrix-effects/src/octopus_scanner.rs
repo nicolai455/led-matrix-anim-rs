@@ -309,9 +309,11 @@ mod beat_regression {
     fn held_beat_reverses_once_and_rearms() {
         let mut effect = OctopusScannerEffect::default();
         let mut frame = Frame::default();
-        let mut audio = AudioSnapshot::default();
-        audio.available = true;
-        audio.beat = true;
+        let mut audio = AudioSnapshot {
+            available: true,
+            beat: true,
+            ..AudioSnapshot::default()
+        };
         let render = |effect: &mut OctopusScannerEffect, frame: &mut Frame, audio: &AudioSnapshot| {
             effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: 0.016, audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
         };

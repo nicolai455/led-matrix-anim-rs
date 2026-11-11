@@ -37,9 +37,11 @@ fn inactive_recovery_allows_ota_without_claiming_blackout_or_hardware_output() {
 
 #[test]
 fn repaired_image_gets_one_trial_without_losing_recovery_latch() {
-    let mut j = Journal::default();
-    j.safe_mode = true;
-    j.failures = 3;
+    let mut j = Journal {
+        safe_mode: true,
+        failures: 3,
+        ..Journal::default()
+    };
     j.arm_trial();
     j.begin();
     assert!(!j.safe_mode);
@@ -49,9 +51,11 @@ fn repaired_image_gets_one_trial_without_losing_recovery_latch() {
 
 #[test]
 fn trial_for_new_partition_cannot_bypass_old_image_recovery() {
-    let mut j = Journal::default();
-    j.safe_mode = true;
-    j.failures = 3;
+    let mut j = Journal {
+        safe_mode: true,
+        failures: 3,
+        ..Journal::default()
+    };
     j.arm_trial();
     j.trial_partition = Some(0x420000);
     j.begin_partition(Some(0x20000));
@@ -61,9 +65,11 @@ fn trial_for_new_partition_cannot_bypass_old_image_recovery() {
 
 #[test]
 fn serial_pending_image_gets_only_one_trial_per_image_identity() {
-    let mut j = Journal::default();
-    j.safe_mode = true;
-    j.failures = 5;
+    let mut j = Journal {
+        safe_mode: true,
+        failures: 5,
+        ..Journal::default()
+    };
     j.begin_image(Some(0x420000), true, "image-a");
     assert!(!j.safe_mode);
     assert!(j.failures >= 5);
@@ -75,8 +81,10 @@ fn serial_pending_image_gets_only_one_trial_per_image_identity() {
 
 #[test]
 fn ordinary_boot_never_bypasses_recovery_for_new_image_identity() {
-    let mut j = Journal::default();
-    j.safe_mode = true;
+    let mut j = Journal {
+        safe_mode: true,
+        ..Journal::default()
+    };
     j.begin_image(Some(0x20000), false, "fallback");
     assert!(j.safe_mode);
 }

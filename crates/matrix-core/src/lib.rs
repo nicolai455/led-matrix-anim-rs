@@ -12,7 +12,7 @@ pub use audio::{
     BANDS as AUDIO_BANDS, FFT_SIZE, SAMPLE_RATE as AUDIO_SAMPLE_RATE,
 };
 pub use effect::{Effect, ParameterDescriptor, ParameterKind, RenderContext};
-pub use engine::{AudioMode, Engine};
+pub use engine::{AudioMode, Engine, PlaylistCollection, StoredPlaylist, StoredPlaylistEntry, MAX_STORED_PLAYLISTS};
 pub use frames::{
     parse_json_frame, FrameSource, LfxHeader, LfxStream, LfxWriter, SliceFrameSource,
     BYTES_PER_FRAME, LFX_HEADER_SIZE, LFX_MAGIC,

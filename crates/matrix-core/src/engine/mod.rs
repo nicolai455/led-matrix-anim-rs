@@ -4,7 +4,76 @@ use crate::pixel::{Frame, Rgb};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-const MAX_PLAYLIST_ENTRIES: usize = 32;
+/// Whole-state persistence is capped below the 20/24 KiB NVS partitions with
+/// headroom within the partition and among other NVS keys.
+const MAX_PLAYLIST_ENTRIES: usize = 73;
+pub const MAX_RUNTIME_STATE_BYTES: usize = 16 * 1024;
+pub const MAX_STORED_PLAYLISTS: usize = 8;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StoredPlaylistEntry {
+    pub effect_id: String,
+    pub duration_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StoredPlaylist {
+    pub id: String,
+    pub name: String,
+    pub entries: Vec<StoredPlaylistEntry>,
+    pub r#loop: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlaylistCollection {
+    pub playlists: Vec<StoredPlaylist>,
+    #[serde(default)]
+    pub selected_id: Option<String>,
+}
+
+impl PlaylistCollection {
+    pub fn validate(&self) -> Result<(), String> {
+        use std::collections::HashSet;
+        if self.playlists.len() > MAX_STORED_PLAYLISTS {
+            return Err(format!("at most {MAX_STORED_PLAYLISTS} named playlists are supported"));
+        }
+        let mut ids = HashSet::new();
+        for playlist in &self.playlists {
+            if playlist.id.is_empty()
+                || playlist.id.len() > 64
+                || !playlist.id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+            {
+                return Err("playlist id must contain 1..=64 ASCII letters, digits, '-' or '_'".into());
+            }
+            if playlist.name.trim().is_empty() || playlist.name.len() > 64 {
+                return Err("playlist name must contain 1..=64 bytes".into());
+            }
+            if !ids.insert(playlist.id.as_str()) {
+                return Err("playlist ids must be unique".into());
+            }
+            if playlist.entries.is_empty() || playlist.entries.len() > MAX_PLAYLIST_ENTRIES {
+                return Err(format!("each named playlist must have 1..={MAX_PLAYLIST_ENTRIES} entries"));
+            }
+            for (index, entry) in playlist.entries.iter().enumerate() {
+                if entry.effect_id.is_empty() || entry.effect_id.len() > 64 {
+                    return Err(format!("playlist '{}' entry {index} has an invalid effect id", playlist.id));
+                }
+                if !(MIN_PLAYLIST_ENTRY_MS..=MAX_PLAYLIST_ENTRY_MS).contains(&entry.duration_ms) {
+                    return Err(format!("playlist '{}' entry {index} durationMs must be in [{MIN_PLAYLIST_ENTRY_MS}..{MAX_PLAYLIST_ENTRY_MS}]", playlist.id));
+                }
+            }
+        }
+        if let Some(selected) = &self.selected_id {
+            if !self.playlists.iter().any(|playlist| &playlist.id == selected) {
+                return Err("selected playlist id must name a saved playlist".into());
+            }
+        }
+        Ok(())
+    }
+}
 const MIN_PLAYLIST_ENTRY_MS: u64 = 1_000;
 const MAX_PLAYLIST_ENTRY_MS: u64 = 86_400_000;
 
@@ -71,6 +140,7 @@ pub struct Engine {
     playlist_index: Option<usize>,
     playlist_remaining_ms: u64,
     playlist_last_update_ms: u64,
+    playlist_collection: PlaylistCollection,
     audio_mode: AudioMode,
     audio_available: bool,
     mic_settings: MicSettings,
@@ -80,6 +150,7 @@ pub struct Engine {
 
 /// Detached owned state; captures effect parameters without JSON construction.
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DetachedSnapshot {
     state: &'static str,
     brightness: u8,
@@ -95,6 +166,10 @@ pub struct DetachedSnapshot {
     audio_status: &'static str,
     mic: MicSettings,
     playlist: PlaylistSnapshot,
+    #[serde(rename = "playlistCollection")]
+    playlist_collection: PlaylistCollection,
+    #[serde(rename = "playlistConfig")]
+    playlist_persistence: serde_json::Value,
     effects: std::collections::BTreeMap<
         &'static str,
         std::collections::BTreeMap<&'static str, DetachedParameter>,
@@ -155,6 +230,7 @@ impl Engine {
             playlist_index: None,
             playlist_remaining_ms: 0,
             playlist_last_update_ms: 0,
+            playlist_collection: PlaylistCollection::default(),
             audio_mode: AudioMode::Off,
             audio_available: false,
             mic_settings: MicSettings::default(),
@@ -361,6 +437,152 @@ impl Engine {
 
     pub(crate) fn playlist_persistence(&self) -> serde_json::Value {
         json!({"entries": self.playlist_entries, "loop": self.playlist_loop})
+    }
+
+    pub fn playlist_collection(&self) -> &PlaylistCollection {
+        &self.playlist_collection
+    }
+
+    pub fn playlist_config(&self) -> serde_json::Value {
+        self.playlist_persistence()
+    }
+
+    /// Restore the persisted automatic-cycle flag without powering the output.
+    pub fn set_auto_cycle_restored(&mut self, enabled: bool) {
+        self.auto_cycle_ms = if enabled { self.cycle_interval_ms } else { 0 };
+        self.last_cycle_ms = 0;
+        self.dirty = true;
+    }
+
+    fn complete_runtime_state(&self, collection: &PlaylistCollection, config: serde_json::Value) -> Result<serde_json::Value, String> {
+        let mut state = self.snapshot_scalar();
+        let object = state.as_object_mut().ok_or("invalid runtime snapshot")?;
+        object.insert("playlistCollection".into(), serde_json::to_value(collection).map_err(|e| e.to_string())?);
+        object.insert("playlistConfig".into(), config);
+        object.insert("effects".into(), serde_json::to_value(self.capture_snapshot().effects).map_err(|e| e.to_string())?);
+        Ok(state)
+    }
+
+    pub fn validate_named_playlist(&self, playlist: &StoredPlaylist) -> Result<(), String> {
+        let mut next = self.playlist_collection.clone();
+        if let Some(index) = next.playlists.iter().position(|existing| existing.id == playlist.id) {
+            next.playlists[index] = playlist.clone();
+        } else {
+            if next.playlists.len() >= MAX_STORED_PLAYLISTS {
+                return Err(format!("at most {MAX_STORED_PLAYLISTS} named playlists are supported"));
+            }
+            next.playlists.push(playlist.clone());
+        }
+        next.selected_id = Some(playlist.id.clone());
+        next.validate()?;
+        for entry in &playlist.entries {
+            if !self.effects.iter().any(|effect| effect.id() == entry.effect_id) {
+                return Err(format!("unknown stable effect id '{}' in playlist", entry.effect_id));
+            }
+        }
+        let config = json!({"entries":playlist.entries,"loop":playlist.r#loop});
+        let state = self.complete_runtime_state(&next, config)?;
+        let encoded = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+        if encoded.len() > MAX_RUNTIME_STATE_BYTES {
+            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn restore_named_playlist_state(&mut self, collection: &PlaylistCollection) -> Result<(), String> {
+        collection.validate()?;
+        for playlist in &collection.playlists {
+            for (index, entry) in playlist.entries.iter().enumerate() {
+                if !self.effects.iter().any(|effect| effect.id() == entry.effect_id) {
+                    return Err(format!("playlist '{}' entry {index} references unknown effect id '{}'", playlist.id, entry.effect_id));
+                }
+            }
+        }
+        let state = self.complete_runtime_state(collection, json!({"entries": self.playlist_entries, "loop": self.playlist_loop}))?;
+        if serde_json::to_vec(&state).map_err(|error| error.to_string())?.len() > MAX_RUNTIME_STATE_BYTES {
+            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+        }
+        self.playlist_collection = collection.clone();
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn install_default_sound_playlist(&mut self, playlist: StoredPlaylist) -> Result<(), String> {
+        let mut next = self.playlist_collection.clone();
+        if next.playlists.iter().any(|existing| existing.id == playlist.id) {
+            return Ok(());
+        }
+        self.validate_named_playlist(&playlist)?;
+        if next.playlists.len() >= MAX_STORED_PLAYLISTS {
+            return Err(format!("at most {MAX_STORED_PLAYLISTS} named playlists are supported"));
+        }
+        next.playlists.push(playlist.clone());
+        let state = self.complete_runtime_state(&next, json!({"entries": self.playlist_entries, "loop": self.playlist_loop}))?;
+        if serde_json::to_vec(&state).map_err(|error| error.to_string())?.len() > MAX_RUNTIME_STATE_BYTES {
+            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+        }
+        self.playlist_collection = next;
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn apply_playlist_collection(&mut self, payload: &str) -> Result<(), String> {
+        let collection: PlaylistCollection = serde_json::from_str(payload)
+            .map_err(|e| format!("invalid playlist collection JSON: {e}"))?;
+        collection.validate()?;
+        let state = self.complete_runtime_state(
+            &collection,
+            json!({"entries": self.playlist_entries, "loop": self.playlist_loop}),
+        )?;
+        let encoded = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+        if encoded.len() > MAX_RUNTIME_STATE_BYTES {
+            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+        }
+        for playlist in &collection.playlists {
+            for (index, entry) in playlist.entries.iter().enumerate() {
+                if !self.effects.iter().any(|effect| effect.id() == entry.effect_id) {
+                    return Err(format!("playlist '{}' entry {index} references unknown effect id '{}'", playlist.id, entry.effect_id));
+                }
+            }
+        }
+        self.playlist_collection = collection;
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn activate_saved_playlist(&mut self, id: &str) -> Result<(), String> {
+        let playlist = self.playlist_collection.playlists.iter().find(|playlist| playlist.id == id)
+            .ok_or_else(|| format!("unknown saved playlist '{id}'"))?.clone();
+        let payload = serde_json::to_string(&json!({"entries":playlist.entries,"loop":playlist.r#loop})).map_err(|e| e.to_string())?;
+        self.apply_playlist_config(&payload)?;
+        self.playlist_collection.selected_id = Some(playlist.id);
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn save_named_playlist(&mut self, playlist: StoredPlaylist) -> Result<(), String> {
+        self.validate_named_playlist(&playlist)?;
+        let mut next = self.playlist_collection.clone();
+        if let Some(index) = next.playlists.iter().position(|existing| existing.id == playlist.id) {
+            next.playlists[index] = playlist.clone();
+        } else {
+            next.playlists.push(playlist.clone());
+        }
+        next.selected_id = Some(playlist.id.clone());
+        let active = serde_json::to_string(&json!({"entries":playlist.entries,"loop":playlist.r#loop})).map_err(|e| e.to_string())?;
+        self.apply_playlist_config(&active)?;
+        self.playlist_collection = next;
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn delete_named_playlist(&mut self, id: &str) -> Result<(), String> {
+        let mut next = self.playlist_collection.clone();
+        let before = next.playlists.len();
+        next.playlists.retain(|playlist| playlist.id != id);
+        if next.playlists.len() == before { return Err(format!("unknown saved playlist '{id}'")); }
+        if next.selected_id.as_deref() == Some(id) { next.selected_id = None; }
+        self.apply_playlist_collection(&serde_json::to_string(&next).map_err(|e| e.to_string())?)
     }
 
     fn update_playlist(&mut self, now_ms: u64) {
@@ -648,6 +870,31 @@ impl Engine {
             "speed" => self.apply_speed(payload),
             "cycle" => self.apply_cycle(payload),
             "playlist_config" => self.apply_playlist_config(payload),
+            "playlist_default_install" => {
+                let playlist: StoredPlaylist = serde_json::from_str(payload)
+                    .map_err(|error| format!("invalid default sound playlist JSON: {error}"))?;
+                self.install_default_sound_playlist(playlist)
+            }
+            "playlist_save" => {
+                let playlist: StoredPlaylist = serde_json::from_str(payload)
+                    .map_err(|e| format!("invalid playlist_save JSON: {e}"))?;
+                self.save_named_playlist(playlist)
+            }
+            "playlist_select" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Select { id: String }
+                let select: Select = serde_json::from_str(payload).map_err(|e| format!("invalid playlist_select JSON: {e}"))?;
+                self.activate_saved_playlist(&select.id)
+            }
+            "playlist_delete" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Delete { id: String }
+                let delete: Delete = serde_json::from_str(payload).map_err(|e| format!("invalid playlist_delete JSON: {e}"))?;
+                self.delete_named_playlist(&delete.id)
+            }
+            "playlist_collection" => self.apply_playlist_collection(payload),
             "playlist_control" => self.apply_playlist_control(payload),
             "audio_source" => self.apply_audio_source(payload),
             "mic" => self.apply_mic(payload),
@@ -997,6 +1244,8 @@ impl Engine {
             audio_status: self.audio_status(),
             mic: self.mic_settings.clone(),
             playlist: self.playlist_snapshot(),
+            playlist_collection: self.playlist_collection.clone(),
+            playlist_persistence: self.playlist_persistence(),
             effects,
         }
     }
@@ -1049,6 +1298,8 @@ impl Engine {
             "audio_source": audio_src,
             "audio_status": audio_stat,
             "playlist": self.playlist_snapshot(),
+            "playlistCollection": self.playlist_collection,
+            "playlistConfig": self.playlist_persistence(),
             "mic": {
                 "gainDb": self.mic_settings.gain_db,
                 "squelchDb": self.mic_settings.squelch_db,
@@ -1114,8 +1365,10 @@ impl Engine {
                         map.serialize_entry(key, value)?;
                     }
                 }
+                map.serialize_entry("playlistCollection", &self.0.playlist_collection)?;
+                map.serialize_entry("playlistConfig", &self.0.playlist_persistence())?;
                 for (key, value) in self.1 {
-                    if key != "effects" {
+                    if key != "effects" && key != "playlistCollection" && key != "playlistConfig" {
                         map.serialize_entry(key, value)?;
                     }
                 }

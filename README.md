@@ -66,7 +66,7 @@ WLED is the gold standard for addressable LED strips. However, when driving larg
 
 - **Wi-Fi:** prioritizes multiple STA profiles (up to five) with an 18-second timeout per attempt. If all station profiles fail, switches to a WPA2 fallback AP only when an explicitly provisioned per-device AP passphrase is present; otherwise Wi-Fi remains station-only/off. AP gateway is configured as `192.168.4.1/24` with DHCP. The app has no universal AP password; first boot needs private manufacturing/owner provisioning before a setup AP is available. The Web UI exposes `/api/network` with passphrase redaction.
 - **Shared audio analysis:** Core PCM processing uses actual sample rates, normalized bass/onset and an estimated BPM. Control telemetry and the browser preview consume the same snapshot fields. This is deterministic host-tested analysis, not an ESP32 performance or sound-quality qualification.
-- **Engine playlist:** stable effect IDs and bounded durations are configured separately from Auto Cycle; playback state is time-stepped by Engine snapshots. Queue configuration persists, while playback never auto-resumes and power still boots OFF.
+- **Engine playlist:** stable effect IDs and bounded durations are configured separately from Auto Cycle; playback state is time-stepped by Engine snapshots. The default looping sound playlist includes all 73 inventoried audio-reactive effects at 10 seconds each. Queue configuration persists, while playback never auto-resumes and power still boots OFF.
 - **Arcade Invaders:** projectile/alien collision is evaluated before drawing the hit frame; destroyed aliens remain gone until reset (host regression-tested; see [`SPACE_INVADERS_VERIFICATION.md`](SPACE_INVADERS_VERIFICATION.md)).
 
 For details and limitations, see [`WIFI_CONFIGURATION.md`](WIFI_CONFIGURATION.md), [`FIRMWARE_NETWORK.md`](FIRMWARE_NETWORK.md), [`AUDIO_EFFECT_REVIEW.md`](AUDIO_EFFECT_REVIEW.md), and [`VERIFICATION.md`](VERIFICATION.md).
@@ -239,7 +239,8 @@ espflash flash --chip esp32 target/xtensa-esp32-espidf/release/matrix-firmware
 Once running on your network, update firmware wirelessly without plugging in USB:
 
 ```sh
-curl -X POST --data-binary @firmware/target/xtensa-esp32-espidf/release/matrix-firmware.bin \
+# Update-Client muss den Kontrollmarker senden; er ist CSRF-Schutz, keine Authentifizierung.
+curl -X POST -H 'X-Matrix-Control: 1' --data-binary @firmware/target/xtensa-esp32-espidf/release/matrix-firmware.bin \
   http://<device-ip>/update
 ```
 

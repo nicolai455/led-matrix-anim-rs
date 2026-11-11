@@ -15,7 +15,7 @@ fn log_current_stack(task: &str) {
 }
 
 pub const MAX_KIND_BYTES: usize = 128;
-pub const MAX_PAYLOAD_BYTES: usize = 2048;
+pub const MAX_PAYLOAD_BYTES: usize = 8192;
 
 pub trait LedOutput: Send + 'static {
     fn show(&mut self, frame: &Frame, brightness: u8) -> Result<(), String>;
@@ -112,6 +112,8 @@ pub struct ControlHubInner {
     live_metrics: Arc<RwLock<Option<(f32, f32)>>>,
     fps: Arc<RwLock<f32>>,
     output_errors: Arc<AtomicU32>,
+    #[cfg(test)]
+    #[allow(dead_code)]
     render_progress: Arc<AtomicU32>,
     output_successes: Arc<AtomicU32>,
     last_output_error: Arc<RwLock<Option<String>>>,
@@ -176,6 +178,7 @@ impl ControlHub {
         let live_metrics = Arc::new(RwLock::new(None));
         let fps = Arc::new(RwLock::new(0.0));
         let output_errors = Arc::new(AtomicU32::new(0));
+        #[cfg(test)]
         let render_progress = Arc::new(AtomicU32::new(0));
         let output_successes = Arc::new(AtomicU32::new(0));
         let last_output_error = Arc::new(RwLock::new(None));
@@ -192,6 +195,7 @@ impl ControlHub {
             live_metrics: live_metrics.clone(),
             fps: fps.clone(),
             output_errors: output_errors.clone(),
+            #[cfg(test)]
             render_progress: render_progress.clone(),
             output_successes: output_successes.clone(),
             last_output_error: last_output_error.clone(),
@@ -267,6 +271,13 @@ impl ControlHub {
                                             output.update_config(&cfg)
                                         }
                                         Err(e) => Err(format!("invalid panel config: {e}")),
+                                    }
+                                } else if cmd.kind == "playlist_default_install" {
+                                    let playlist = serde_json::from_str::<matrix_core::StoredPlaylist>(&cmd.payload)
+                                        .map_err(|error| format!("invalid default playlist: {error}"));
+                                    match playlist {
+                                        Ok(playlist) => engine.install_default_sound_playlist(playlist),
+                                        Err(error) => Err(error),
                                     }
                                 } else {
                                     engine.apply(&cmd.kind, &cmd.payload)
@@ -384,6 +395,7 @@ impl ControlHub {
                         }
                     }
 
+                    #[cfg(test)]
                     render_progress.fetch_add(1, Ordering::Relaxed);
                     // 4. Physical blocking output is frame backpressure!
                     // Notice: no lock is held across show().
@@ -414,8 +426,22 @@ impl ControlHub {
         Ok(ControlHub { inner })
     }
 
+    pub fn set_default_sound_playlist(&self, playlist: matrix_core::StoredPlaylist) -> Result<(), String> {
+        let result = self.submit_sync(
+            "playlist_default_install",
+            &serde_json::to_string(&playlist).map_err(|error| error.to_string())?,
+            Duration::from_secs(2),
+        )?;
+        if matches!(result, SubmitOutcome::Applied) { Ok(()) } else { Err("busy: default sound playlist install pending".into()) }
+    }
+
     /// Successful physical output calls and errors, for startup validation.
-    pub fn render_progress(&self) -> u32 { self.inner.render_progress.load(Ordering::Relaxed) }
+    pub fn render_progress(&self) -> u32 {
+        #[cfg(test)]
+        { self.inner.render_progress.load(Ordering::Relaxed) }
+        #[cfg(not(test))]
+        { self.inner.output_successes.load(Ordering::Relaxed) }
+    }
 
     pub fn output_progress(&self) -> (u32, u32) {
         (self.inner.output_successes.load(Ordering::Relaxed), self.inner.output_errors.load(Ordering::Relaxed))
@@ -518,9 +544,40 @@ impl ControlHub {
         Value::Object(result)
     }
 
-    /// Persist the latest engine snapshot; serialized transient audio telemetry is not retained.
+    /// Persist the latest engine snapshot without transient telemetry.
     pub fn save_runtime_state(&self, store: &StateStore) -> Result<(), String> {
-        store.save_json(self.snapshot_json().as_slice())
+        let snapshot = self.snapshot_json();
+        let value: Value = serde_json::from_slice(snapshot.as_slice()).map_err(|e| e.to_string())?;
+        let mut state = crate::persistence::normalize_runtime_state(&value);
+        let object = state.as_object_mut().ok_or("invalid runtime snapshot")?;
+        object.remove("params");
+        for key in ["playlistCollection", "playlistConfig"] {
+            if let Some(value) = value.get(key) { object.insert(key.to_owned(), value.clone()); }
+        }
+        let mut changed = serde_json::Map::new();
+        let catalog = self.catalog();
+        if let (Some(effect_id), Some(parameters)) = (value.get("effect_id").and_then(Value::as_str), value.get("effects").and_then(Value::as_object).and_then(|effects| effects.get(value.get("effect_id").and_then(Value::as_str).unwrap_or_default()))) {
+            if let Some(parameters) = parameters.as_object() {
+                if let Some(descriptors) = catalog.as_array().and_then(|items| items.iter().find(|item| item["id"].as_str() == Some(effect_id)).and_then(|item| item["parameters"].as_array())) {
+                    let mut overrides = serde_json::Map::new();
+                    for descriptor in descriptors {
+                        let (Some(id),Some(current),Some(default)) = (descriptor["id"].as_str(), descriptor["id"].as_str().and_then(|id| parameters.get(id)), descriptor.get("default")) else { continue; };
+                        let same = match (current, default) {
+                            (Value::String(a), Value::String(b)) => a == b,
+                            (Value::String(a), Value::Number(b)) => a.parse::<f64>().ok() == b.as_f64(),
+                            (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
+                            (Value::Bool(a), Value::Bool(b)) => a == b,
+                            (Value::String(a), Value::Bool(b)) => a.eq_ignore_ascii_case(if *b { "on" } else { "off" }),
+                            _ => false,
+                        };
+                        if !same { overrides.insert(id.to_owned(), current.clone()); }
+                    }
+                    if !overrides.is_empty() { changed.insert(effect_id.to_owned(), Value::Object(overrides)); }
+                }
+            }
+        }
+        if !changed.is_empty() { object.insert("params".into(), Value::Object(changed)); }
+        store.save(&state)
     }
 
     /// Returns the static effect catalog.
@@ -615,10 +672,19 @@ mod snapshot_publish_tests {
     fn detached_snapshot_is_immutable_and_matches_engine_schema() {
         let mut engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
         let detached = engine.capture_snapshot();
-        let before = engine.snapshot();
+        let actual = serde_json::to_value(&detached).unwrap();
+        let expected = engine.snapshot();
+        assert_eq!(actual["effectId"], expected["effect_id"]);
+        assert_eq!(actual["playlistCollection"], expected["playlistCollection"]);
+        assert_eq!(actual["playlistConfig"], expected["playlistConfig"]);
+        let encoded = serde_json::to_string(&actual).unwrap();
+        let mut restored = Engine::new(matrix_effects::builtin_effects()).unwrap();
+        matrix_core::state::restore_runtime_state(&mut restored, &encoded).unwrap();
+        let restored_snapshot = restored.snapshot();
+        assert_eq!(restored_snapshot["playlistCollection"], expected["playlistCollection"]);
         engine.apply("light", r#"{"brightness":17}"#).unwrap();
-        assert_eq!(serde_json::to_value(&detached).unwrap(), before);
-        assert_ne!(serde_json::to_value(&detached).unwrap(), engine.snapshot());
+        assert_eq!(serde_json::to_value(&detached).unwrap(), actual);
+        assert_ne!(actual, engine.snapshot());
     }
 
     #[test]

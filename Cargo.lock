@@ -852,6 +852,7 @@ dependencies = [
 name = "matrix-core"
 version = "0.1.0"
 dependencies = [
+ "matrix-effects",
  "serde",
  "serde_json",
 ]
