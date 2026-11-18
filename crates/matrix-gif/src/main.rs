@@ -528,4 +528,29 @@ mod tests {
         assert!((round2(1.2345) - 1.23).abs() < f64::EPSILON);
         assert!((round2(1.235) - 1.24).abs() < f64::EPSILON);
     }
+
+    #[test]
+    fn panic_message_reads_str_and_string_payloads() {
+        let from_str = catch_unwind(|| panic!("boom &str")).unwrap_err();
+        assert_eq!(panic_message(from_str), "boom &str");
+        let from_string = catch_unwind(|| std::panic::panic_any(String::from("boom String")))
+            .unwrap_err();
+        assert_eq!(panic_message(from_string), "boom String");
+    }
+
+    #[test]
+    fn render_panic_is_reported_as_error_text() {
+        // Mirrors the per-frame closure used while recording: a panicking render
+        // must surface as an Err string (and therefore as a summary error row)
+        // instead of unwinding through the whole run.
+        let mut calls = 0u32;
+        let result: Result<u32, String> =
+            catch_unwind(AssertUnwindSafe(|| {
+                calls += 1;
+                panic!("simulated effect panic");
+            }))
+            .map_err(|payload| format!("effect panicked: {}", panic_message(payload)));
+        assert_eq!(calls, 1);
+        assert_eq!(result.unwrap_err(), "effect panicked: simulated effect panic");
+    }
 }
