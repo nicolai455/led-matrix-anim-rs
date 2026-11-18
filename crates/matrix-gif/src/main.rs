@@ -1,10 +1,11 @@
-//! `matrix-gif`: renders every built-in LED matrix effect to an animated GIF and
-//! records per-effect render statistics.
+//! `matrix-gif`: renders every built-in LED matrix effect to an animated GIF plus
+//! a 2x3 contact-sheet PNG, and records per-effect render statistics.
 //!
 //! Rendering is fully deterministic: frame `i` is rendered at
 //! `t = i * 1000 / fps` milliseconds with a synthetic (or silent) audio snapshot,
 //! so the same command reproduces byte-identical GIFs.
 
+mod contact;
 mod gif;
 mod model;
 mod render;
@@ -12,8 +13,8 @@ mod render;
 use std::path::{Path, PathBuf};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use clap::Parser;
-use matrix_core::Engine;
+use clap::{Parser, Subcommand};
+use matrix_core::{Engine, Frame};
 use serde::Serialize;
 
 use crate::model::{AudioChoice, EffectInfo, EffectSummary};
@@ -22,9 +23,12 @@ use crate::model::{AudioChoice, EffectInfo, EffectSummary};
 #[command(
     name = "matrix-gif",
     version,
-    about = "Render LED matrix effects to animated GIFs"
+    about = "Render LED matrix effects to animated GIFs and contact sheets"
 )]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Output directory for `<index>-<id>.gif` files.
     #[arg(long, value_name = "DIR", default_value = "docs/effects/gifs")]
     out: PathBuf,
@@ -58,6 +62,44 @@ struct Cli {
     summary: Option<PathBuf>,
 }
 
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Render a 2x3 PNG contact sheet per effect instead of GIFs.
+    ContactSheets {
+        /// Output directory for `<index>-<id>.png` files.
+        #[arg(long, value_name = "DIR", default_value = "docs/effects/contact-sheets")]
+        out: PathBuf,
+
+        /// Render every effect in catalog order.
+        #[arg(long)]
+        all: bool,
+
+        /// Effect id to render (repeatable).
+        #[arg(long = "effect", value_name = "ID")]
+        effects: Vec<String>,
+
+        /// Clip length in seconds.
+        #[arg(long, default_value_t = 4.0)]
+        seconds: f64,
+
+        /// Frames per second.
+        #[arg(long, default_value_t = 25)]
+        fps: u32,
+
+        /// Nearest-neighbour upscale factor per cell (each cell is scale*32 px).
+        #[arg(long, default_value_t = 4)]
+        scale: u32,
+
+        /// Audio feed for audio-reactive effects.
+        #[arg(long, value_enum, default_value_t = AudioChoice::Synthetic)]
+        audio: AudioChoice,
+
+        /// Write a JSON summary of the render to this path.
+        #[arg(long, value_name = "PATH")]
+        summary: Option<PathBuf>,
+    },
+}
+
 /// Top-level summary document written to `--summary`.
 #[derive(Debug, Serialize)]
 struct RunSummary {
@@ -89,16 +131,28 @@ fn main() {
 }
 
 fn run(cli: Cli) -> Result<i32, String> {
-    gifs(
-        &cli.out,
-        cli.all,
-        cli.effects,
-        cli.seconds,
-        cli.fps,
-        cli.scale,
-        cli.audio,
-        cli.summary.as_deref(),
-    )
+    match cli.command {
+        Some(Command::ContactSheets {
+            out,
+            all,
+            effects,
+            seconds,
+            fps,
+            scale,
+            audio,
+            summary,
+        }) => contact_sheets(&out, all, effects, seconds, fps, scale, audio, summary.as_deref()),
+        None => gifs(
+            &cli.out,
+            cli.all,
+            cli.effects,
+            cli.seconds,
+            cli.fps,
+            cli.scale,
+            cli.audio,
+            cli.summary.as_deref(),
+        ),
+    }
 }
 
 fn validate(seconds: f64, fps: u32) -> Result<(), String> {
@@ -224,6 +278,127 @@ fn render_gif(
         id: info.id.clone(),
         name: info.name.clone(),
         frames: stats.frames,
+        fps,
+        seconds,
+        max_luma: stats.max_luma,
+        mean_luma: round2(stats.mean_luma()),
+        nonblack_frames: stats.nonblack_frames,
+        distinct_colors_max: stats.distinct_colors_max,
+        has_parameters: info.has_parameters(),
+        audio_reactive: info.audio_reactive,
+        bytes,
+        error: None,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn contact_sheets(
+    out: &Path,
+    all: bool,
+    wanted: Vec<String>,
+    seconds: f64,
+    fps: u32,
+    scale: u32,
+    audio: AudioChoice,
+    summary_path: Option<&Path>,
+) -> Result<i32, String> {
+    validate(seconds, fps)?;
+    if scale == 0 {
+        return Err("--scale must be >= 1".to_string());
+    }
+    let mut engine = render::new_engine()?;
+    let catalog = render::discover_effects(&engine)?;
+    let chosen = select(&catalog, all, &wanted)?;
+    let frames = render::frame_count(seconds, fps);
+    std::fs::create_dir_all(out)
+        .map_err(|error| format!("cannot create {}: {error}", out.display()))?;
+
+    let mut rows = Vec::with_capacity(chosen.len());
+    for info in &chosen {
+        let path = out.join(format!("{}.png", info.file_stem()));
+        match render_sheet(&mut engine, info, &path, seconds, fps, scale, audio, frames) {
+            Ok(row) => {
+                println!(
+                    "[{:>3}/{}] {:<28} {:>7} bytes  contact sheet",
+                    info.index + 1,
+                    catalog.len(),
+                    info.id,
+                    row.bytes
+                );
+                rows.push(row);
+            }
+            Err(error) => {
+                println!(
+                    "[{:>3}/{}] {:<28} FAILED: {}",
+                    info.index + 1,
+                    catalog.len(),
+                    info.id,
+                    error
+                );
+                rows.push(EffectSummary::for_error(info, fps, seconds, error));
+            }
+        }
+    }
+
+    finish(&rows, summary_path, fps, seconds, scale, audio, catalog.len())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_sheet(
+    engine: &mut Engine,
+    info: &EffectInfo,
+    path: &Path,
+    seconds: f64,
+    fps: u32,
+    scale: u32,
+    audio: AudioChoice,
+    frames: u64,
+) -> Result<EffectSummary, String> {
+    render::activate(engine, &info.id, audio)?;
+    render::warmup(engine, fps, audio);
+
+    let wanted: Vec<u64> = contact::sample_indices(frames);
+    let mut samples: Vec<Option<Frame>> = vec![None; wanted.len()];
+    let mut stats = gif::GifStats::default();
+    let mut next = 0usize;
+
+    for index in 0..frames {
+        let now_ms = render::frame_time_ms(index, fps);
+        let snapshot = audio.snapshot(now_ms);
+        let frame = catch_unwind(AssertUnwindSafe(|| engine.render(now_ms, &snapshot)))
+            .map_err(|payload| {
+                format!(
+                    "effect panicked at frame {index} (t={now_ms} ms): {}",
+                    panic_message(payload)
+                )
+            })?;
+        stats.absorb(&frame);
+        while next < wanted.len() && wanted[next] == index {
+            samples[next] = Some(frame.clone());
+            next += 1;
+        }
+    }
+
+    // Fill any slot the clip was too short for with the last rendered frame so
+    // every sheet is complete.
+    let last = samples.iter().rev().flatten().next().cloned();
+    if last.is_some() {
+        for slot in samples.iter_mut() {
+            if slot.is_none() {
+                slot.clone_from(&last);
+            }
+        }
+    }
+    let samples: Vec<Frame> = samples.into_iter().flatten().collect();
+
+    let sheet = contact::build_sheet(info, &samples, scale);
+    let bytes = contact::save_png(&sheet, path)?;
+
+    Ok(EffectSummary {
+        index: info.index,
+        id: info.id.clone(),
+        name: info.name.clone(),
+        frames,
         fps,
         seconds,
         max_luma: stats.max_luma,
