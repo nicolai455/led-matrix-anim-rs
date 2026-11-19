@@ -5,6 +5,7 @@ members = [
     "crates/matrix-effects",
     "crates/matrix-control",
     "crates/matrix-preview",
+    "crates/matrix-gif",
 ]
 exclude = [
     "firmware",
