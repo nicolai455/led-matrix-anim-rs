@@ -13,6 +13,7 @@ pub mod recovery;
 pub mod request_guard;
 pub mod output;
 pub mod pins;
+pub mod setup_token;
 
 pub use device_id::{
     format_device_id_from_mac_bytes, format_device_id_from_mac_u64, get_device_id,
