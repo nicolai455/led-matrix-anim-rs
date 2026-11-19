@@ -40,7 +40,7 @@ neopixel matrix visualizer, rust embedded esp-idf, parallel rmt led driver
 Every built-in effect, rendered frame by frame by the real engine — not screenshots
 and not hardware footage — and browsable in one scrollable page:
 
-### ▶️ **[Open the effect gallery](docs/effects/index.html)**
+### ▶️ **[Browse all 82 effects on GitHub](docs/effects/GALLERY.md)** · **[Interactive gallery](docs/effects/index.html)** (open locally or host statically)
 
 | | |
 |---|---|
@@ -50,9 +50,9 @@ and not hardware footage — and browsable in one scrollable page:
 | `kaleidoscope` | `arcade_invaders` |
 
 Each card links its 4-second GIF (160×160, 25 fps) and a 2×3 contact sheet sampled
-at 10/30/50/70/85/95 % of the clip. The page needs no build step, no JavaScript
-framework and no network: it works from a fresh clone via `file://` as well as from
-any static host.
+at 10/30/50/70/85/95 % of the clip. `docs/effects/GALLERY.md` is plain markdown so
+GitHub renders every effect inline; `docs/effects/index.html` is a self-contained
+page with search and filters that works from `file://` or any static host.
 
 Reproduce every artifact locally:
 
