@@ -421,6 +421,10 @@ select option, .param-select option { background:var(--card); color:var(--text);
 <script>
 let state = {};
 let catalog = [];
+// The Wi-Fi configuration is served by /api/network, not by /api/state. `state`
+// is replaced wholesale on every snapshot poll, so keeping it there lost the
+// profile list roughly a second after loading — the "can't save a Wi-Fi" bug.
+let networkConfig = null;
 let effectSearchQuery = '';
 let playlistEntries = [];
 let playlistCollection = { playlists: [], selectedId: null };
@@ -794,7 +798,7 @@ async function loadNetworkConfig() {
     const value = await response.json();
     if (!response.ok) throw new Error(value.error || response.statusText);
     const profiles = Array.isArray(value.wifiProfiles) ? value.wifiProfiles : [];
-    state.networkConfig = value;
+    networkConfig = value;
     document.getElementById('fallbackApSsid').value = value.fallbackApSsid || 'JDJLIGHT';
     document.getElementById('fallbackApPasswordClear').checked = false;
     document.getElementById('networkApWarning').style.display = value.fallbackApPasswordConfigured === false ? 'block' : 'none';
@@ -857,7 +861,7 @@ function updateNetworkLiveState() {
 
 function renderNetworkProfiles() {
   const container = document.getElementById('networkProfiles');
-  const config = state.networkConfig || {};
+  const config = networkConfig || {};
   const profiles = Array.isArray(config.wifiProfiles) ? config.wifiProfiles : [];
   const liveStates = networkStatusText(state);
   while (container.firstChild) container.removeChild(container.firstChild);
@@ -889,7 +893,7 @@ function renderNetworkProfiles() {
 }
 
 function moveNetworkProfile(index, direction) {
-  const profiles = state.networkConfig && state.networkConfig.wifiProfiles;
+  const profiles = networkConfig && networkConfig.wifiProfiles;
   const target = index + direction;
   if (!Array.isArray(profiles) || target < 0 || target >= profiles.length) return;
   [profiles[index], profiles[target]] = [profiles[target], profiles[index]];
@@ -898,7 +902,7 @@ function moveNetworkProfile(index, direction) {
 }
 
 function editNetworkProfile(index) {
-  const profile = state.networkConfig.wifiProfiles[index];
+  const profile = networkConfig.wifiProfiles[index];
   if (!profile) return;
   document.getElementById('networkSsid').value = profile.ssid;
   document.getElementById('networkPassword').value = '';
@@ -909,7 +913,7 @@ function editNetworkProfile(index) {
 
 async function saveNetworkConfig() {
   const status = document.getElementById('networkStatus');
-  const config = state.networkConfig || { wifiProfiles: [] };
+  const config = networkConfig || { wifiProfiles: [] };
   const password = document.getElementById('fallbackApPassword').value;
   const networkPassword = document.getElementById('networkPassword').value;
   const payload = {
@@ -972,7 +976,7 @@ async function saveNetworkConfig() {
     const response = await fetch('/api/network', { method: 'POST', headers, body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || response.statusText);
-    state.networkConfig = result.config;
+    networkConfig = result.config;
     document.getElementById('fallbackApPassword').value = '';
     document.getElementById('networkPassword').value = '';
     document.getElementById('networkSsid').value = '';
@@ -1059,7 +1063,7 @@ function addNetworkProfile() {
     document.getElementById('networkStatus').textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes. Tick “Open network” for a network without a password.';
     return;
   }
-  const config = state.networkConfig || (state.networkConfig = { wifiProfiles: [] });
+  const config = networkConfig || (networkConfig = { wifiProfiles: [] });
   if (!Array.isArray(config.wifiProfiles)) config.wifiProfiles = [];
   const editIndex = Number(ssidEl.dataset.editIndex);
   if ((!Number.isInteger(editIndex) || editIndex < 0) && (config.wifiProfiles.length >= 5 || config.wifiProfiles.some(profile => profile.ssid === ssid))) {

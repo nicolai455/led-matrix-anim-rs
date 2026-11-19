@@ -563,3 +563,58 @@ fn a_saved_playlist_with_an_unknown_effect_is_not_restored_but_does_not_fail_the
         .expect("a stale queue must not abort the restore");
     assert!(restored.playlist_collection().playlists.is_empty(), "the bad playlist must be dropped whole");
 }
+
+/// Persisting the shipped 73-entry default playlist used to fail with
+/// "runtime state exceeds 16384 byte limit": the active queue was written twice
+/// (as `playlistConfig` and as the selected playlist's entries). The persisted
+/// document must stay inside the limit and still restore the queue.
+#[test]
+fn the_default_playlist_persists_without_duplicating_its_entries() {
+    let mut source = engine();
+    config(&mut source, &[("a", 1_000), ("b", 2_000)], true);
+    let stored = StoredPlaylist {
+        id: "saved".into(),
+        name: "Saved".into(),
+        r#loop: true,
+        entries: vec![
+            StoredPlaylistEntry { effect_id: "a".into(), duration_ms: 1_000 },
+            StoredPlaylistEntry { effect_id: "b".into(), duration_ms: 2_000 },
+        ],
+    };
+    source.save_named_playlist(stored).expect("playlist saves");
+
+    let saved = serialize_runtime_state(&source);
+    assert!(
+        saved.len() <= matrix_core::engine::MAX_RUNTIME_STATE_BYTES,
+        "persisted state is {} bytes",
+        saved.len()
+    );
+    // The queue is recoverable from the collection, so it must not be duplicated.
+    assert!(
+        !saved.contains("\"playlistConfig\""),
+        "the active queue duplicates the selected playlist: {saved}"
+    );
+
+    let mut restored_engine = engine();
+    restore_runtime_state(&mut restored_engine, &saved).expect("state restores");
+    let active = playlist(&restored_engine);
+    assert_eq!(active["entries"].as_array().unwrap().len(), 2, "queue restored");
+    assert_eq!(active["loop"], true);
+    assert_eq!(restored_engine.playlist_collection().selected_id.as_deref(), Some("saved"));
+}
+
+/// An unsaved draft queue is not in the collection, so it must still be written
+/// explicitly — otherwise the user's ad-hoc queue would silently vanish.
+#[test]
+fn an_unsaved_draft_queue_is_still_persisted() {
+    let mut source = engine();
+    config(&mut source, &[("a", 1_000)], false);
+    let saved = serialize_runtime_state(&source);
+    assert!(
+        saved.contains("\"playlistConfig\""),
+        "a draft queue must be persisted: {saved}"
+    );
+    let mut restored_engine = engine();
+    restore_runtime_state(&mut restored_engine, &saved).expect("state restores");
+    assert_eq!(playlist(&restored_engine)["entries"].as_array().unwrap().len(), 1);
+}

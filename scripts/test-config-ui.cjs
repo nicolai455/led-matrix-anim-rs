@@ -80,7 +80,7 @@ test('load failure disables save; output mode switches editable pins', async () 
 
 test('wifi editor includes a valid new profile in Save even without Add profile first', async () => {
   const h = harness();
-  vm.runInContext("state={networkConfig:{wifiProfiles:[]}}", h.sandbox);
+  vm.runInContext("networkConfig={wifiProfiles:[]}; state={}", h.sandbox);
   h.element('networkSsid').value='open-network';
   h.element('networkPassword').value='';
   h.element('networkPriority').value='7';
@@ -93,7 +93,7 @@ test('wifi editor includes a valid new profile in Save even without Add profile 
 
 test('wifi editor saves typed password and profile fields without pre-adding', async () => {
   const h = harness();
-  vm.runInContext("state={networkConfig:{wifiProfiles:[]}}", h.sandbox);
+  vm.runInContext("networkConfig={wifiProfiles:[]}; state={}", h.sandbox);
   h.element('networkSsid').value='saved-network';
   h.element('networkPassword').value='fake-test-password';
   h.element('networkPriority').value='12';
@@ -104,7 +104,7 @@ test('wifi editor saves typed password and profile fields without pre-adding', a
 
 test('saving wifi configuration does not erase the saved MQTT password', async () => {
   const h = harness();
-  vm.runInContext("state={networkConfig:{wifiProfiles:[],mqttHost:'broker.local',mqttPort:1883,mqttUser:'client',mqttPasswordConfigured:true}}", h.sandbox);
+  vm.runInContext("networkConfig={wifiProfiles:[],mqttHost:'broker.local',mqttPort:1883,mqttUser:'client',mqttPasswordConfigured:true}; state={}", h.sandbox);
   h.element('networkSsid').value='saved-network';
   h.element('networkPassword').value='fake-test-password';
   h.element('networkPriority').value='12';
@@ -325,7 +325,7 @@ test('playlist persistence failure notice remains visible after a later state re
 
 test('Wi-Fi settings status reports an empty saved profile list without throwing', async () => {
   const h=harness();
-  vm.runInContext("catalog=[]; state={networkConfig:{}}", h.sandbox);
+  vm.runInContext("catalog=[]; networkConfig={}; state={}", h.sandbox);
   vm.runInContext("fetch=async()=>({ok:true,json:async()=>({wifiProfiles:[],fallbackApEnabled:true,fallbackApSsid:'safe-ap'})})", h.sandbox);
   await h.sandbox.loadNetworkConfig();
   assert.equal(h.element('networkStatus').textContent,'No saved Wi-Fi profiles. Fallback AP is enabled; AP credentials remain masked.');

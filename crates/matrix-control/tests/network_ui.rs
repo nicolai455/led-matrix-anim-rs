@@ -45,6 +45,9 @@ async function fetch(url, options) {{
 }}
 let scanResponse = {{ networks: [], stale: false }};
 let state = {{}};
+// Mirrors the page-level variable the network card reads; the extracted slice
+// does not include the declaration itself.
+let networkConfig = null;
 {}
 {body}
 "#,
@@ -135,7 +138,7 @@ fn live_profile_states_and_scan_results_are_rendered() {
         r#"
 (async () => {
   state = { wifi: { profiles: [ { ssid: 'home', state: 'connected' }, { ssid: 'garden', state: 'failed' } ] } };
-  state.networkConfig = { wifiProfiles: [
+  networkConfig = { wifiProfiles: [
     { ssid: 'home', priority: 5, hidden: false, passwordConfigured: true },
     { ssid: 'garden', priority: 1, hidden: false, passwordConfigured: false }
   ] };

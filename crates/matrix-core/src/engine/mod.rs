@@ -10,6 +10,25 @@ const MAX_PLAYLIST_ENTRIES: usize = 73;
 pub const MAX_RUNTIME_STATE_BYTES: usize = 16 * 1024;
 pub const MAX_STORED_PLAYLISTS: usize = 8;
 
+/// True when `config` (an active queue) is byte-equivalent to the entries of the
+/// playlist `collection.selected_id` already stores, making it redundant.
+/// Public so the persistence serializer in `state.rs` applies the same rule.
+pub fn active_queue_is_redundant(collection: &PlaylistCollection, config: &serde_json::Value) -> bool {
+    let Some(selected) = collection
+        .selected_id
+        .as_deref()
+        .and_then(|id| collection.playlists.iter().find(|playlist| playlist.id == id))
+    else {
+        return false;
+    };
+    let entries_match = config
+        .get("entries")
+        .and_then(|value| serde_json::from_value::<Vec<StoredPlaylistEntry>>(value.clone()).ok())
+        .is_some_and(|entries| entries == selected.entries);
+    let loop_matches = config.get("loop").and_then(serde_json::Value::as_bool) == Some(selected.r#loop);
+    entries_match && loop_matches
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StoredPlaylistEntry {
@@ -468,7 +487,18 @@ impl Engine {
         let mut state = self.snapshot_scalar();
         let object = state.as_object_mut().ok_or("invalid runtime snapshot")?;
         object.insert("playlistCollection".into(), serde_json::to_value(collection).map_err(|e| e.to_string())?);
-        object.insert("playlistConfig".into(), config);
+        // The active queue is usually just the selected saved playlist, and the
+        // collection already carries those entries verbatim. Persisting both
+        // stored the same 73 entries twice (~3.7 KB each) and pushed a valid
+        // state past MAX_RUNTIME_STATE_BYTES: saving the shipped default playlist
+        // failed with "runtime state exceeds 16384 byte limit".
+        // `restore_runtime_state` rebuilds the queue through `playlist_select`,
+        // so the duplicate is only needed for an unsaved/draft queue.
+        if active_queue_is_redundant(collection, &config) {
+            object.remove("playlistConfig");
+        } else {
+            object.insert("playlistConfig".into(), config);
+        }
         object.insert("effects".into(), serde_json::to_value(self.capture_snapshot().effects).map_err(|e| e.to_string())?);
         Ok(state)
     }

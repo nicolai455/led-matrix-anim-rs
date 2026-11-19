@@ -36,7 +36,16 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
 
     let mic = engine.mic_settings();
 
-    let doc = json!({
+    let playlist_collection = engine.playlist_collection();
+    let active_queue = engine.playlist_config();
+    // The active queue is normally identical to the selected saved playlist, and
+    // the collection already stores those entries. Writing both duplicates every
+    // entry (~3.7 KB for the 73-entry default), which pushed a legitimate state
+    // past MAX_RUNTIME_STATE_BYTES and made "Save queue" fail with
+    // "runtime state exceeds 16384 byte limit".
+    let redundant = crate::engine::active_queue_is_redundant(&playlist_collection, &active_queue);
+
+    let mut doc = json!({
         "version": 1,
         "brightness": engine.brightness(),
         "effect": current_effect.name(),
@@ -49,8 +58,7 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
             "b": engine.color().b
         },
         "audio": audio_str,
-        "playlistCollection": engine.playlist_collection(),
-        "playlistConfig": engine.playlist_persistence(),
+        "playlistCollection": playlist_collection,
         "mic": {
             "gainDb": mic.gain_db,
             "squelchDb": mic.squelch_db,
@@ -62,6 +70,11 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
         },
         "params": params_map
     });
+    if !redundant {
+        if let Some(object) = doc.as_object_mut() {
+            object.insert("playlistConfig".into(), active_queue);
+        }
+    }
 
     doc.to_string()
 }

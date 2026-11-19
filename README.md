@@ -8,6 +8,7 @@
 [![Framerate](https://img.shields.io/badge/Framerate-60%2B%20FPS%20(4--Ch%20Parallel%20RMT)-success.svg)]()
 [![Audio](https://img.shields.io/badge/Audio-I2S%20DMA%20(INMP441%2FICS--43434)-blueviolet.svg)]()
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-MQTT%20Auto--Discovery-41BDF5.svg)](https://www.home-assistant.io/)
+[![Effects](https://img.shields.io/badge/Effects-82%20animated%20GIFs-38bdf8.svg)](docs/effects/index.html)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg)](https://github.com/nicolai455/led-matrix-anim-rs/pulls)
 
 > **High-framerate (60+ FPS), sound-reactive 2D WS2812B / NeoPixel LED matrix display firmware and desktop simulator written in pure Rust with ESP-IDF std.**
@@ -31,6 +32,42 @@ neopixel matrix visualizer, rust embedded esp-idf, parallel rmt led driver
 - **WASM Browser Preview & Desktop Simulator:** Develop and test effects without physical hardware using the WebAssembly browser simulator or host CLI tool (`cargo run -p matrix-control --bin matrix-simulator`).
 - **Home Assistant & Web Control:** Retained MQTT auto-discovery for all effects and live parameters, a responsive embedded Web UI, and a fallback Access Point (`JDJLIGHT` / `192.168.4.1`).
 - **Hardware Power Limiter:** Quiescent dark current compensation (accounts for ~1024 mA idle draw) and configurable 5V power budget throttling (default 12A limit). Always boots dark to protect USB ports.
+
+---
+
+## 🎬 Effect Gallery — all 82 effects as animated GIFs
+
+Every built-in effect, rendered frame by frame by the real engine — not screenshots
+and not hardware footage — and browsable in one scrollable page:
+
+### ▶️ **[Open the effect gallery](docs/effects/index.html)**
+
+| | |
+|---|---|
+| ![Fire](docs/effects/gifs/007-fire.gif) | ![Matrix Rain](docs/effects/gifs/010-matrix_rain.gif) |
+| `fire` | `matrix_rain` |
+| ![Kaleidoscope](docs/effects/gifs/024-kaleidoscope.gif) | ![Space Invaders](docs/effects/gifs/047-arcade_invaders.gif) |
+| `kaleidoscope` | `arcade_invaders` |
+
+Each card links its 4-second GIF (160×160, 25 fps) and a 2×3 contact sheet sampled
+at 10/30/50/70/85/95 % of the clip. The page needs no build step, no JavaScript
+framework and no network: it works from a fresh clone via `file://` as well as from
+any static host.
+
+Reproduce every artifact locally:
+
+```bash
+cargo run --release -p matrix-gif -- --all \
+    --out docs/effects/gifs --summary docs/effects/summary.json
+cargo run --release -p matrix-gif -- contact-sheets --all \
+    --out docs/effects/contact-sheets --summary docs/effects/contact-sheets-summary.json
+cargo run -p matrix-gif -- gallery      # rebuild docs/effects/index.html
+```
+
+Rendering is deterministic: frame *i* is drawn at `t = i·1000/fps` ms after 60
+warm-up frames with one synthetic audio track, so a re-run is byte-identical. See
+[`docs/effects/README.md`](docs/effects/README.md) for the artifact contract and
+[`crates/matrix-gif`](crates/matrix-gif/README.md) for the CLI.
 
 ---
 

@@ -239,6 +239,7 @@ class Page {
     this.requests = [];
     this.dialogs = [];
     this.expectedHttpErrors = [];
+    this.requestBodies = new Map();
     this.options = options;
     this.off = cdp.on(message => this.handle(message));
   }
@@ -257,10 +258,26 @@ class Page {
     }
     if (method === 'Network.requestWillBeSent') {
       this.requests.push(params.request.url);
+      // Keep the body of POSTs so a 4xx can be diagnosed instead of guessed at.
+      if (params.request.postData) {
+        this.requestBodies.set(params.requestId, {
+          url: params.request.url,
+          method: params.request.method,
+          body: params.request.postData,
+        });
+      }
     }
     if (method === 'Network.responseReceived') {
       const { status, url } = params.response;
-      if (status >= 400) this.httpErrors.push({ status, url });
+      if (status >= 400) {
+        const sent = this.requestBodies.get(params.requestId);
+        this.httpErrors.push({
+          status,
+          url,
+          body: sent && sent.body ? sent.body.slice(0, 400) : undefined,
+        });
+      }
+      this.requestBodies.delete(params.requestId);
     }
     if (method === 'Page.javascriptDialogOpening') {
       this.dialogs.push(params.message);
@@ -493,12 +510,13 @@ class Page {
 }
 
 /**
- * Host simulator expectations shared by every test page: the favicon is absent
- * and /api/network intentionally reports "no radio" with HTTP 503.
+ * Host simulator expectations shared by every test page. The favicon is absent;
+ * `/api/network` is served from the in-memory host store, so it is no longer an
+ * expected error. `/api/firmware` is device-only and answers 404 on the host.
  */
 function baselineExpectations(page) {
   page.expectHttpError(/\/favicon\.ico$/, 404);
-  page.expectHttpError(/\/api\/network$/, 503);
+  page.expectHttpError(/\/api\/firmware$/, 404);
   return page;
 }
 
