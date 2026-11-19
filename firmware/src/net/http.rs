@@ -94,9 +94,20 @@ pub struct HttpHeapPressure {
 
 pub const DMA_PRESSURE_FLOOR_BYTES: usize = 1024;
 
+/// Internal-heap floor for one API request. A `/api/command` carrying a full
+/// playlist needs a bigger contiguous buffer than a scalar command, so the
+/// admission check must use the same per-route limit the reader enforces.
+pub fn body_floor_for(method: &str, path: &str) -> usize {
+    matrix_control::api::body_limit_for(method, path).max(MAX_API_BODY_BYTES)
+}
+
 pub fn shed_dynamic_api(heap: HttpHeapPressure) -> bool {
-    heap.internal_free < MAX_API_BODY_BYTES
-        || heap.internal_largest < MAX_API_BODY_BYTES
+    shed_dynamic_api_for(heap, MAX_API_BODY_BYTES)
+}
+
+pub fn shed_dynamic_api_for(heap: HttpHeapPressure, internal_floor: usize) -> bool {
+    heap.internal_free < internal_floor
+        || heap.internal_largest < internal_floor
         || heap.dma_free < DMA_PRESSURE_FLOOR_BYTES
         || heap.dma_largest < DMA_PRESSURE_FLOOR_BYTES
 }
@@ -123,19 +134,29 @@ pub fn api_admission(method: &str, path: &str, memory_low: bool) -> ApiAdmission
 }
 
 #[cfg(target_os = "espidf")]
-fn memory_is_low() -> bool {
-    use esp_idf_sys as idf;
-    let internal = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_8BIT;
-    let dma = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_DMA;
-    // Samples are advisory and can change immediately after the calls.
-    unsafe {
-        shed_dynamic_api(HttpHeapPressure {
-            internal_free: idf::heap_caps_get_free_size(internal),
-            internal_largest: idf::heap_caps_get_largest_free_block(internal),
-            dma_free: idf::heap_caps_get_free_size(dma),
-            dma_largest: idf::heap_caps_get_largest_free_block(dma),
-        })
+impl HttpHeapPressure {
+    /// Samples the two capability regions once. Advisory only: the values can
+    /// change immediately after the calls, so callers must not treat this as a
+    /// reservation.
+    pub fn from_current() -> Self {
+        use esp_idf_sys as idf;
+        let internal = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_8BIT;
+        let dma = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_DMA;
+        unsafe {
+            Self {
+                internal_free: idf::heap_caps_get_free_size(internal),
+                internal_largest: idf::heap_caps_get_largest_free_block(internal),
+                dma_free: idf::heap_caps_get_free_size(dma),
+                dma_largest: idf::heap_caps_get_largest_free_block(dma),
+            }
+        }
     }
+}
+
+#[cfg(target_os = "espidf")]
+fn memory_is_low() -> bool {
+    // Samples are advisory and can change immediately after the calls.
+    shed_dynamic_api(HttpHeapPressure::from_current())
 }
 
 impl FirmwareHttpServer {
@@ -465,7 +486,18 @@ impl FirmwareHttpServer {
                         HttpResponse::err_json(503, "device low on memory, shedding load"),
                     );
                 }
+                let heap_now = HttpHeapPressure::from_current();
                 let uri = req.uri().to_string();
+                let body_limit = matrix_control::api::body_limit_for("POST", &uri);
+                if shed_dynamic_api_for(heap_now, body_floor_for("POST", &uri)) {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(
+                            503,
+                            "device low on contiguous internal memory for this payload; retry",
+                        ),
+                    );
+                }
                 let mut body = Vec::new();
                 let mut buf = [0u8; 512];
                 let mut total_read = 0;
@@ -485,7 +517,7 @@ impl FirmwareHttpServer {
                         break;
                     }
                     total_read += n;
-                    if total_read > MAX_API_BODY_BYTES {
+                    if total_read > body_limit {
                         payload_too_large = true;
                         break;
                     }

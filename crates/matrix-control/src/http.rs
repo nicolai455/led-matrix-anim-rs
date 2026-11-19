@@ -46,15 +46,16 @@ pub fn start_http_server(
                         // Strip query parameters for routing if needed
                         let path = url.split('?').next().unwrap_or(&url);
 
+                        let limit = crate::api::body_limit_for(&method, path);
                         let mut body = Vec::new();
-                        let read =
-                            std::io::Read::take(request.as_reader(), 4097).read_to_end(&mut body);
+                        let read = std::io::Read::take(request.as_reader(), limit as u64 + 1)
+                            .read_to_end(&mut body);
                         let res = if read.is_err() {
                             crate::api::HttpResponse::err_json(400, "request body read failed")
-                        } else if body.len() > 4096 {
+                        } else if body.len() > limit {
                             crate::api::HttpResponse::err_json(
                                 413,
-                                "request body exceeds 4096 bytes",
+                                &format!("request body exceeds {limit} bytes"),
                             )
                         } else {
                             handle_api_request(&ctx, &method, path, &body)

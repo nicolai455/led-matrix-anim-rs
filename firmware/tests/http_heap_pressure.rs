@@ -1,7 +1,27 @@
 use matrix_firmware::net::http::{
-    api_admission, shed_dynamic_api, ApiAdmission, HttpHeapPressure, DMA_PRESSURE_FLOOR_BYTES,
-    MAX_API_BODY_BYTES,
+    api_admission, body_floor_for, shed_dynamic_api, shed_dynamic_api_for, ApiAdmission,
+    HttpHeapPressure, DMA_PRESSURE_FLOOR_BYTES, MAX_API_BODY_BYTES,
 };
+
+#[test]
+fn a_playlist_command_needs_a_bigger_contiguous_block_than_a_scalar_command() {
+    // A full 73-entry queue is ~3.9 KB, a two-playlist library ~7.6 KB. Both are
+    // valid engine states, so the admission floor must follow the route limit.
+    assert_eq!(body_floor_for("POST", "/api/config"), MAX_API_BODY_BYTES);
+    assert!(body_floor_for("POST", "/api/command") > MAX_API_BODY_BYTES);
+
+    let command_floor = body_floor_for("POST", "/api/command");
+    let heap = HttpHeapPressure {
+        internal_free: command_floor,
+        internal_largest: command_floor,
+        dma_free: DMA_PRESSURE_FLOOR_BYTES,
+        dma_largest: DMA_PRESSURE_FLOOR_BYTES,
+    };
+    assert!(!shed_dynamic_api_for(heap, command_floor));
+    assert!(shed_dynamic_api_for(heap, command_floor + 1));
+    // The scalar route keeps working with the smaller floor on the same heap.
+    assert!(!shed_dynamic_api_for(heap, body_floor_for("POST", "/api/config")));
+}
 
 #[test]
 fn cached_gets_and_status_remain_available_under_pressure() {

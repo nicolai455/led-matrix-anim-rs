@@ -12,6 +12,26 @@ use std::time::Duration;
 // A const byte slice can be materialized twice across the crate boundary.
 pub static PREVIEW_WASM: &[u8] = include_bytes!("../assets/preview.wasm.gz");
 
+/// Body limits differ per route because the payloads differ in size by an order
+/// of magnitude: a scalar command is < 200 bytes, while a full 73-entry queue
+/// wrapped in `/api/command` is ~4.2 KB and a two-playlist library ~8.5 KB.
+/// A single flat 4 KB limit silently rejected valid queues (HTTP 413) while the
+/// web UI happily offered them — the "Playlist startet nicht" class of bug.
+pub const MAX_API_BODY_BYTES: usize = 4096;
+/// `/api/command` carries whole playlists; the engine accepts up to 8 named
+/// playlists of 73 entries, which the runtime-state limit caps at 16 KB anyway.
+pub const MAX_COMMAND_BODY_BYTES: usize = 16 * 1024;
+
+/// Upper bound for a request body on `path`, given the HTTP method.
+pub fn body_limit_for(method: &str, path: &str) -> usize {
+    let path = path.split('?').next().unwrap_or(path);
+    match (method, path) {
+        ("POST", "/api/command") => MAX_COMMAND_BODY_BYTES,
+        _ => MAX_API_BODY_BYTES,
+    }
+}
+
+
 // Keep persistence and live command submission ordered across concurrent requests.
 static CONFIG_REQUEST_LOCK: Mutex<()> = Mutex::new(());
 
