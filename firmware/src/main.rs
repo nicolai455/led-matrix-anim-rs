@@ -186,15 +186,20 @@ fn run_firmware() {
     if !engine.switch_to_effect(&panel_config.default_animation) {
         log::warn!("Unknown configured default effect; retaining initial effect");
     }
-    engine
-        .apply(
-            "light",
-            &serde_json::json!({"brightness":panel_config.led_brightness}).to_string(),
-        )
-        .expect("validated brightness");
+    // Validation already ran in PanelConfig::validate, but the engine is the
+    // authority here and a rejected command must not abort the boot: a panic
+    // in this path is a reboot loop on the device (panic = "abort").
+    if let Err(error) = engine.apply(
+        "light",
+        &serde_json::json!({"brightness":panel_config.led_brightness}).to_string(),
+    ) {
+        log::warn!("Configured boot brightness rejected: {error}");
+    }
     engine.set_auto_cycle_interval_ms(panel_config.auto_cycle_ms);
     if panel_config.auto_cycle_ms != 0 {
-        engine.apply("cycle", "ON").expect("valid cycle command");
+        if let Err(error) = engine.apply("cycle", "ON") {
+            log::warn!("Configured auto-cycle rejected: {error}");
+        }
     }
 
     let mut saved_state = nvs.get_saved_state().unwrap_or_else(|error| {

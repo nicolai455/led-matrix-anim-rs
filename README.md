@@ -12,7 +12,7 @@
 
 > **High-framerate (60+ FPS), sound-reactive 2D WS2812B / NeoPixel LED matrix display firmware and desktop simulator written in pure Rust with ESP-IDF std.**
 
-Featuring 80+ handcrafted 2D visual effects, real-time digital I2S microphone audio DSP, 4-channel parallel hardware RMT DMA driving, Home Assistant MQTT auto-discovery, fallback Wi-Fi Captive Portal, and an instant WebAssembly browser simulator.
+Featuring 82 handcrafted 2D visual effects, real-time digital I2S microphone audio DSP, 4-channel parallel hardware RMT DMA driving, Home Assistant MQTT auto-discovery, fallback Wi-Fi Captive Portal, and an instant WebAssembly browser simulator.
 
 ---
 
@@ -25,7 +25,7 @@ neopixel matrix visualizer, rust embedded esp-idf, parallel rmt led driver
 ## 🌟 Highlights
 
 - **Ultra-High Framerate (60–100+ FPS):** Uses 4 parallel hardware RMT DMA channels to drive 1024 LEDs simultaneously. Cutting transmission time from ~31 ms (single chain) down to **~7.7 ms** eliminates RMT buffer bottlenecks and guarantees smooth 60+ FPS animations.
-- **80+ Native 2D Effects:** Demoscene raymarching, fluid caustics, domain warping, metaballs, cellular automata, club/concert strobe fixtures, moving head beams, retro arcade games (Space Invaders, Pac-Man, Mario, Breakout), and pixel-art meme loops.
+- **82 Native 2D Effects:** Demoscene raymarching, fluid caustics, domain warping, metaballs, cellular automata, club/concert strobe fixtures, moving head beams, retro arcade games (Space Invaders, Pac-Man, Mario, Breakout), and pixel-art meme loops.
 - **Sound-Reactive DSP Engine:** Direct digital I2S DMA streaming (INMP441 / ICS-43434) with multi-band FFT frequency decomposition, transient beat detection, dynamic AGC, and zero CPU blocking.
 - **Zero-Allocation Rust Safety:** Memory-safe Rust with ESP-IDF std. Zero heap churn during render loops, no memory fragmentation, saturating color blending, and panic-resilient error boundaries.
 - **WASM Browser Preview & Desktop Simulator:** Develop and test effects without physical hardware using the WebAssembly browser simulator or host CLI tool (`cargo run -p matrix-control --bin matrix-simulator`).
@@ -46,7 +46,7 @@ WLED is the gold standard for addressable LED strips. However, when driving larg
 | **Memory Safety & Language** | **Pure Rust (ESP-IDF std)**, zero heap churn, zero buffer overflows | C++ (Arduino / ESP-IDF), manual memory management |
 | **Sound Reactivity** | Real-time I2S DMA worker thread, multi-band FFT, transient beat hits | AudioReactive Usermod (I2S/analog), shared loop scheduling |
 | **Hardware Simulator** | **Native Host Simulator & WebAssembly Browser Preview** | Limited 2D simulation; requires live hardware or WLED-WLED emulators |
-| **Effect Catalog** | **80+ bespoke 2D matrix shaders**, arcade games, disco fixtures, fluid dynamics | Hundreds of 1D strip effects; smaller native 2D matrix shader selection |
+| **Effect Catalog** | **82 bespoke 2D matrix shaders**, arcade games, disco fixtures, fluid dynamics | Hundreds of 1D strip effects; smaller native 2D matrix shader selection |
 | **Quiescent Current Tracking** | Accounts for 1 mA idle current per WS2812B pixel (1024 mA base) | Software brightness limiter without idle pixel calibration |
 | **1D Strip Effects** | ❌ Minimal (focus is exclusively on 2D matrices) | ✅ Massive 1D strip animation ecosystem |
 | **Segment Partitioning UI** | ❌ Fixed 2D matrix layout | ✅ Advanced arbitrary strip segment editor |
@@ -269,7 +269,7 @@ cargo run -p matrix-control --bin matrix-simulator -- --listen 127.0.0.1:8080
 ```
 
 Open `http://127.0.0.1:8080` in any browser. The simulator boots **OFF** by default. Toggle power ON to explore:
-- All 80+ visual effects and real-time parameter sliders.
+- All 82 visual effects and real-time parameter sliders.
 - Color, brightness, speed, and text overlays.
 - Virtual microphone audio input with synthetic audio generator.
 - Panel layout configuration and live FPS telemetry.
@@ -375,7 +375,7 @@ impl Effect for MyAwesomeEffect {
 | Crate / Path | Responsibility |
 | :--- | :--- |
 | **`crates/matrix-core`** | Pixel formats (`Rgb`), frame buffer (`Frame`), effect contract (`Effect`), audio DSP & FFT analysis, current limiting, geometry mapping, serialization. |
-| **`crates/matrix-effects`** | Catalog of 80+ handcrafted visual effects, parameter schemas, demoscene math, and lazy factory loading. |
+| **`crates/matrix-effects`** | Catalog of 82 handcrafted visual effects, parameter schemas, demoscene math, and lazy factory loading. |
 | **`crates/matrix-control`** | Render engine actor, bounded command queues, Web UI & REST API dispatch, MQTT & Home Assistant discovery, state persistence. |
 | **`crates/matrix-preview`** | WebAssembly bindings compiled to `.wasm` for instant zero-latency browser rendering. |
 | **`firmware`** | Production ESP-IDF application; currently supported only on ESP32-S3 N16R8. Classic ESP32 OTA images exceed their configured slots; see [`VERIFICATION.md`](VERIFICATION.md). |
