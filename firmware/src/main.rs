@@ -230,6 +230,23 @@ fn run_firmware() {
         log::warn!("Default sound playlist not installed: {error}");
     }
 
+    // The default playlist must be the active queue as well, otherwise the UI
+    // shows 73 saved entries next to an empty queue and Start stays disabled.
+    // Loading a queue stops playback, so the boot output remains dark.
+    let cycle_was_on = engine.snapshot_scalar()["cycle"] == "ON";
+    let active_queue_empty = engine
+        .playlist_config()
+        .get("entries")
+        .and_then(serde_json::Value::as_array)
+        .is_none_or(|entries| entries.is_empty());
+    if active_queue_empty {
+        if let Err(error) = engine.apply("playlist_select", &serde_json::json!({"id":"sound-default"}).to_string()) {
+            log::warn!("Default sound playlist not selected: {error}");
+        } else if cycle_was_on {
+            engine.set_auto_cycle_restored(true);
+        }
+    }
+
     // CRITICAL HARDWARE & SAFETY INVARIANT: Boots OFF including restore!
     // WS2812B LEDs always start dark on power up / reset.
     let _ = engine.apply("light", "{\"state\":\"OFF\"}");

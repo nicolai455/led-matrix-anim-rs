@@ -405,8 +405,8 @@ select option, .param-select option { background:var(--card); color:var(--text);
     <summary class="section-summary"><span><strong>Runtime state &amp; device</strong><small>Save settings to device storage or restart.</small></span></summary>
     <p class="config-help" style="margin-bottom:10px">Save or clear the current runtime state separately from hardware configuration.</p>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="saveState()">Save runtime state</button>
-      <button class="btn btn-danger" onclick="clearState()">Clear runtime state</button>
+      <button class="btn btn-primary" id="saveStateBtn" onclick="saveState()">Save runtime state</button>
+      <button class="btn btn-danger" id="clearStateBtn" onclick="clearState()">Clear runtime state</button>
       <button class="btn" id="restartBtn" onclick="restartDevice()">Restart Device</button>
     </div>
   </details>
@@ -433,6 +433,9 @@ let playlistStatePersisting = false;
 let playlistSaveVersion = 0;
 let playlistPendingPersistence = null;
 let playlistPersistenceNotice = '';
+// Server-side playlist failures must survive the 500 ms snapshot poll: they are
+// cleared only by the next successful playlist action, never by updatePlaylistUI().
+let playlistCommandError = '';
 let lastRenderedPlaylistView = '';
 const MAX_PLAYLIST_ENTRIES = 73;
 const MIN_PLAYLIST_ENTRY_MS = 1000;
@@ -453,6 +456,17 @@ let previewReady = false;
 let previewConnected = false;
 
 function previewMode() { return document.getElementById('previewMode').value; }
+// The host/device snapshot is camelCase (effectId, audioSource, ...) while legacy
+// payloads use snake_case. Normalize once on ingest so every consumer works.
+function normalizeSnapshot(source) {
+  if (!source || typeof source !== 'object') return source;
+  const s = source;
+  if (s.effect_id === undefined && typeof s.effectId === 'string') s.effect_id = s.effectId;
+  if (s.audio_source === undefined && typeof s.audioSource === 'string') s.audio_source = s.audioSource;
+  if (s.audio_status === undefined && typeof s.audioStatus === 'string') s.audio_status = s.audioStatus;
+  if (s.color_mode === undefined && typeof s.colorMode === 'string') s.color_mode = s.colorMode;
+  return s;
+}
 function previewStatus(text) { document.getElementById('previewStatus').textContent = text; }
 
 function syncPreviewState() {
@@ -728,7 +742,9 @@ async function postCommand(kind, payload) {
   } catch (e) {
     showToast('Network error submitting command', 'var(--red)');
     setTimeout(clearToast, 3000);
-    throw e;
+    // Never leave an unhandled rejection behind: the caller inspects `error`,
+    // and the UI must stay usable while the device is unreachable.
+    return { error: 'Network error: ' + String(e && e.message ? e.message : e) };
   }
 }
 
@@ -864,6 +880,11 @@ function renderNetworkProfiles() {
     actions.appendChild(button('↓', 'Move Wi-Fi profile down', () => moveNetworkProfile(index, 1)));
     actions.appendChild(button('Edit', 'Edit Wi-Fi profile', () => editNetworkProfile(index)));
     actions.appendChild(button('Remove', 'Remove Wi-Fi profile', () => { profiles.splice(index, 1); renderNetworkProfiles(); }));
+    row.dataset.networkIndex = String(index);
+    actions.querySelectorAll('button').forEach((item, position) => {
+      item.dataset.networkIndex = String(index);
+      item.dataset.networkAction = ['move-up', 'move-down', 'edit', 'remove'][position];
+    });
     row.appendChild(actions); container.appendChild(row);
   });
 }
@@ -1104,6 +1125,11 @@ function renderPlaylistEntries(snapshot) {
     actions.appendChild(button('↑', 'Move entry up', () => movePlaylistEntry(index, -1)));
     actions.appendChild(button('↓', 'Move entry down', () => movePlaylistEntry(index, 1)));
     actions.appendChild(button('−', 'Remove entry', () => removePlaylistEntry(index)));
+    row.dataset.playlistIndex = String(index);
+    actions.querySelectorAll('button').forEach((item, position) => {
+      item.dataset.playlistIndex = String(index);
+      item.dataset.playlistAction = ['move-up', 'move-down', 'remove'][position];
+    });
     row.appendChild(actions);
     container.appendChild(row);
   });
@@ -1181,11 +1207,11 @@ async function setPlaylistDuration(index, value, input) {
 }
 
 async function applyPlaylistConfig() {
-  const notice = document.getElementById('playlistNotice');
   playlistLoopDraft = document.getElementById('playlistLoop').checked;
   if (playlistEntries.length > MAX_PLAYLIST_ENTRIES || playlistEntries.some(entry =>
     !playlistEffect(entry.effectId) || !Number.isSafeInteger(entry.durationMs) || entry.durationMs < MIN_PLAYLIST_ENTRY_MS || entry.durationMs > MAX_PLAYLIST_ENTRY_MS)) {
-    notice.textContent = 'Queue contains an invalid effect or duration. Correct the queue before saving.';
+    playlistCommandError = 'Queue contains an invalid effect or duration. Correct the queue before saving.';
+    updatePlaylistUI();
     return;
   }
   const submittedEntries = playlistEntries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
@@ -1208,68 +1234,76 @@ async function applyPlaylistConfig() {
     notice.textContent = 'Queue command accepted' + (result && result.pending ? ' (queued)' : '') + '; waiting for device snapshot.';
     updatePlaylistUI();
   } catch (error) {
-    notice.textContent = 'Queue save failed.';
+    playlistPersistenceNotice = '';
+    playlistCommandError = 'Queue save failed: ' + String(error.message || error);
+    updatePlaylistUI();
+  }
+}
+
+// Resolve a startable active queue without the old three-path special casing.
+// Priority: unsaved draft > saved playlist selection > already active queue.
+async function ensureStartableQueue() {
+  const collection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
+    ? state.playlistCollection : {playlists:[], selectedId:null};
+  const selectEl = document.getElementById('playlistSavedSelect');
+  const selectedId = selectEl.value || playlistSelectionDraftId || collection.selectedId;
+  const selected = collection.playlists.find(item => item.id === selectedId);
+  const activeMatches = snapshot => !!selected && playlistSnapshotMatchesDraft(snapshot.playlist, selected.entries, selected.loop);
+
+  if (playlistDraftDirty && playlistEntries.length) {
+    // A draft that is byte-identical to a saved playlist only needs selecting;
+    // never resend an oversized queue the device already stores.
+    const savedMatch = collection.playlists.find(item => playlistSnapshotMatchesDraft(
+      {entries:item.entries,loop:item.loop}, playlistEntries, playlistLoopDraft));
+    if (savedMatch) {
+      const selection = await postCommand('playlist_select', {id: savedMatch.id});
+      if (selection && selection.error) throw new Error(selection.error);
+      await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+        snapshot.playlistCollection.selectedId === savedMatch.id &&
+        playlistSnapshotMatchesDraft(snapshot.playlist, savedMatch.entries, savedMatch.loop));
+      playlistDraftDirty = false;
+      playlistAwaitingSnapshot = false;
+      playlistDraftId = savedMatch.id;
+      playlistSelectionDraftId = savedMatch.id;
+      return;
+    }
+    const entries = playlistEntries.map(entry => ({effectId: entry.effectId, durationMs: entry.durationMs}));
+    const loop = document.getElementById('playlistLoop').checked;
+    const config = await postCommand('playlist_config', {entries, loop});
+    if (config && config.error) throw new Error(config.error);
+    await waitForPlaylistSnapshot(snapshot => playlistSnapshotMatchesDraft(snapshot.playlist, entries, loop));
+    playlistDraftDirty = false;
+    playlistAwaitingSnapshot = false;
+    playlistLoopDraft = loop;
+    return;
+  }
+  if (selected && !(collection.selectedId === selected.id && activeMatches(state))) {
+    const selection = await postCommand('playlist_select', {id: selected.id});
+    if (selection && selection.error) throw new Error(selection.error);
+    await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+      snapshot.playlistCollection.selectedId === selected.id && activeMatches(snapshot));
+    return;
+  }
+  if (!state.playlist || !Array.isArray(state.playlist.entries) || !state.playlist.entries.length) {
+    throw new Error('No queue is loaded. Select a saved playlist or load a preset first.');
   }
 }
 
 async function controlPlaylist(action) {
   if (!['start', 'pause', 'resume', 'stop', 'next', 'previous'].includes(action)) return;
-  const notice = document.getElementById('playlistNotice');
   try {
-    if (action === 'start') {
-      const collection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
-        ? state.playlistCollection : {playlists:[], selectedId:null};
-      let selectedId = document.getElementById('playlistSavedSelect').value || playlistSelectionDraftId || collection.selectedId;
-      if (selectedId && !collection.playlists.some(item => item.id === selectedId)) selectedId = collection.selectedId;
-      let selected = collection.playlists.find(item => item.id === selectedId);
-      const selectionDirty = !!selected && selectedId !== collection.selectedId;
-      if (playlistDraftDirty && playlistEntries.length) {
-        const entries = playlistEntries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
-        const loop = document.getElementById('playlistLoop').checked;
-        const builtInPreset = playlistDraftId === 'sound-default' && collection.playlists.some(item => item.id === 'sound-default');
-        if (builtInPreset) {
-          playlistDraftDirty = false;
-          playlistAwaitingSnapshot = false;
-          playlistLoopDraft = loop;
-          selectedId = 'sound-default';
-          selected = collection.playlists.find(item => item.id === selectedId);
-        } else if (selectionDirty) {
-          if (!selected || !playlistSnapshotMatchesDraft({entries:selected.entries,loop:selected.loop}, entries, loop)) {
-            throw new Error('Selected playlist has unsaved edits; save it before starting.');
-          }
-          playlistDraftDirty = false;
-          playlistAwaitingSnapshot = false;
-        } else {
-          const config = await postCommand('playlist_config', { entries, loop });
-          if (config && config.error) throw new Error(config.error);
-          await waitForPlaylistSnapshot(snapshot => playlistSnapshotMatchesDraft(snapshot.playlist, entries, loop));
-          playlistDraftDirty = false;
-          playlistAwaitingSnapshot = false;
-          playlistLoopDraft = loop;
-          selectedId = null;
-          selected = null;
-        }
-      }
-      const active = state.playlist && Array.isArray(state.playlist.entries) ? state.playlist : {entries:[]};
-      const selectedIsActive = selected && collection.selectedId === selected.id &&
-        playlistSnapshotMatchesDraft(active, selected.entries, selected.loop);
-      if (selected && !selectedIsActive) {
-        const selection = await postCommand('playlist_select', { id: selected.id });
-        if (selection && selection.error) throw new Error(selection.error);
-        await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
-          snapshot.playlistCollection.selectedId === selected.id &&
-          playlistSnapshotMatchesDraft(snapshot.playlist, selected.entries, selected.loop));
-      } else if (!active.entries.length) {
-        throw new Error('Select a saved playlist or load and save a queue before starting.');
-      }
-    }
+    if (action === 'start') await ensureStartableQueue();
     const result = await postCommand('playlist_control', { action });
     if (result && result.error) throw new Error(result.error);
+    // A successful playlist action clears any stale failure banner.
+    playlistCommandError = '';
     playlistPersistenceNotice = '';
-    notice.textContent = '';
+    document.getElementById('playlistNotice').textContent = '';
+    updatePlaylistUI();
   } catch (error) {
     playlistPersistenceNotice = '';
-    notice.textContent = 'Playlist ' + action + ' failed: ' + String(error.message || error);
+    playlistCommandError = 'Playlist ' + action + ' failed: ' + String(error.message || error);
+    updatePlaylistUI();
   }
 }
 
@@ -1386,22 +1420,51 @@ function loadDefaultSoundPlaylist() {
 async function saveNamedPlaylist() {
   const name = document.getElementById('playlistNameInput').value.trim();
   if (!name || new TextEncoder().encode(name).length > 64 || !playlistEntries.length || playlistEntries.length > MAX_PLAYLIST_ENTRIES) {
-    document.getElementById('playlistNotice').textContent = 'Give the playlist a 1–64 byte name and add 1–73 valid entries.';
+    playlistCommandError = 'Give the playlist a 1–64 byte name and add 1–73 valid entries.';
+    updatePlaylistUI();
     return;
   }
   if (playlistEntries.some(entry => !playlistEffect(entry.effectId) || !Number.isSafeInteger(entry.durationMs) || entry.durationMs < MIN_PLAYLIST_ENTRY_MS || entry.durationMs > MAX_PLAYLIST_ENTRY_MS)) {
-    document.getElementById('playlistNotice').textContent = 'Playlist contains an invalid effect or duration.';
+    playlistCommandError = 'Playlist contains an invalid effect or duration.';
+    updatePlaylistUI();
     return;
   }
   if (!playlistDraftId) await createNewPlaylistDraft();
+  // Nothing to write when the draft is byte-identical to the stored playlist:
+  // select the stored copy instead of resending a queue that may exceed the
+  // device body/size limits (e.g. the 73-entry sound-reactive default).
+  const stored = playlistCollection.playlists.find(item => item.id === playlistDraftId &&
+    item.name === name && !!item.loop === playlistLoopDraft &&
+    playlistSnapshotMatchesDraft({entries:item.entries,loop:item.loop}, playlistEntries, playlistLoopDraft));
+  if (stored) {
+    try {
+      const selection = await postCommand('playlist_select', {id: stored.id});
+      if (selection && selection.error) throw new Error(selection.error);
+      await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+        snapshot.playlistCollection.selectedId === stored.id &&
+        playlistSnapshotMatchesDraft(snapshot.playlist, stored.entries, stored.loop));
+      playlistDraftDirty = false;
+      playlistAwaitingSnapshot = false;
+      playlistSelectionDraftId = stored.id;
+      playlistCommandError = '';
+      await saveState();
+      document.getElementById('playlistNotice').textContent = 'Playlist “' + name + '” is already stored; selected it. Playback remains stopped.';
+    } catch (error) {
+      playlistCommandError = 'Playlist save failed: ' + String(error.message || error);
+    }
+    updatePlaylistUI();
+    return;
+  }
   const version = playlistSaveVersion;
   const payload = {id:playlistDraftId,name,entries:playlistEntries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs})),loop:playlistLoopDraft};
   playlistDraftDirty = true;
   const response = await postCommand('playlist_save', payload);
   if (response && response.error) {
-    document.getElementById('playlistNotice').textContent = 'Playlist save failed: ' + response.error;
+    playlistCommandError = 'Playlist save failed: ' + response.error;
+    updatePlaylistUI();
     return;
   }
+  playlistCommandError = '';
   playlistAwaitingSnapshot = true;
   if (response && response.pending) {
     playlistPersistenceNotice = 'Playlist save queued; waiting for matching device snapshot.';
@@ -1430,7 +1493,7 @@ async function saveNamedPlaylist() {
     playlistDraftDirty = true;
     playlistAwaitingSnapshot = false;
     playlistPersistenceNotice = '';
-    document.getElementById('playlistNotice').textContent = 'Playlist active but persistent state save failed: ' + String(error.message || error);
+    playlistCommandError = 'Playlist active but persistent state save failed: ' + String(error.message || error);
   }
   updatePlaylistUI();
 }
@@ -1515,6 +1578,11 @@ function updatePlaylistUI() {
   playlistCollection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
     ? state.playlistCollection : {playlists:[], selectedId:null};
   if (!playlistDraftDirty && !playlistSelectionDraftId) playlistDraftId = playlistCollection.selectedId;
+  // With exactly one stored playlist an unset dropdown is never a real choice:
+  // preselect it so Start is not silently disabled on a fresh boot.
+  if (!playlistSelectionDraftId && !playlistCollection.selectedId && playlistCollection.playlists.length === 1) {
+    playlistSelectionDraftId = playlistCollection.playlists[0].id;
+  }
   renderPlaylistSelector();
   const selected = playlistCollection.playlists.find(item => item.id === (playlistSelectionDraftId || playlistCollection.selectedId));
   const selectedPlaylist = playlistCollection.playlists.find(item => item.id === playlistDraftId);
@@ -1564,21 +1632,26 @@ function updatePlaylistUI() {
   else if (!playlistDraftDirty && status === 'stopped' && snapshot.entries.length && state.effect_id)
     messages.push('Playback stopped; manual effect selection is active and is not part of this queue.');
   if (status === 'running' && index < 0) messages.push('Playlist status is inconsistent: running without a current entry.');
+
+  const selectedId = document.getElementById('playlistSavedSelect').value;
+  const hasSelectedPlaylist = playlistCollection.playlists.some(item => item.id === selectedId);
+  const draftStartable = playlistDraftDirty && playlistEntries.length &&
+    (!playlistDraftId || playlistCollection.playlists.some(item => item.id === playlistDraftId));
+  // Explicit reason so the button is never disabled without an explanation.
+  const noQueueSelected = status !== 'running' && !draftStartable && !snapshot.entries.length && !hasSelectedPlaylist;
+  if (noQueueSelected) {
+    messages.push('No playlist selected. Pick a saved playlist above or press “Load sound-reactive default (10 s each)”, then “Save queue”.');
+  }
+  if (playlistCommandError) messages.unshift(playlistCommandError);
   if (playlistPersistenceNotice) messages.unshift(playlistPersistenceNotice);
   if (messages.length) notice.textContent = messages.join(' ');
   else if (playlistPersistenceNotice) notice.textContent = playlistPersistenceNotice;
+  else if (playlistCommandError) notice.textContent = playlistCommandError;
   else if (notice.textContent.startsWith('Queue save failed') || notice.textContent.startsWith('Playlist ') || notice.textContent.startsWith('Queue command accepted')) {
     // Preserve a transient command status until replaced by the next operation.
   } else notice.textContent = '';
-  if (playlistDraftDirty && playlistEntries.length &&
-      (!playlistDraftId || playlistCollection.playlists.some(item => item.id === playlistDraftId))) {
-    document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot;
-  } else {
-    const selectedId = document.getElementById('playlistSavedSelect').value;
-    const hasSelectedPlaylist = playlistCollection.playlists.some(item => item.id === selectedId);
-    document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot ||
-      (playlistDraftDirty && !!playlistEntries.length) || (!snapshot.entries.length && !hasSelectedPlaylist);
-  }
+  document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot ||
+    (!draftStartable && ((playlistDraftDirty && !!playlistEntries.length) || noQueueSelected));
   document.getElementById('playlistPauseBtn').disabled = playlistDraftDirty || status !== 'running';
   document.getElementById('playlistResumeBtn').disabled = playlistDraftDirty || status !== 'paused';
   document.getElementById('playlistStopBtn').disabled = playlistDraftDirty || status === 'stopped';
@@ -2013,7 +2086,7 @@ async function loop() {
   }
   try {
     const s = await fetchJSON('/api/state');
-    state = s;
+    state = normalizeSnapshot(s);
     queueMicHistory(s);
     previewConnected = true;
     syncPreviewState();
