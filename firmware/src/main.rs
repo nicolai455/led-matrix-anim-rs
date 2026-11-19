@@ -389,12 +389,25 @@ fn run_firmware() {
     });
     #[cfg(target_os = "espidf")]
     matrix_firmware::memory_diagnostics::log_heap("before-wifi-start");
+    let wifi_state = Arc::new(matrix_firmware::net::WifiState::new());
+    let scan_cache = Arc::new(matrix_firmware::net::ScanCache::new());
+    let setup_token = match matrix_firmware::setup_token::load_or_create(&nvs) {
+        Ok(token) => token,
+        Err(error) => {
+            // Without a token the home network stays read-only; the fallback AP
+            // still works, so this is an error log, not a fatal failure.
+            log::error!("Setup token provisioning failed: {error}");
+            String::new()
+        }
+    };
     #[cfg(target_os = "espidf")]
     let _wifi = match WifiManager::start(
         modem,
         sysloop,
         default_nvs,
         wifi_config,
+        Arc::clone(&scan_cache),
+        Arc::clone(&wifi_state),
     ) {
         Ok(w) => {
             log::info!("Wi-Fi service initialized");
@@ -413,6 +426,9 @@ fn run_firmware() {
         api_ctx,
         Arc::clone(&ota_manager),
         Arc::clone(&nvs),
+        Arc::clone(&wifi_state),
+        Arc::clone(&scan_cache),
+        Arc::new(setup_token),
     ) {
         Ok(s) => {
             log::warn!("HTTP server operational on port 80");

@@ -2,9 +2,49 @@
 //! This module deliberately does not expose stored passphrases.
 use crate::network_config::{NetworkConfig, WifiProfile, MAX_NETWORK_CONFIG_BYTES, MAX_WIFI_PROFILES};
 use crate::nvs_store::FirmwareNvs;
+use crate::request_guard::ControlScope;
 use serde_json::{json, Value};
 
 pub const NETWORK_BODY_LIMIT: usize = 4096;
+
+/// Split a serialized JSON object into its body (everything before the final
+/// `}`) and a flag telling whether the object was empty. `None` means the bytes
+/// are not a JSON object and must not be extended.
+pub fn split_state_object(snapshot: &[u8]) -> Option<(&[u8], bool)> {
+    let end = snapshot.iter().rposition(|byte| !byte.is_ascii_whitespace())?;
+    if snapshot.get(end) != Some(&b'}') {
+        return None;
+    }
+    let body = &snapshot[..end];
+    let empty = body.iter().rev().find(|byte| !byte.is_ascii_whitespace()) == Some(&b'{');
+    Some((body, empty))
+}
+
+/// Append a `wifi` object to an existing `/api/state` JSON object without
+/// re-parsing it. Returns `None` when the snapshot does not look like a JSON
+/// object or the extra allocation cannot be reserved, so callers can fall back
+/// to the unmodified snapshot instead of aborting on OOM.
+///
+/// Firmware streams the two halves instead of calling this (to avoid a second
+/// snapshot-sized allocation); host code and tests use it directly.
+pub fn append_wifi_state(snapshot: &[u8], wifi: &Value) -> Option<Vec<u8>> {
+    let (body, empty_object) = split_state_object(snapshot)?;
+    let separator: &[u8] = if empty_object { b"\"wifi\":" } else { b",\"wifi\":" };
+    let wifi = serde_json::to_vec(wifi).ok()?;
+    let mut out = Vec::new();
+    out.try_reserve(body.len() + separator.len() + wifi.len() + 1).ok()?;
+    out.extend_from_slice(body);
+    out.extend_from_slice(separator);
+    out.extend_from_slice(&wifi);
+    out.push(b'}');
+    Some(out)
+}
+
+/// `setupToken` is only disclosed to callers inside the station subnet: the
+/// fallback AP needs no token, and a foreign network must not learn it.
+pub fn setup_token_for(scope: ControlScope, token: &str) -> Option<&str> {
+    (scope == ControlScope::LocalSubnet).then_some(token)
+}
 
 pub fn redacted_config(config: &NetworkConfig) -> Result<Value, String> {
     let profiles = config.prioritized_wifi_profiles()?.iter().map(|profile| json!({
@@ -91,6 +131,33 @@ pub fn update_config(nvs: &FirmwareNvs, body: &[u8]) -> Result<Value, String> {
 mod tests {
     use super::*;
     fn store() -> std::sync::Arc<FirmwareNvs> { FirmwareNvs::new().unwrap() }
+
+    #[test]
+    fn wifi_state_is_appended_to_an_existing_snapshot() {
+        let wifi = json!({"mode": "mixed", "sta": {"connected": false}});
+        let merged = append_wifi_state(br#"{"brightness":128,"effect":"Rain"}"#, &wifi).unwrap();
+        let parsed: Value = serde_json::from_slice(&merged).unwrap();
+        assert_eq!(parsed["brightness"], 128);
+        assert_eq!(parsed["effect"], "Rain");
+        assert_eq!(parsed["wifi"]["mode"], "mixed");
+        assert_eq!(parsed["wifi"]["sta"]["connected"], false);
+
+        // Trailing whitespace and an empty object must both stay valid JSON.
+        let merged = append_wifi_state(b"{\n }\n", &wifi).unwrap();
+        let parsed: Value = serde_json::from_slice(&merged).unwrap();
+        assert_eq!(parsed["wifi"]["mode"], "mixed");
+        // Anything that is not a JSON object is rejected instead of corrupted.
+        assert!(append_wifi_state(b"[]", &wifi).is_none());
+        assert!(append_wifi_state(b"", &wifi).is_none());
+    }
+
+    #[test]
+    fn setup_token_is_only_disclosed_inside_the_station_subnet() {
+        assert_eq!(setup_token_for(ControlScope::LocalSubnet, "ABCDEFGH"), Some("ABCDEFGH"));
+        assert_eq!(setup_token_for(ControlScope::FallbackAp, "ABCDEFGH"), None);
+        assert_eq!(setup_token_for(ControlScope::Untrusted, "ABCDEFGH"), None);
+    }
+
     #[test]
     fn response_redacts_wifi_ap_and_mqtt_secrets() {
         let nvs = store();

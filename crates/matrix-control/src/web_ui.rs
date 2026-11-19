@@ -329,13 +329,18 @@ select option, .param-select option { background:var(--card); color:var(--text);
 <details class="card config-card" id="networkCard">
   <summary><span><span class="config-title">Wi-Fi and fallback access point</span><span class="config-subtitle">Configure prioritized station profiles and local setup access</span></span></summary>
   <div class="config-body">
-    <p class="config-notice">The AP WPA2 passphrase protects local configuration; the UI has no separate login. Stored passphrases are never returned by the API. Blank fields keep existing secrets; use the explicit clear action to remove one. Changes trigger a controlled restart after save; reconnect at <code>http://192.168.4.1/</code>.</p>
+    <p class="config-notice">Stored passphrases are never returned by the API; blank fields keep existing secrets, and the explicit clear action removes one. Saving restarts the device: it then joins the home network you configured and is reachable at the IP your router assigns — <strong>not</strong> only at <code>http://192.168.4.1/</code>. The fallback AP exists for setup and recovery while the station link is down.</p>
+    <div class="config-notice" id="networkTokenNotice" style="display:none">Changes from this network need the device setup token. <label class="config-field" style="margin-top:6px">Setup token<input id="networkSetupToken" maxlength="8" autocomplete="off" spellcheck="false" placeholder="8 characters"></label><span class="config-help">Shown only inside the home network. Enter it before saving; it is kept in this tab only.</span></div>
+    <div class="config-notice" id="networkApWarning" style="display:none; border-color:var(--yellow)"><strong>No fallback AP password set.</strong> Without one there is no recovery access point: if the new profile is wrong, the only way back is a USB flash. Set an AP passphrase before you move the device into your home network.</div>
+    <div class="btn-row" style="margin-bottom:8px"><button class="btn" id="networkScanBtn" type="button">Scan for networks</button><span class="config-help" id="networkScanStatus" role="status" aria-live="polite"></span></div>
+    <div class="playlist-list" id="networkScanResults" aria-live="polite"></div>
     <div class="config-grid"><label class="config-field">New profile SSID<input id="networkSsid" maxlength="32" autocomplete="off"></label><label class="config-field">Priority<input id="networkPriority" type="number" min="0" max="255" value="0"></label><label class="config-check"><input id="networkHidden" type="checkbox"> Hidden SSID</label></div>
-    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="networkPassword">New profile password</label><input id="networkPassword" type="password" autocomplete="new-password" aria-label="New profile password"></div></form>
+    <label class="config-check"><input id="networkOpenNetwork" type="checkbox"> Open network (no password)</label>
+    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="networkPassword">New profile password</label><input id="networkPassword" type="password" autocomplete="new-password" aria-label="New profile password" placeholder="8–64 bytes, or tick “Open network”"></div></form>
     <div class="btn-row"><button class="btn" id="networkAddProfileBtn" type="button">Add Wi-Fi profile</button></div>
     <div class="playlist-list" id="networkProfiles" aria-live="polite"></div>
     <div class="config-grid"><label class="config-field">Fallback AP SSID<input id="fallbackApSsid" maxlength="32"></label></div>
-    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="fallbackApPassword">New AP password</label><input id="fallbackApPassword" type="password" autocomplete="new-password" aria-label="New AP password"></div></form>
+    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="fallbackApPassword">New AP password</label><input id="fallbackApPassword" type="password" autocomplete="new-password" aria-label="New AP password" placeholder="at least 8 bytes"></div></form>
     <label class="config-check"><input id="fallbackApPasswordClear" type="checkbox"> Clear saved AP password and disable fallback AP</label>
     <div class="btn-row"><button class="btn btn-primary" id="networkSaveBtn" type="button">Save Wi-Fi settings</button><span id="networkStatus" role="status" aria-live="polite"></span></div>
   </div>
@@ -776,6 +781,7 @@ async function loadNetworkConfig() {
     state.networkConfig = value;
     document.getElementById('fallbackApSsid').value = value.fallbackApSsid || 'JDJLIGHT';
     document.getElementById('fallbackApPasswordClear').checked = false;
+    document.getElementById('networkApWarning').style.display = value.fallbackApPasswordConfigured === false ? 'block' : 'none';
     renderNetworkProfiles();
     status.textContent = value.networkAvailable === false
       ? 'Wi-Fi configuration loaded; hardware networking unavailable in this host adapter.'
@@ -787,19 +793,65 @@ async function loadNetworkConfig() {
   } catch (error) {
     status.textContent = 'Wi-Fi configuration unavailable: ' + String(error.message || error);
   }
+  await loadNetworkSetupToken();
+}
+
+// The setup token is only served to clients inside the device's station subnet.
+// When it is absent the card stays usable through the fallback AP.
+async function loadNetworkSetupToken() {
+  const notice = document.getElementById('networkTokenNotice');
+  try {
+    const info = await fetchJSON('/api/firmware');
+    if (typeof info.setupToken === 'string' && info.setupToken) {
+      notice.style.display = 'block';
+      const field = document.getElementById('networkSetupToken');
+      if (!field.value) field.placeholder = info.setupToken;
+      return;
+    }
+  } catch (error) { /* no firmware endpoint in this adapter */ }
+  notice.style.display = 'none';
+}
+
+function setupTokenValue() {
+  const notice = document.getElementById('networkTokenNotice');
+  if (notice.style.display === 'none') return '';
+  const field = document.getElementById('networkSetupToken');
+  const typed = (field.value || '').trim();
+  return typed || (field.placeholder || '').trim();
+}
+
+function networkStatusText(snapshot) {
+  const wifi = snapshot && snapshot.wifi;
+  if (!wifi || !Array.isArray(wifi.profiles) || !wifi.profiles.length) return {};
+  const bySsid = {};
+  wifi.profiles.forEach(profile => { bySsid[profile.ssid] = profile.state; });
+  return bySsid;
+}
+
+// Re-render the profile list only when the live Wi-Fi state actually changed, so
+// the fast /api/state poll does not thrash the DOM.
+let lastNetworkLiveView = '';
+function updateNetworkLiveState() {
+  const wifi = state && state.wifi;
+  const view = JSON.stringify(wifi || null);
+  if (view === lastNetworkLiveView) return;
+  lastNetworkLiveView = view;
+  renderNetworkProfiles();
 }
 
 function renderNetworkProfiles() {
   const container = document.getElementById('networkProfiles');
   const config = state.networkConfig || {};
   const profiles = Array.isArray(config.wifiProfiles) ? config.wifiProfiles : [];
+  const liveStates = networkStatusText(state);
   while (container.firstChild) container.removeChild(container.firstChild);
   profiles.forEach((profile, index) => {
     const row = document.createElement('div');
     row.className = 'playlist-entry';
     const label = document.createElement('span');
     label.className = 'playlist-entry-title';
-    label.textContent = profile.ssid + ' · priority ' + profile.priority + (profile.hidden ? ' · hidden' : '') + (profile.passwordConfigured ? ' · password saved' : ' · open network');
+    const liveState = liveStates[profile.ssid];
+    label.textContent = profile.ssid + ' · priority ' + profile.priority + (profile.hidden ? ' · hidden' : '') + (profile.passwordConfigured ? ' · password saved' : ' · open network') + (liveState ? ' · ' + liveState : '');
     row.appendChild(label);
     const actions = document.createElement('div');
     actions.className = 'playlist-entry-actions';
@@ -852,6 +904,11 @@ async function saveNetworkConfig() {
   };
   const ssidEl = document.getElementById('networkSsid');
   const editIndex = Number(ssidEl.dataset.editIndex);
+  const openNetwork = document.getElementById('networkOpenNetwork').checked;
+  if (openNetwork && networkPassword) {
+    status.textContent = 'An open network has no password; clear the password field or untick “Open network”.';
+    return;
+  }
   if (ssidEl.value || networkPassword || ssidEl.dataset.editIndex !== undefined) {
     const ssid = ssidEl.value;
     const priority = Number(document.getElementById('networkPriority').value);
@@ -859,7 +916,7 @@ async function saveNetworkConfig() {
     const existing = Number.isInteger(editIndex) && editIndex >= 0 ? payload.wifiProfiles[editIndex] : null;
     const profile = existing || {};
     if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || !Number.isInteger(priority) || priority < 0 || priority > 255 || (networkPassword && new TextEncoder().encode(networkPassword).length < 8)) {
-      status.textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes.';
+      status.textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes. Tick “Open network” for a network without a password.';
       return;
     }
     if (!existing && payload.wifiProfiles.length >= 5) {
@@ -871,9 +928,16 @@ async function saveNetworkConfig() {
       return;
     }
     Object.assign(profile, { ssid, priority, hidden });
-    if (networkPassword) {
+    if (openNetwork) {
+      // Explicitly open: the firmware stores no password, the UI previously
+      // demanded eight bytes and made open networks impossible to save.
+      profile.clearPassword = true;
+      delete profile.password;
+      delete profile.keepPassword;
+    } else if (networkPassword) {
       profile.password = networkPassword;
       delete profile.keepPassword;
+      delete profile.clearPassword;
     } else if (existing && existing.passwordConfigured) {
       profile.keepPassword = true;
     }
@@ -881,19 +945,83 @@ async function saveNetworkConfig() {
   }
   if (password) payload.fallbackApPassword = password;
   if (document.getElementById('fallbackApPasswordClear').checked) payload.clearFallbackApPassword = true;
+  const token = setupTokenValue();
   try {
-    const response = await fetch('/api/network', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' }, body: JSON.stringify(payload) });
+    const headers = { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' };
+    if (token) headers['X-Matrix-Setup-Token'] = token;
+    const response = await fetch('/api/network', { method: 'POST', headers, body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || response.statusText);
     state.networkConfig = result.config;
     document.getElementById('fallbackApPassword').value = '';
     document.getElementById('networkPassword').value = '';
     document.getElementById('networkSsid').value = '';
+    document.getElementById('networkOpenNetwork').checked = false;
     delete document.getElementById('networkSsid').dataset.editIndex;
     document.getElementById('fallbackApPasswordClear').checked = false;
-    status.textContent = 'Saved. The device will restart; reconnect at ' + (result.address || 'http://192.168.4.1/');
+    status.textContent = 'Saved. The device will restart and join the configured home network; find it there at the IP your router assigns. The fallback AP at http://192.168.4.1/ only stays up while the station link is down.';
     renderNetworkProfiles();
   } catch (error) { status.textContent = 'Save failed: ' + String(error.message || error); }
+}
+
+async function scanNetwork() {
+  const status = document.getElementById('networkScanStatus');
+  status.textContent = 'Scanning…';
+  try {
+    const response = await fetch('/api/network/scan', { cache: 'no-store' });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || response.statusText);
+    const networks = Array.isArray(value.networks) ? value.networks : [];
+    if (value.stale && !networks.length) {
+      // The radio may still be scanning; poll a few times before giving up.
+      if (!scanNetwork.attempts) scanNetwork.attempts = 0;
+      if (scanNetwork.attempts < 6) {
+        scanNetwork.attempts += 1;
+        status.textContent = 'Scan in progress…';
+        setTimeout(scanNetwork, 1500);
+        return;
+      }
+    }
+    scanNetwork.attempts = 0;
+    renderScanResults(networks);
+    status.textContent = networks.length
+      ? networks.length + ' network(s)' + (value.connectionMayDrop ? ' — the scan briefly interrupts the station link.' : '')
+      : 'No networks found. Move closer to the router and scan again.';
+  } catch (error) {
+    scanNetwork.attempts = 0;
+    status.textContent = 'Scan failed: ' + String(error.message || error);
+  }
+}
+
+function renderScanResults(networks) {
+  const container = document.getElementById('networkScanResults');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  networks.forEach(network => {
+    const row = document.createElement('div');
+    row.className = 'playlist-entry';
+    const label = document.createElement('span');
+    label.className = 'playlist-entry-title';
+    const bars = network.rssi >= -55 ? '▂▄▆█' : network.rssi >= -67 ? '▂▄▆' : network.rssi >= -78 ? '▂▄' : '▂';
+    const lock = network.auth && network.auth !== 'open' ? ' 🔒' : ' (open)';
+    label.textContent = network.ssid + ' · ch ' + network.channel + ' · ' + network.rssi + ' dBm ' + bars + lock;
+    row.appendChild(label);
+    const actions = document.createElement('div');
+    actions.className = 'playlist-entry-actions';
+    const use = document.createElement('button');
+    use.type = 'button'; use.className = 'btn'; use.textContent = 'Use';
+    use.title = 'Use this SSID for a new profile';
+    use.onclick = () => {
+      document.getElementById('networkSsid').value = network.ssid;
+      document.getElementById('networkOpenNetwork').checked = !network.auth || network.auth === 'open';
+      document.getElementById('networkPassword').value = '';
+      document.getElementById('networkHidden').checked = false;
+      delete document.getElementById('networkSsid').dataset.editIndex;
+      document.getElementById('networkScanStatus').textContent = 'SSID filled in' + (network.auth && network.auth !== 'open' ? '; enter the ' + network.auth + ' password below.' : '; open network selected.');
+    };
+    actions.appendChild(use);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
 }
 
 function addNetworkProfile() {
@@ -902,8 +1030,13 @@ function addNetworkProfile() {
   const priority = Number(document.getElementById('networkPriority').value);
   const password = document.getElementById('networkPassword').value;
   const hidden = document.getElementById('networkHidden').checked;
+  const openNetwork = document.getElementById('networkOpenNetwork').checked;
+  if (openNetwork && password) {
+    document.getElementById('networkStatus').textContent = 'An open network has no password; clear the password field or untick “Open network”.';
+    return;
+  }
   if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || !Number.isInteger(priority) || priority < 0 || priority > 255 || (password && new TextEncoder().encode(password).length < 8)) {
-    document.getElementById('networkStatus').textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes.';
+    document.getElementById('networkStatus').textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes. Tick “Open network” for a network without a password.';
     return;
   }
   const config = state.networkConfig || (state.networkConfig = { wifiProfiles: [] });
@@ -914,13 +1047,15 @@ function addNetworkProfile() {
     return;
   }
   const profile = { ssid, priority, hidden };
-  if (password) profile.password = password;
+  if (openNetwork) profile.clearPassword = true;
+  else if (password) profile.password = password;
   if (Number.isInteger(editIndex) && editIndex >= 0 && editIndex < config.wifiProfiles.length) {
-    if (!password && config.wifiProfiles[editIndex].passwordConfigured) profile.keepPassword = true;
+    if (!password && !openNetwork && config.wifiProfiles[editIndex].passwordConfigured) profile.keepPassword = true;
     config.wifiProfiles[editIndex] = profile;
     delete ssidEl.dataset.editIndex;
   } else config.wifiProfiles.push(profile);
   ssidEl.value = ''; document.getElementById('networkPassword').value = '';
+  document.getElementById('networkOpenNetwork').checked = false;
   renderNetworkProfiles();
 }
 
@@ -1663,6 +1798,7 @@ function updateUI() {
   }
   document.getElementById('cycleToggle').checked = state.cycle === 'ON';
   updatePlaylistUI();
+  updateNetworkLiveState();
 
   // Audio buttons
   ['Off', 'Synthetic', 'Mic'].forEach(s => {
@@ -1928,6 +2064,7 @@ async function init() {
   document.getElementById('playlistApplyBtn').onclick = saveNamedPlaylist;
   document.getElementById('networkAddProfileBtn').onclick = addNetworkProfile;
   document.getElementById('networkSaveBtn').onclick = saveNetworkConfig;
+  document.getElementById('networkScanBtn').onclick = scanNetwork;
 
   try {
     let effects = await fetchJSON('/api/effects');
