@@ -6,6 +6,7 @@
 //! so the same command reproduces byte-identical GIFs.
 
 mod contact;
+mod gallery;
 mod gif;
 mod model;
 mod render;
@@ -98,6 +99,24 @@ enum Command {
         #[arg(long, value_name = "PATH")]
         summary: Option<PathBuf>,
     },
+    /// Write the static `index.html` gallery for already-rendered artifacts.
+    Gallery {
+        /// Directory holding `gifs/` and `contact-sheets/`.
+        #[arg(long, value_name = "DIR", default_value = "docs/effects")]
+        dir: PathBuf,
+
+        /// Summary produced by the GIF run.
+        #[arg(long, value_name = "PATH", default_value = "docs/effects/summary.json")]
+        summary: PathBuf,
+
+        /// Output file for the gallery page.
+        #[arg(long, value_name = "PATH", default_value = "docs/effects/index.html")]
+        out: PathBuf,
+
+        /// Repository URL linked in the page header.
+        #[arg(long, default_value = "https://github.com/nicolai455/led-matrix-anim-rs")]
+        repo: String,
+    },
 }
 
 /// Top-level summary document written to `--summary`.
@@ -142,6 +161,9 @@ fn run(cli: Cli) -> Result<i32, String> {
             audio,
             summary,
         }) => contact_sheets(&out, all, effects, seconds, fps, scale, audio, summary.as_deref()),
+        Some(Command::Gallery { dir, summary, out, repo }) => {
+            gallery_page(&dir, &summary, &out, &repo)
+        }
         None => gifs(
             &cli.out,
             cli.all,
@@ -421,6 +443,73 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     } else {
         "<non-string panic payload>".to_string()
     }
+}
+
+/// Builds `index.html` from an existing summary and verifies that every artifact
+/// the page links to is actually present, so a fresh clone never ships a gallery
+/// full of 404s.
+fn gallery_page(dir: &Path, summary_path: &Path, out: &Path, repo: &str) -> Result<i32, String> {
+    let raw = std::fs::read_to_string(summary_path)
+        .map_err(|error| format!("cannot read {}: {error}", summary_path.display()))?;
+    #[derive(serde::Deserialize)]
+    struct SummaryDoc {
+        fps: u32,
+        seconds: f64,
+        effects: Vec<EffectSummary>,
+    }
+    let doc: SummaryDoc = serde_json::from_str(&raw)
+        .map_err(|error| format!("cannot parse {}: {error}", summary_path.display()))?;
+    if doc.effects.is_empty() {
+        return Err(format!("{} contains no effects", summary_path.display()));
+    }
+
+    let mut missing = Vec::new();
+    for row in &doc.effects {
+        let stem = format!(
+            "{:03}-{}",
+            row.index + 1,
+            row.id
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
+                .collect::<String>()
+        );
+        for candidate in [
+            dir.join("gifs").join(format!("{stem}.gif")),
+            dir.join("contact-sheets").join(format!("{stem}.png")),
+        ] {
+            if !candidate.exists() {
+                missing.push(candidate.display().to_string());
+            }
+        }
+    }
+    if !missing.is_empty() {
+        return Err(format!(
+            "{} artifacts referenced by the summary are missing (first: {}); render them first",
+            missing.len(),
+            missing[0]
+        ));
+    }
+
+    let html = gallery::render(
+        &doc.effects,
+        &gallery::GalleryMeta {
+            seconds: doc.seconds,
+            fps: doc.fps,
+            repo,
+        },
+    );
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    std::fs::write(out, html).map_err(|error| format!("cannot write {}: {error}", out.display()))?;
+    println!(
+        "gallery: {} effects -> {} ({} bytes)",
+        doc.effects.len(),
+        out.display(),
+        std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0)
+    );
+    Ok(0)
 }
 
 fn finish(

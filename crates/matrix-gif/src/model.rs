@@ -1,6 +1,6 @@
 //! Shared model types for the effect GIF / contact-sheet renderer.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// How audio is fed to the engine while rendering.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -72,7 +72,7 @@ fn sanitize(id: &str) -> String {
 }
 
 /// Per-effect summary row written to `summary.json`.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EffectSummary {
     pub index: usize,
     pub id: String,

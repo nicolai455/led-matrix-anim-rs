@@ -123,10 +123,24 @@ fn handle_api_request_inner(
         ("GET", "/preview.wasm.gz") => {
             HttpResponse::ok_binary("application/gzip", PREVIEW_WASM.to_vec())
         }
-        ("GET", "/api/network") | ("POST", "/api/network") => HttpResponse::err_json(
-            503,
-            "Wi-Fi configuration is unavailable in host simulator mode; no radio is present",
-        ),
+        // The host has no radio, but the Wi-Fi card must still be exercisable:
+        // this in-memory store answers with the firmware's exact response shape
+        // and validation rules, and always reports `networkAvailable: false`.
+        ("GET", "/api/network") => HttpResponse::ok_json(crate::network_host::config_json()),
+        ("POST", "/api/network") => {
+            let (status, value) = crate::network_host::apply(body);
+            if status == 200 {
+                HttpResponse::ok_json(value)
+            } else {
+                HttpResponse::err_json(status, value["error"].as_str().unwrap_or("invalid request"))
+            }
+        }
+        ("GET", "/api/network/scan") => HttpResponse::ok_json(json!({
+            "networks": [],
+            "stale": false,
+            "networkAvailable": false,
+            "notice": "the host simulator has no radio, so there is nothing to scan",
+        })),
         ("GET", "/api/audio") => {
             let snapshot = ctx.hub.snapshot_scalar();
             let mut audio = serde_json::Map::new();

@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod http;
 pub mod hub;
 pub mod mic;
+pub mod network_host;
 #[cfg(feature = "host")]
 pub mod mqtt;
 pub mod persistence;
