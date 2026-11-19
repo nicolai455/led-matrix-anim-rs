@@ -212,6 +212,61 @@ fn rapid_effect_switch_and_reset_stays_stable() {
     }
 }
 
+#[test]
+fn every_effect_survives_an_unclamped_delta_and_stays_within_a_frame_budget() {
+    // `Engine::render` clamps delta to 0.5 s, so it can never expose a catch-up
+    // loop that replays simulated time. Effects are also driven directly (preview
+    // renderer, matrix-gif, tests), so the unclamped contract needs its own guard.
+    // `game_of_life` used to step once per elapsed generation with no cap: a
+    // resumed host (delta ~1e9) stalled the render thread for minutes in a debug
+    // build. A real frame budget is the assertion that catches that class.
+    use matrix_core::{Effect, RenderContext, Rgb};
+    use std::time::{Duration, Instant};
+
+    const BUDGET: Duration = Duration::from_millis(400);
+    let mut slow = Vec::new();
+    let mut nonfinite = Vec::new();
+
+    for effect in matrix_effects::builtin_effects().iter_mut() {
+        let id = effect.id().to_string();
+        let audio = hostile_audio().into_iter().next().expect("a hostile case").1;
+        let started = Instant::now();
+        for frame_idx in 0..40u64 {
+            // Alternate an exploding clock with a stuck one.
+            let now_ms = if frame_idx % 2 == 0 {
+                frame_idx * (u64::MAX / 2 / 40)
+            } else {
+                u64::MAX / 2
+            };
+            let context = RenderContext {
+                now_ms,
+                delta_seconds: 1e9,
+                audio: &audio,
+                color: Rgb::new(200, 100, 50),
+                text: "HELLO WORLD",
+                scroll_speed: 30.0,
+            };
+            let mut frame = Frame::new();
+            effect.render(&mut frame, &context);
+            if !frame_is_finite(&frame) {
+                nonfinite.push(id.clone());
+                break;
+            }
+        }
+        let elapsed = started.elapsed();
+        if elapsed > BUDGET {
+            slow.push(format!("{id} took {elapsed:?}"));
+        }
+    }
+
+    assert!(nonfinite.is_empty(), "non-finite frames from: {nonfinite:?}");
+    assert!(
+        slow.is_empty(),
+        "effects exceeded a {BUDGET:?} budget for 40 frames at delta=1e9:\n{}",
+        slow.join("\n")
+    );
+}
+
 fn frame_is_finite(frame: &Frame) -> bool {
     // Rgb is u8, so a frame is always finite; the real check is that the
     // effect did not panic before returning one. Keep the hook so a future

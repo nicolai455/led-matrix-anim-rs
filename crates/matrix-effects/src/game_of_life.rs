@@ -236,8 +236,14 @@ impl Effect for GameOfLifeEffect {
         let step_time = 1.0 / gen_rate.max(1.0);
         self.accumulator += dt;
 
-        while self.accumulator >= step_time {
+        // A huge delta (host sleep/resume, a stalled render thread) must not turn
+        // into an unbounded catch-up loop: every generation is a full 32x32 pass,
+        // so `delta_seconds = 1e9` would spin for minutes on the render thread.
+        // Cap the number of generations per frame and drop the leftover time.
+        let mut steps = 0;
+        while self.accumulator >= step_time && steps < 8 {
             self.accumulator -= step_time;
+            steps += 1;
 
             // Compute next generation
             let mut live_count = 0usize;
@@ -285,6 +291,10 @@ impl Effect for GameOfLifeEffect {
             if live_count < 15 {
                 self.randomize();
             }
+        }
+        if self.accumulator >= step_time {
+            // Backlog from a long stall is discarded, not replayed next frame.
+            self.accumulator = 0.0;
         }
 
         // Phosphor decay for dead cells
