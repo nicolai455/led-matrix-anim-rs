@@ -17,3 +17,6 @@ firmware/state.json
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local Hermes plans/scratch
+.hermes/
