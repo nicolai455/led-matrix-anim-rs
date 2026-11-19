@@ -90,13 +90,13 @@ impl PopcatEffect {
                 Rgb::new(50, 45, 40),
             ),
             1 => (
-                Rgb::new(35, 35, 45),    // Tuxedo dark
+                Rgb::new(35, 35, 45), // Tuxedo dark
                 Rgb::new(255, 150, 180),
                 Rgb::new(15, 15, 20),
             ),
             2 => (
-                Rgb::new(20, 240, 200),  // Neon Cyan
-                Rgb::new(255, 30, 140),  // Neon Pink
+                Rgb::new(20, 240, 200), // Neon Cyan
+                Rgb::new(255, 30, 140), // Neon Pink
                 Rgb::new(10, 20, 40),
             ),
             _ => (
@@ -120,7 +120,9 @@ impl Effect for PopcatEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -167,9 +169,21 @@ impl Effect for PopcatEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let speed = (self.values[0] / 30.0) * (1.0 + bass * 0.7);

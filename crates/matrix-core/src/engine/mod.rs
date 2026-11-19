@@ -13,19 +13,24 @@ pub const MAX_STORED_PLAYLISTS: usize = 8;
 /// True when `config` (an active queue) is byte-equivalent to the entries of the
 /// playlist `collection.selected_id` already stores, making it redundant.
 /// Public so the persistence serializer in `state.rs` applies the same rule.
-pub fn active_queue_is_redundant(collection: &PlaylistCollection, config: &serde_json::Value) -> bool {
-    let Some(selected) = collection
-        .selected_id
-        .as_deref()
-        .and_then(|id| collection.playlists.iter().find(|playlist| playlist.id == id))
-    else {
+pub fn active_queue_is_redundant(
+    collection: &PlaylistCollection,
+    config: &serde_json::Value,
+) -> bool {
+    let Some(selected) = collection.selected_id.as_deref().and_then(|id| {
+        collection
+            .playlists
+            .iter()
+            .find(|playlist| playlist.id == id)
+    }) else {
         return false;
     };
     let entries_match = config
         .get("entries")
         .and_then(|value| serde_json::from_value::<Vec<StoredPlaylistEntry>>(value.clone()).ok())
         .is_some_and(|entries| entries == selected.entries);
-    let loop_matches = config.get("loop").and_then(serde_json::Value::as_bool) == Some(selected.r#loop);
+    let loop_matches =
+        config.get("loop").and_then(serde_json::Value::as_bool) == Some(selected.r#loop);
     entries_match && loop_matches
 }
 
@@ -57,15 +62,22 @@ impl PlaylistCollection {
     pub fn validate(&self) -> Result<(), String> {
         use std::collections::HashSet;
         if self.playlists.len() > MAX_STORED_PLAYLISTS {
-            return Err(format!("at most {MAX_STORED_PLAYLISTS} named playlists are supported"));
+            return Err(format!(
+                "at most {MAX_STORED_PLAYLISTS} named playlists are supported"
+            ));
         }
         let mut ids = HashSet::new();
         for playlist in &self.playlists {
             if playlist.id.is_empty()
                 || playlist.id.len() > 64
-                || !playlist.id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+                || !playlist
+                    .id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
             {
-                return Err("playlist id must contain 1..=64 ASCII letters, digits, '-' or '_'".into());
+                return Err(
+                    "playlist id must contain 1..=64 ASCII letters, digits, '-' or '_'".into(),
+                );
             }
             if playlist.name.trim().is_empty() || playlist.name.len() > 64 {
                 return Err("playlist name must contain 1..=64 bytes".into());
@@ -74,11 +86,16 @@ impl PlaylistCollection {
                 return Err("playlist ids must be unique".into());
             }
             if playlist.entries.is_empty() || playlist.entries.len() > MAX_PLAYLIST_ENTRIES {
-                return Err(format!("each named playlist must have 1..={MAX_PLAYLIST_ENTRIES} entries"));
+                return Err(format!(
+                    "each named playlist must have 1..={MAX_PLAYLIST_ENTRIES} entries"
+                ));
             }
             for (index, entry) in playlist.entries.iter().enumerate() {
                 if entry.effect_id.is_empty() || entry.effect_id.len() > 64 {
-                    return Err(format!("playlist '{}' entry {index} has an invalid effect id", playlist.id));
+                    return Err(format!(
+                        "playlist '{}' entry {index} has an invalid effect id",
+                        playlist.id
+                    ));
                 }
                 if !(MIN_PLAYLIST_ENTRY_MS..=MAX_PLAYLIST_ENTRY_MS).contains(&entry.duration_ms) {
                     return Err(format!("playlist '{}' entry {index} durationMs must be in [{MIN_PLAYLIST_ENTRY_MS}..{MAX_PLAYLIST_ENTRY_MS}]", playlist.id));
@@ -86,7 +103,11 @@ impl PlaylistCollection {
             }
         }
         if let Some(selected) = &self.selected_id {
-            if !self.playlists.iter().any(|playlist| &playlist.id == selected) {
+            if !self
+                .playlists
+                .iter()
+                .any(|playlist| &playlist.id == selected)
+            {
                 return Err("selected playlist id must name a saved playlist".into());
             }
         }
@@ -483,10 +504,17 @@ impl Engine {
         self.dirty = true;
     }
 
-    fn complete_runtime_state(&self, collection: &PlaylistCollection, config: serde_json::Value) -> Result<serde_json::Value, String> {
+    fn complete_runtime_state(
+        &self,
+        collection: &PlaylistCollection,
+        config: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
         let mut state = self.snapshot_scalar();
         let object = state.as_object_mut().ok_or("invalid runtime snapshot")?;
-        object.insert("playlistCollection".into(), serde_json::to_value(collection).map_err(|e| e.to_string())?);
+        object.insert(
+            "playlistCollection".into(),
+            serde_json::to_value(collection).map_err(|e| e.to_string())?,
+        );
         // The active queue is usually just the selected saved playlist, and the
         // collection already carries those entries verbatim. Persisting both
         // stored the same 73 entries twice (~3.7 KB each) and pushed a valid
@@ -499,67 +527,125 @@ impl Engine {
         } else {
             object.insert("playlistConfig".into(), config);
         }
-        object.insert("effects".into(), serde_json::to_value(self.capture_snapshot().effects).map_err(|e| e.to_string())?);
+        object.insert(
+            "effects".into(),
+            serde_json::to_value(self.capture_snapshot().effects).map_err(|e| e.to_string())?,
+        );
         Ok(state)
     }
 
     pub fn validate_named_playlist(&self, playlist: &StoredPlaylist) -> Result<(), String> {
         let mut next = self.playlist_collection.clone();
-        if let Some(index) = next.playlists.iter().position(|existing| existing.id == playlist.id) {
+        if let Some(index) = next
+            .playlists
+            .iter()
+            .position(|existing| existing.id == playlist.id)
+        {
             next.playlists[index] = playlist.clone();
         } else {
             if next.playlists.len() >= MAX_STORED_PLAYLISTS {
-                return Err(format!("at most {MAX_STORED_PLAYLISTS} named playlists are supported"));
+                return Err(format!(
+                    "at most {MAX_STORED_PLAYLISTS} named playlists are supported"
+                ));
             }
             next.playlists.push(playlist.clone());
         }
         next.selected_id = Some(playlist.id.clone());
         next.validate()?;
         for entry in &playlist.entries {
-            if !self.effects.iter().any(|effect| effect.id() == entry.effect_id) {
-                return Err(format!("unknown stable effect id '{}' in playlist", entry.effect_id));
+            if !self
+                .effects
+                .iter()
+                .any(|effect| effect.id() == entry.effect_id)
+            {
+                return Err(format!(
+                    "unknown stable effect id '{}' in playlist",
+                    entry.effect_id
+                ));
             }
         }
         let config = json!({"entries":playlist.entries,"loop":playlist.r#loop});
         let state = self.complete_runtime_state(&next, config)?;
         let encoded = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
         if encoded.len() > MAX_RUNTIME_STATE_BYTES {
-            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+            return Err(format!(
+                "runtime state exceeds {} byte limit",
+                MAX_RUNTIME_STATE_BYTES
+            ));
         }
         Ok(())
     }
 
-    pub(crate) fn restore_named_playlist_state(&mut self, collection: &PlaylistCollection) -> Result<(), String> {
+    pub(crate) fn restore_named_playlist_state(
+        &mut self,
+        collection: &PlaylistCollection,
+    ) -> Result<(), String> {
         collection.validate()?;
         for playlist in &collection.playlists {
             for (index, entry) in playlist.entries.iter().enumerate() {
-                if !self.effects.iter().any(|effect| effect.id() == entry.effect_id) {
-                    return Err(format!("playlist '{}' entry {index} references unknown effect id '{}'", playlist.id, entry.effect_id));
+                if !self
+                    .effects
+                    .iter()
+                    .any(|effect| effect.id() == entry.effect_id)
+                {
+                    return Err(format!(
+                        "playlist '{}' entry {index} references unknown effect id '{}'",
+                        playlist.id, entry.effect_id
+                    ));
                 }
             }
         }
-        let state = self.complete_runtime_state(collection, json!({"entries": self.playlist_entries, "loop": self.playlist_loop}))?;
-        if serde_json::to_vec(&state).map_err(|error| error.to_string())?.len() > MAX_RUNTIME_STATE_BYTES {
-            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+        let state = self.complete_runtime_state(
+            collection,
+            json!({"entries": self.playlist_entries, "loop": self.playlist_loop}),
+        )?;
+        if serde_json::to_vec(&state)
+            .map_err(|error| error.to_string())?
+            .len()
+            > MAX_RUNTIME_STATE_BYTES
+        {
+            return Err(format!(
+                "runtime state exceeds {} byte limit",
+                MAX_RUNTIME_STATE_BYTES
+            ));
         }
         self.playlist_collection = collection.clone();
         self.dirty = true;
         Ok(())
     }
 
-    pub fn install_default_sound_playlist(&mut self, playlist: StoredPlaylist) -> Result<(), String> {
+    pub fn install_default_sound_playlist(
+        &mut self,
+        playlist: StoredPlaylist,
+    ) -> Result<(), String> {
         let mut next = self.playlist_collection.clone();
-        if next.playlists.iter().any(|existing| existing.id == playlist.id) {
+        if next
+            .playlists
+            .iter()
+            .any(|existing| existing.id == playlist.id)
+        {
             return Ok(());
         }
         self.validate_named_playlist(&playlist)?;
         if next.playlists.len() >= MAX_STORED_PLAYLISTS {
-            return Err(format!("at most {MAX_STORED_PLAYLISTS} named playlists are supported"));
+            return Err(format!(
+                "at most {MAX_STORED_PLAYLISTS} named playlists are supported"
+            ));
         }
         next.playlists.push(playlist.clone());
-        let state = self.complete_runtime_state(&next, json!({"entries": self.playlist_entries, "loop": self.playlist_loop}))?;
-        if serde_json::to_vec(&state).map_err(|error| error.to_string())?.len() > MAX_RUNTIME_STATE_BYTES {
-            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+        let state = self.complete_runtime_state(
+            &next,
+            json!({"entries": self.playlist_entries, "loop": self.playlist_loop}),
+        )?;
+        if serde_json::to_vec(&state)
+            .map_err(|error| error.to_string())?
+            .len()
+            > MAX_RUNTIME_STATE_BYTES
+        {
+            return Err(format!(
+                "runtime state exceeds {} byte limit",
+                MAX_RUNTIME_STATE_BYTES
+            ));
         }
         self.playlist_collection = next;
         self.dirty = true;
@@ -576,12 +662,22 @@ impl Engine {
         )?;
         let encoded = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
         if encoded.len() > MAX_RUNTIME_STATE_BYTES {
-            return Err(format!("runtime state exceeds {} byte limit", MAX_RUNTIME_STATE_BYTES));
+            return Err(format!(
+                "runtime state exceeds {} byte limit",
+                MAX_RUNTIME_STATE_BYTES
+            ));
         }
         for playlist in &collection.playlists {
             for (index, entry) in playlist.entries.iter().enumerate() {
-                if !self.effects.iter().any(|effect| effect.id() == entry.effect_id) {
-                    return Err(format!("playlist '{}' entry {index} references unknown effect id '{}'", playlist.id, entry.effect_id));
+                if !self
+                    .effects
+                    .iter()
+                    .any(|effect| effect.id() == entry.effect_id)
+                {
+                    return Err(format!(
+                        "playlist '{}' entry {index} references unknown effect id '{}'",
+                        playlist.id, entry.effect_id
+                    ));
                 }
             }
         }
@@ -591,9 +687,16 @@ impl Engine {
     }
 
     fn activate_saved_playlist(&mut self, id: &str) -> Result<(), String> {
-        let playlist = self.playlist_collection.playlists.iter().find(|playlist| playlist.id == id)
-            .ok_or_else(|| format!("unknown saved playlist '{id}'"))?.clone();
-        let payload = serde_json::to_string(&json!({"entries":playlist.entries,"loop":playlist.r#loop})).map_err(|e| e.to_string())?;
+        let playlist = self
+            .playlist_collection
+            .playlists
+            .iter()
+            .find(|playlist| playlist.id == id)
+            .ok_or_else(|| format!("unknown saved playlist '{id}'"))?
+            .clone();
+        let payload =
+            serde_json::to_string(&json!({"entries":playlist.entries,"loop":playlist.r#loop}))
+                .map_err(|e| e.to_string())?;
         self.apply_playlist_config(&payload)?;
         self.playlist_collection.selected_id = Some(playlist.id);
         self.dirty = true;
@@ -603,13 +706,19 @@ impl Engine {
     pub fn save_named_playlist(&mut self, playlist: StoredPlaylist) -> Result<(), String> {
         self.validate_named_playlist(&playlist)?;
         let mut next = self.playlist_collection.clone();
-        if let Some(index) = next.playlists.iter().position(|existing| existing.id == playlist.id) {
+        if let Some(index) = next
+            .playlists
+            .iter()
+            .position(|existing| existing.id == playlist.id)
+        {
             next.playlists[index] = playlist.clone();
         } else {
             next.playlists.push(playlist.clone());
         }
         next.selected_id = Some(playlist.id.clone());
-        let active = serde_json::to_string(&json!({"entries":playlist.entries,"loop":playlist.r#loop})).map_err(|e| e.to_string())?;
+        let active =
+            serde_json::to_string(&json!({"entries":playlist.entries,"loop":playlist.r#loop}))
+                .map_err(|e| e.to_string())?;
         self.apply_playlist_config(&active)?;
         self.playlist_collection = next;
         self.dirty = true;
@@ -620,8 +729,12 @@ impl Engine {
         let mut next = self.playlist_collection.clone();
         let before = next.playlists.len();
         next.playlists.retain(|playlist| playlist.id != id);
-        if next.playlists.len() == before { return Err(format!("unknown saved playlist '{id}'")); }
-        if next.selected_id.as_deref() == Some(id) { next.selected_id = None; }
+        if next.playlists.len() == before {
+            return Err(format!("unknown saved playlist '{id}'"));
+        }
+        if next.selected_id.as_deref() == Some(id) {
+            next.selected_id = None;
+        }
         self.apply_playlist_collection(&serde_json::to_string(&next).map_err(|e| e.to_string())?)
     }
 
@@ -652,7 +765,11 @@ impl Engine {
             return;
         }
 
-        let round_ms: u64 = self.playlist_entries.iter().map(|entry| entry.duration_ms).sum();
+        let round_ms: u64 = self
+            .playlist_entries
+            .iter()
+            .map(|entry| entry.duration_ms)
+            .sum();
         if self.playlist_loop && round_ms > 0 {
             overdue %= round_ms;
         }
@@ -827,16 +944,17 @@ impl Engine {
                 } else {
                     current - 1
                 };
-                let effect_idx = match self.effect_index_by_id(&self.playlist_entries[index].effect_id) {
-                    Some(effect_idx) => effect_idx,
-                    None => {
-                        let id = self.playlist_entries[index].effect_id.clone();
-                        self.stop_playlist();
-                        return Err(format!(
-                            "cannot skip to entry {index}: effect '{id}' is not in this build"
-                        ));
-                    }
-                };
+                let effect_idx =
+                    match self.effect_index_by_id(&self.playlist_entries[index].effect_id) {
+                        Some(effect_idx) => effect_idx,
+                        None => {
+                            let id = self.playlist_entries[index].effect_id.clone();
+                            self.stop_playlist();
+                            return Err(format!(
+                                "cannot skip to entry {index}: effect '{id}' is not in this build"
+                            ));
+                        }
+                    };
                 self.playlist_index = Some(index);
                 self.playlist_remaining_ms = self.playlist_entries[index].duration_ms;
                 self.playlist_last_update_ms = self.last_render_ms;
@@ -943,15 +1061,21 @@ impl Engine {
             "playlist_select" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
-                struct Select { id: String }
-                let select: Select = serde_json::from_str(payload).map_err(|e| format!("invalid playlist_select JSON: {e}"))?;
+                struct Select {
+                    id: String,
+                }
+                let select: Select = serde_json::from_str(payload)
+                    .map_err(|e| format!("invalid playlist_select JSON: {e}"))?;
                 self.activate_saved_playlist(&select.id)
             }
             "playlist_delete" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
-                struct Delete { id: String }
-                let delete: Delete = serde_json::from_str(payload).map_err(|e| format!("invalid playlist_delete JSON: {e}"))?;
+                struct Delete {
+                    id: String,
+                }
+                let delete: Delete = serde_json::from_str(payload)
+                    .map_err(|e| format!("invalid playlist_delete JSON: {e}"))?;
                 self.delete_named_playlist(&delete.id)
             }
             "playlist_collection" => self.apply_playlist_collection(payload),
@@ -1605,7 +1729,10 @@ mod tests {
         let playlist = engine.snapshot()["playlist"].clone();
         assert_eq!(playlist["status"], "stopped");
         let notice = playlist["notice"].as_str().unwrap_or_default();
-        assert!(notice.contains("ghost"), "notice must name the effect: {playlist:?}");
+        assert!(
+            notice.contains("ghost"),
+            "notice must name the effect: {playlist:?}"
+        );
     }
 
     #[test]

@@ -87,15 +87,29 @@ impl GalaxySpiralEffect {
         Self::default()
     }
 
-    fn sample_color(pal: usize, color_cycle: f32, brightness: f32, r_norm: f32, arm_angle: f32) -> Rgb {
+    fn sample_color(
+        pal: usize,
+        color_cycle: f32,
+        brightness: f32,
+        r_norm: f32,
+        arm_angle: f32,
+    ) -> Rgb {
         let b = clamp01(brightness);
         match pal {
             0 => {
                 // Andromeda (Deep space violet / magenta / electric blue / white core)
                 let core_white = (1.0 - r_norm * 2.5).max(0.0) * b;
-                let r = to_byte(255.0 * ((0.4 * (1.0 - r_norm) + 0.6 * (arm_angle * 0.5).sin().abs()) * b + core_white));
-                let g = to_byte(255.0 * ((0.1 * (1.0 - r_norm) + 0.3 * (1.0 - r_norm).powi(2)) * b + core_white));
-                let blue = to_byte(255.0 * ((0.8 * r_norm + 0.5 * (1.0 - r_norm)) * b + core_white));
+                let r = to_byte(
+                    255.0
+                        * ((0.4 * (1.0 - r_norm) + 0.6 * (arm_angle * 0.5).sin().abs()) * b
+                            + core_white),
+                );
+                let g = to_byte(
+                    255.0
+                        * ((0.1 * (1.0 - r_norm) + 0.3 * (1.0 - r_norm).powi(2)) * b + core_white),
+                );
+                let blue =
+                    to_byte(255.0 * ((0.8 * r_norm + 0.5 * (1.0 - r_norm)) * b + core_white));
                 Rgb::new(r, g, blue)
             }
             1 => {
@@ -141,7 +155,9 @@ impl Effect for GalaxySpiralEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -187,9 +203,21 @@ impl Effect for GalaxySpiralEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -235,7 +263,11 @@ impl Effect for GalaxySpiralEffect {
                 // Shimmer from treble / mid
                 let star_sparkle = if audio_active && r > 3.0 {
                     let noise = (spiral_angle * 12.0).sin() * (r * 4.0).cos();
-                    if noise > 0.7 { treble * 0.35 } else { 0.0 }
+                    if noise > 0.7 {
+                        treble * 0.35
+                    } else {
+                        0.0
+                    }
                 } else {
                     0.0
                 };
@@ -244,7 +276,13 @@ impl Effect for GalaxySpiralEffect {
                 let total_brightness = (core_brightness + arm_brightness).clamp(0.0, 1.0);
 
                 if total_brightness > 0.04 {
-                    let col = Self::sample_color(pal, self.color_cycle, total_brightness, r_norm, spiral_angle);
+                    let col = Self::sample_color(
+                        pal,
+                        self.color_cycle,
+                        total_brightness,
+                        r_norm,
+                        spiral_angle,
+                    );
                     frame.set(x, y, col);
                 }
             }

@@ -6,7 +6,9 @@
 //! persisted runtime state is capped at 16 KB — so the transport must accept at
 //! least one full queue and a small playlist library.
 
-use matrix_control::api::{body_limit_for, handle_api_request, ApiContext, MAX_API_BODY_BYTES, MAX_COMMAND_BODY_BYTES};
+use matrix_control::api::{
+    body_limit_for, handle_api_request, ApiContext, MAX_API_BODY_BYTES, MAX_COMMAND_BODY_BYTES,
+};
 use matrix_control::config::ConfigStore;
 use matrix_control::hub::{ControlHub, LedOutput};
 use matrix_control::mic::MicController;
@@ -25,7 +27,10 @@ impl LedOutput for FastOutput {
 /// Every built-in effect id, longest first: worst case for the JSON encoding.
 fn effect_ids_by_length(len: usize) -> Vec<String> {
     let effects = matrix_effects::builtin_effects();
-    let mut ids: Vec<String> = effects.iter().map(|effect| effect.id().to_string()).collect();
+    let mut ids: Vec<String> = effects
+        .iter()
+        .map(|effect| effect.id().to_string())
+        .collect();
     ids.sort_by_key(|id| std::cmp::Reverse(id.len()));
     ids.truncate(len);
     ids
@@ -50,7 +55,10 @@ fn full_73_entry_queue_fits_the_command_body_limit() {
         .into_iter()
         .map(|id| json!({ "effectId": id, "durationMs": 10000 }))
         .collect();
-    let body = command_body("playlist_config", json!({ "entries": entries, "loop": true }));
+    let body = command_body(
+        "playlist_config",
+        json!({ "entries": entries, "loop": true }),
+    );
     // Measured: ~3.9 KB with the longest catalog ids. That leaves < 5 % headroom
     // under the old flat 4 KB limit — any added field or longer id broke it.
     assert!(
@@ -63,8 +71,14 @@ fn full_73_entry_queue_fits_the_command_body_limit() {
         "a full queue must fit the command limit, got {} bytes",
         body.len()
     );
-    assert_eq!(body_limit_for("POST", "/api/command"), MAX_COMMAND_BODY_BYTES);
-    assert_eq!(body_limit_for("POST", "/api/command?x=1"), MAX_COMMAND_BODY_BYTES);
+    assert_eq!(
+        body_limit_for("POST", "/api/command"),
+        MAX_COMMAND_BODY_BYTES
+    );
+    assert_eq!(
+        body_limit_for("POST", "/api/command?x=1"),
+        MAX_COMMAND_BODY_BYTES
+    );
     assert_eq!(body_limit_for("POST", "/api/config"), MAX_API_BODY_BYTES);
     assert_eq!(body_limit_for("GET", "/api/state"), MAX_API_BODY_BYTES);
 }
@@ -79,7 +93,10 @@ fn the_api_accepts_a_full_queue_command_and_reports_it_as_running_capable() {
         .into_iter()
         .map(|id| json!({ "effectId": id, "durationMs": 10000 }))
         .collect();
-    let body = command_body("playlist_config", json!({ "entries": entries, "loop": true }));
+    let body = command_body(
+        "playlist_config",
+        json!({ "entries": entries, "loop": true }),
+    );
     let response = handle_api_request(&ctx, "POST", "/api/command", &body);
     assert!(
         response.status < 400,
@@ -89,7 +106,10 @@ fn the_api_accepts_a_full_queue_command_and_reports_it_as_running_capable() {
     );
 
     let snapshot: Value = serde_json::from_slice(hub.snapshot_json().as_ref()).unwrap();
-    assert_eq!(snapshot["playlist"]["entries"].as_array().unwrap().len(), 73);
+    assert_eq!(
+        snapshot["playlist"]["entries"].as_array().unwrap().len(),
+        73
+    );
 
     let start = handle_api_request(
         &ctx,

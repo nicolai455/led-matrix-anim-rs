@@ -115,7 +115,6 @@ impl EffectSummary {
 /// Luma in 0..=255 using Rec. 709 weights (integer math, no float drift).
 #[inline]
 pub fn luma(pixel: matrix_core::Rgb) -> u8 {
-    let value =
-        (2126 * pixel.r as u32 + 7152 * pixel.g as u32 + 722 * pixel.b as u32) / 10_000;
+    let value = (2126 * pixel.r as u32 + 7152 * pixel.g as u32 + 722 * pixel.b as u32) / 10_000;
     value.min(255) as u8
 }

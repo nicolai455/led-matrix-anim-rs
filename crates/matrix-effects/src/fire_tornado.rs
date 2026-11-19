@@ -1,10 +1,17 @@
-use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte, XorShift32};
+use crate::util::{
+    alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte, XorShift32,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Inferno Flame", "Hellfire Violet", "Chemical Green", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Inferno Flame",
+    "Hellfire Violet",
+    "Chemical Green",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -92,7 +99,15 @@ impl Default for FireTornadoEffect {
             swirl_phase: 0.0,
             color_cycle: 0.0,
             flame_surge: 0.0,
-            embers: [Ember { x: 15.5, y: 31.0, ang: 0.0, dist: 2.0, vy: -12.0, vang: 4.0, life: 0.0 }; 24],
+            embers: [Ember {
+                x: 15.5,
+                y: 31.0,
+                ang: 0.0,
+                dist: 2.0,
+                vy: -12.0,
+                vang: 4.0,
+                life: 0.0,
+            }; 24],
             heat_buffer: alloc_boxed_2d(0.0),
             rng: XorShift32::new(13579),
         }
@@ -167,7 +182,9 @@ impl Effect for FireTornadoEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -217,9 +234,21 @@ impl Effect for FireTornadoEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -260,9 +289,12 @@ impl Effect for FireTornadoEffect {
 
                 // Vertical convection falloff
                 let height_factor = (1.0 - y_norm * 0.75).max(0.1);
-                let turbulence = ((x as f32 * 0.4 + y as f32 * 0.5 - self.swirl_phase * 2.0).sin() * (0.15 + mid * 0.1)).max(0.0);
+                let turbulence = ((x as f32 * 0.4 + y as f32 * 0.5 - self.swirl_phase * 2.0).sin()
+                    * (0.15 + mid * 0.1))
+                    .max(0.0);
 
-                let raw_heat = (vortex_lip * 1.1 + core + turbulence + self.flame_surge * 0.4) * height_factor;
+                let raw_heat =
+                    (vortex_lip * 1.1 + core + turbulence + self.flame_surge * 0.4) * height_factor;
                 self.heat_buffer[y][x] = raw_heat.clamp(0.0, 1.2);
             }
         }

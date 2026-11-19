@@ -435,6 +435,35 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --manifest-path tests/Cargo.toml
 ```
 
+### Browser end-to-end suite
+
+Every interactive control of the web UI is exercised against the host simulator
+in a headless browser — no npm install, fully offline:
+
+```sh
+cargo build -p matrix-control --bin matrix-simulator
+node scripts/gui-e2e/run.cjs            # 43 cases
+node scripts/gui-e2e/run.cjs --filter playlist
+```
+
+It boots a throw-away simulator plus Chromium over the DevTools protocol and
+covers boot, power, brightness, colour, text, speed/cycle, the effect catalog and
+search, effect parameters, all playlist controls (start/pause/resume/stop/next/
+previous/loop/switch), audio sources and mic tuning, the Wi-Fi card (add, edit,
+reorder, remove, validation, scan), hardware config, diagnostics, persistence and
+robustness (rapid clicks, reload mid-session, offline fetches). Any console error,
+uncaught exception or unexpected HTTP status >= 400 fails the run; screenshots and
+`artifacts/report.json` are written on failure.
+
+### Effect artifact QA
+
+```sh
+python3 scripts/qa_effects.py            # measures every rendered GIF
+```
+
+Checks visibility, animation, colour variety and whether content is confined to a
+corner (a broken-coordinate signature) rather than trusting a visual impression.
+
 See [VERIFICATION.md](VERIFICATION.md) and [firmware/README.md](firmware/README.md) for low-level hardware verification details, oscilloscope timing benchmarks, and partition fit analysis.
 
 ---

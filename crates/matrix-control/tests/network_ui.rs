@@ -180,6 +180,8 @@ fn the_missing_ap_password_warning_is_shown_and_the_text_no_longer_claims_ap_onl
         "the lockout warning must be present"
     );
     assert!(WEB_UI.contains("id=\"networkApWarning\""));
-    assert!(WEB_UI.contains("It then rejoins") || WEB_UI.contains("it then joins the home network"));
+    assert!(
+        WEB_UI.contains("It then rejoins") || WEB_UI.contains("it then joins the home network")
+    );
     assert!(!WEB_UI.contains("reconnect at <code>http://192.168.4.1/</code>.</p>"));
 }

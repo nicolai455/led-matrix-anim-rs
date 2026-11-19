@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Bone White", "Radioactive Green", "Cyber Neon", "Rainbow Bones"];
+const PALETTES: &[&str] = &[
+    "Bone White",
+    "Radioactive Green",
+    "Cyber Neon",
+    "Rainbow Bones",
+];
 
 const PARAMETERS: [ParameterDescriptor; 4] = [
     ParameterDescriptor {
@@ -102,7 +107,9 @@ impl Effect for DancingSkeletonEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -147,9 +154,21 @@ impl Effect for DancingSkeletonEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -204,8 +223,12 @@ impl Effect for DancingSkeletonEffect {
         let eye_lx = (skull_x - 1.8).round() as usize;
         let eye_rx = (skull_x + 1.8).round() as usize;
         if eye_py < HEIGHT {
-            if eye_lx < WIDTH { frame.set(eye_lx, eye_py, eye_c); }
-            if eye_rx < WIDTH { frame.set(eye_rx, eye_py, eye_c); }
+            if eye_lx < WIDTH {
+                frame.set(eye_lx, eye_py, eye_c);
+            }
+            if eye_rx < WIDTH {
+                frame.set(eye_rx, eye_py, eye_c);
+            }
         }
 
         let nose_py = (skull_y + 1.0).round() as usize;
@@ -234,7 +257,10 @@ impl Effect for DancingSkeletonEffect {
             if ry >= HEIGHT {
                 continue;
             }
-            let rib_w = (rib_amp + (2 - rib_idx) as f32 * 1.2 + (self.dance_time * 4.0 + rib_idx as f32).sin() * 0.8).round() as i32;
+            let rib_w = (rib_amp
+                + (2 - rib_idx) as f32 * 1.2
+                + (self.dance_time * 4.0 + rib_idx as f32).sin() * 0.8)
+                .round() as i32;
 
             for dx in -rib_w..=rib_w {
                 if dx == 0 {
@@ -324,7 +350,15 @@ impl Effect for DancingSkeletonEffect {
             let flash_c = to_byte(self.strobe_pulse * 120.0);
             for x in 0..WIDTH {
                 let cur = frame.get(x, 31);
-                frame.set(x, 31, Rgb::new(cur.r.saturating_add(flash_c), cur.g, cur.b.saturating_add(flash_c)));
+                frame.set(
+                    x,
+                    31,
+                    Rgb::new(
+                        cur.r.saturating_add(flash_c),
+                        cur.g,
+                        cur.b.saturating_add(flash_c),
+                    ),
+                );
             }
         }
 

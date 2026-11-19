@@ -24,6 +24,14 @@ assert.ok(parseFloat(cols[0].style.height) < 5, `stale sample did not decay: ${{
 "#,
         &WEB_UI[start..end]
     );
-    let output = Command::new("node").arg("-e").arg(script).output().expect("node is required for the browser behavior test");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let output = Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .expect("node is required for the browser behavior test");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

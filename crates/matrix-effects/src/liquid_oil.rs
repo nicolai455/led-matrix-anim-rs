@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Woodstock 1969", "Red & Blue Oil", "Solar Flare", "Acid Liquid"];
+const PALETTES: &[&str] = &[
+    "Woodstock 1969",
+    "Red & Blue Oil",
+    "Solar Flare",
+    "Acid Liquid",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -98,33 +103,61 @@ impl LiquidOilEffect {
                 // Woodstock 1969: Deep Violet / Hot Magenta / Bright Gold
                 if t < 0.35 {
                     let sub = t / 0.35;
-                    Rgb::new(to_byte(40.0 * b + sub * 180.0 * b), to_byte(10.0 * b), to_byte(180.0 * b))
+                    Rgb::new(
+                        to_byte(40.0 * b + sub * 180.0 * b),
+                        to_byte(10.0 * b),
+                        to_byte(180.0 * b),
+                    )
                 } else if t < 0.7 {
                     let sub = (t - 0.35) / 0.35;
-                    Rgb::new(to_byte(220.0 * b), to_byte(sub * 160.0 * b), to_byte((1.0 - sub) * 160.0 * b))
+                    Rgb::new(
+                        to_byte(220.0 * b),
+                        to_byte(sub * 160.0 * b),
+                        to_byte((1.0 - sub) * 160.0 * b),
+                    )
                 } else {
                     let sub = (t - 0.7) / 0.3;
-                    Rgb::new(to_byte(255.0 * b), to_byte((160.0 + sub * 90.0) * b), to_byte(sub * 60.0 * b))
+                    Rgb::new(
+                        to_byte(255.0 * b),
+                        to_byte((160.0 + sub * 90.0) * b),
+                        to_byte(sub * 60.0 * b),
+                    )
                 }
             }
             1 => {
                 // Red & Blue Oil: immiscible crimson and ultramarine droplets
                 if t < 0.5 {
                     let sub = t / 0.5;
-                    Rgb::new(to_byte(255.0 * b * (0.6 + 0.4 * sub)), to_byte(15.0 * b), to_byte(30.0 * b))
+                    Rgb::new(
+                        to_byte(255.0 * b * (0.6 + 0.4 * sub)),
+                        to_byte(15.0 * b),
+                        to_byte(30.0 * b),
+                    )
                 } else {
                     let sub = (t - 0.5) / 0.5;
-                    Rgb::new(to_byte(15.0 * b), to_byte(80.0 * b * sub), to_byte(255.0 * b * (0.6 + 0.4 * sub)))
+                    Rgb::new(
+                        to_byte(15.0 * b),
+                        to_byte(80.0 * b * sub),
+                        to_byte(255.0 * b * (0.6 + 0.4 * sub)),
+                    )
                 }
             }
             2 => {
                 // Solar Flare: Deep Ruby -> Blazing Amber -> Sun White
                 if t < 0.6 {
                     let sub = t / 0.6;
-                    Rgb::new(to_byte(255.0 * b), to_byte(sub * 180.0 * b), to_byte(10.0 * b))
+                    Rgb::new(
+                        to_byte(255.0 * b),
+                        to_byte(sub * 180.0 * b),
+                        to_byte(10.0 * b),
+                    )
                 } else {
                     let sub = (t - 0.6) / 0.4;
-                    Rgb::new(to_byte(255.0 * b), to_byte(255.0 * b), to_byte(sub * 240.0 * b))
+                    Rgb::new(
+                        to_byte(255.0 * b),
+                        to_byte(255.0 * b),
+                        to_byte(sub * 240.0 * b),
+                    )
                 }
             }
             _ => {
@@ -148,7 +181,9 @@ impl Effect for LiquidOilEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -200,9 +235,21 @@ impl Effect for LiquidOilEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -266,7 +313,8 @@ impl Effect for LiquidOilEffect {
                 let edge_glow = if is_meniscus { 0.35 + mid * 0.25 } else { 0.0 };
 
                 let d_edge = (15.5 - r2.sqrt()).max(0.0) / 15.5;
-                let bright = (d_edge.powf(0.4) * (0.8 + edge_glow + self.strobe_pulse * 0.3)).clamp(0.0, 1.0);
+                let bright = (d_edge.powf(0.4) * (0.8 + edge_glow + self.strobe_pulse * 0.3))
+                    .clamp(0.0, 1.0);
 
                 let col = Self::oil_color(pal, field, self.color_cycle, bright);
                 frame.set(x, y, col);

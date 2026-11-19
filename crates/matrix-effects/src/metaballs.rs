@@ -183,7 +183,9 @@ impl Effect for MetaballsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -464,9 +466,16 @@ mod tests {
         );
         let mut baseline = MetaballsEffect::new();
         let mut baseline_frame = Frame::default();
-        let baseline_context = RenderContext {now_ms:533,delta_seconds:0.033,audio:&audio,color:Rgb::WHITE,text:"",scroll_speed:1.0};
-        baseline.render(&mut baseline_frame,&baseline_context);
-        assert_ne!(active_frame.pixels,baseline_frame.pixels);
+        let baseline_context = RenderContext {
+            now_ms: 533,
+            delta_seconds: 0.033,
+            audio: &audio,
+            color: Rgb::WHITE,
+            text: "",
+            scroll_speed: 1.0,
+        };
+        baseline.render(&mut baseline_frame, &baseline_context);
+        assert_ne!(active_frame.pixels, baseline_frame.pixels);
     }
 
     #[test]

@@ -132,7 +132,9 @@ impl Effect for HazardPulsarEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -178,9 +180,21 @@ impl Effect for HazardPulsarEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -230,7 +244,8 @@ impl Effect for HazardPulsarEffect {
                 let in_slot_pie = blade_angle.abs() < 0.25;
                 let in_cutout = in_slot_radial && in_slot_pie;
 
-                let is_hazard_body = in_center_dot || (in_blade_pie && in_blade_radial && !in_cutout);
+                let is_hazard_body =
+                    in_center_dot || (in_blade_pie && in_blade_radial && !in_cutout);
 
                 // Shield aura ring at periphery
                 let is_shield = show_shield && (shield_min_sq..=shield_max_sq).contains(&d2);
@@ -238,7 +253,8 @@ impl Effect for HazardPulsarEffect {
                 if is_hazard_body {
                     let r = d2.sqrt();
                     let r_norm = r / max_r;
-                    let bright = (0.85 + 0.15 * (r_norm * 4.0).sin() + self.alarm_flash * 0.4).min(1.0);
+                    let bright =
+                        (0.85 + 0.15 * (r_norm * 4.0).sin() + self.alarm_flash * 0.4).min(1.0);
                     let mut col = Self::symbol_color(pal, self.color_cycle, bright, r_norm);
                     if self.alarm_flash > 0.4 {
                         let f_b = to_byte(self.alarm_flash * 140.0);
@@ -248,8 +264,13 @@ impl Effect for HazardPulsarEffect {
                     }
                     frame.set(x, y, col);
                 } else if is_shield {
-                    let shield_bright = to_byte((160.0 + treble * 95.0) * (0.6 + 0.4 * (theta * 6.0).sin()));
-                    let col = Rgb::new(shield_bright, to_byte(shield_bright as f32 * 0.7), to_byte(shield_bright as f32 * 0.2));
+                    let shield_bright =
+                        to_byte((160.0 + treble * 95.0) * (0.6 + 0.4 * (theta * 6.0).sin()));
+                    let col = Rgb::new(
+                        shield_bright,
+                        to_byte(shield_bright as f32 * 0.7),
+                        to_byte(shield_bright as f32 * 0.2),
+                    );
                     frame.set(x, y, col);
                 }
             }

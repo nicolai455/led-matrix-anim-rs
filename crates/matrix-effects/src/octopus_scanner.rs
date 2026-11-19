@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Club Rainbow", "Red & Blue Police", "Gold & Cyan", "UV Rave"];
+const PALETTES: &[&str] = &[
+    "Club Rainbow",
+    "Red & Blue Police",
+    "Gold & Cyan",
+    "UV Rave",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -141,7 +146,9 @@ impl Effect for OctopusScannerEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -194,9 +201,21 @@ impl Effect for OctopusScannerEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -226,7 +245,11 @@ impl Effect for OctopusScannerEffect {
             let col = Self::beam_color(i, pal, self.color_cycle);
 
             // Frequency band modulation
-            let band_val = if audio_active { context.audio.bands[i * 2] } else { 0.5 };
+            let band_val = if audio_active {
+                context.audio.bands[i * 2]
+            } else {
+                0.5
+            };
             let reach = max_reach * (0.65 + band_val * 0.7);
 
             // Independent barrel tumbling nutation
@@ -247,7 +270,9 @@ impl Effect for OctopusScannerEffect {
                     let d_norm = dist / reach.max(1.0);
                     let beam_falloff = 1.0 - d_norm.powi(2) * 0.7;
 
-                    let intensity = (beam_falloff * (0.7 + band_val * 0.5) + self.strobe_pulse * 0.35 + mid * 0.15)
+                    let intensity = (beam_falloff * (0.7 + band_val * 0.5)
+                        + self.strobe_pulse * 0.35
+                        + mid * 0.15)
                         .clamp(0.0, 1.0);
 
                     let r_add = to_byte(col.r as f32 * intensity);
@@ -276,14 +301,22 @@ impl Effect for OctopusScannerEffect {
 
         // Center Chrome Chandelier Fixture (4x4 hub at cx, cy)
         let hub_rim = Rgb::new(120, 125, 140);
-        let hub_core = if beat { Rgb::WHITE } else { Rgb::new(200, 210, 230) };
+        let hub_core = if beat {
+            Rgb::WHITE
+        } else {
+            Rgb::new(200, 210, 230)
+        };
 
         for dy in -1..=1i32 {
             for dx in -1..=1i32 {
                 let px = (cx + dx as f32).round() as usize;
                 let py = (cy + dy as f32).round() as usize;
                 if px < WIDTH && py < HEIGHT {
-                    let c = if dx == 0 && dy == 0 { hub_core } else { hub_rim };
+                    let c = if dx == 0 && dy == 0 {
+                        hub_core
+                    } else {
+                        hub_rim
+                    };
                     frame.set(px, py, c);
                 }
             }
@@ -314,9 +347,20 @@ mod beat_regression {
             beat: true,
             ..AudioSnapshot::default()
         };
-        let render = |effect: &mut OctopusScannerEffect, frame: &mut Frame, audio: &AudioSnapshot| {
-            effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: 0.016, audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
-        };
+        let render =
+            |effect: &mut OctopusScannerEffect, frame: &mut Frame, audio: &AudioSnapshot| {
+                effect.render(
+                    frame,
+                    &RenderContext {
+                        now_ms: 0,
+                        delta_seconds: 0.016,
+                        audio,
+                        color: Rgb::WHITE,
+                        text: "",
+                        scroll_speed: 1.0,
+                    },
+                );
+            };
         render(&mut effect, &mut frame, &audio);
         assert_eq!(effect.direction, -1.0);
         render(&mut effect, &mut frame, &audio);

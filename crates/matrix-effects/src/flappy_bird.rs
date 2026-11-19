@@ -93,15 +93,15 @@ impl FlappyBirdEffect {
                 Rgb::new(220, 190, 110), // Sand Ground
             ),
             1 => (
-                Rgb::new(12, 16, 35),    // Midnight Navy
-                Rgb::new(0, 240, 220),   // Neon Cyan Pipe
-                Rgb::new(255, 40, 160),  // Magenta Bird
+                Rgb::new(12, 16, 35),   // Midnight Navy
+                Rgb::new(0, 240, 220),  // Neon Cyan Pipe
+                Rgb::new(255, 40, 160), // Magenta Bird
                 Rgb::new(30, 45, 80),
             ),
             2 => (
-                Rgb::new(180, 80, 120),  // Sunset Vapor
-                Rgb::new(90, 40, 140),   // Violet Pipe
-                Rgb::new(255, 170, 50),  // Gold Bird
+                Rgb::new(180, 80, 120), // Sunset Vapor
+                Rgb::new(90, 40, 140),  // Violet Pipe
+                Rgb::new(255, 170, 50), // Gold Bird
                 Rgb::new(100, 40, 70),
             ),
             _ => (
@@ -126,7 +126,9 @@ impl Effect for FlappyBirdEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -172,9 +174,21 @@ impl Effect for FlappyBirdEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let pal = self.values[2] as usize;
@@ -335,8 +349,12 @@ impl Effect for FlappyBirdEffect {
         // Orange Beak at (bx + 3, by) and (bx + 4, by)
         let beak_c = Rgb::new(255, 120, 20);
         if by >= 0 && by < HEIGHT as i32 {
-            if bx + 3 < WIDTH as i32 { frame.set((bx + 3) as usize, by as usize, beak_c); }
-            if bx + 4 < WIDTH as i32 { frame.set((bx + 4) as usize, by as usize, beak_c); }
+            if bx + 3 < WIDTH as i32 {
+                frame.set((bx + 3) as usize, by as usize, beak_c);
+            }
+            if bx + 4 < WIDTH as i32 {
+                frame.set((bx + 4) as usize, by as usize, beak_c);
+            }
             if by + 1 < HEIGHT as i32 && bx + 3 < WIDTH as i32 {
                 frame.set((bx + 3) as usize, (by + 1) as usize, beak_c);
             }

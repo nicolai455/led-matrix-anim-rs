@@ -78,18 +78,28 @@ fn named_playlists_can_be_saved_selected_and_deleted_without_autostart() {
     }).to_string()).unwrap();
 
     assert_eq!(original.playlist_collection().playlists.len(), 2);
-    assert_eq!(original.playlist_collection().selected_id.as_deref(), Some("second"));
+    assert_eq!(
+        original.playlist_collection().selected_id.as_deref(),
+        Some("second")
+    );
     assert_eq!(playlist(&original)["entries"][0]["effectId"], "b");
     assert_eq!(playlist(&original)["entries"][0]["durationMs"], 8000);
     assert_eq!(playlist(&original)["status"], "stopped");
     assert!(!original.is_on());
 
-    original.apply("playlist_select", &json!({"id":"first"}).to_string()).unwrap();
-    assert_eq!(original.playlist_collection().selected_id.as_deref(), Some("first"));
+    original
+        .apply("playlist_select", &json!({"id":"first"}).to_string())
+        .unwrap();
+    assert_eq!(
+        original.playlist_collection().selected_id.as_deref(),
+        Some("first")
+    );
     assert_eq!(playlist(&original)["entries"][0]["effectId"], "a");
     assert_eq!(playlist(&original)["status"], "stopped");
 
-    original.apply("playlist_delete", &json!({"id":"first"}).to_string()).unwrap();
+    original
+        .apply("playlist_delete", &json!({"id":"first"}).to_string())
+        .unwrap();
     assert_eq!(original.playlist_collection().playlists.len(), 1);
     assert_eq!(original.playlist_collection().selected_id, None);
 }
@@ -115,11 +125,20 @@ fn playlist_configuration_and_collection_round_trip_separately() {
     }).to_string()).unwrap();
     let saved = serialize_runtime_state(&original);
     let serialized: serde_json::Value = serde_json::from_str(&saved).unwrap();
-    assert_eq!(serialized["playlistCollection"]["playlists"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        serialized["playlistCollection"]["playlists"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     let mut restored = engine();
     restore_runtime_state(&mut restored, &saved).unwrap();
     assert_eq!(restored.playlist_collection().playlists.len(), 1);
-    assert_eq!(restored.playlist_collection().selected_id.as_deref(), Some("saved"));
+    assert_eq!(
+        restored.playlist_collection().selected_id.as_deref(),
+        Some("saved")
+    );
     assert_eq!(playlist(&restored)["entries"][0]["effectId"], "b");
     assert_eq!(playlist(&restored)["status"], "stopped");
     assert!(!restored.is_on());
@@ -127,10 +146,20 @@ fn playlist_configuration_and_collection_round_trip_separately() {
 
 #[test]
 fn playlist_collection_rejects_oversized_or_invalid_state() {
-    let collection = PlaylistCollection { playlists: (0..=matrix_core::engine::MAX_STORED_PLAYLISTS).map(|i| StoredPlaylist {
-        id: format!("p{i}"), name: format!("Playlist {i}"),
-        entries: vec![StoredPlaylistEntry { effect_id:"a".into(), duration_ms:5000 }], r#loop:false
-    }).collect(), ..Default::default() };
+    let collection = PlaylistCollection {
+        playlists: (0..=matrix_core::engine::MAX_STORED_PLAYLISTS)
+            .map(|i| StoredPlaylist {
+                id: format!("p{i}"),
+                name: format!("Playlist {i}"),
+                entries: vec![StoredPlaylistEntry {
+                    effect_id: "a".into(),
+                    duration_ms: 5000,
+                }],
+                r#loop: false,
+            })
+            .collect(),
+        ..Default::default()
+    };
     assert!(collection.validate().is_err());
 }
 
@@ -138,27 +167,96 @@ fn playlist_collection_rejects_oversized_or_invalid_state() {
 fn default_sound_playlist_contains_every_inventory_effect_for_ten_seconds() {
     let playlist = matrix_effects::default_sound_playlist();
     let expected = [
-        "arcade_invaders", "audio_mesh", "audio_pulse", "audio_tunnel", "audio_waveform",
-        "black_hole", "bongo_cat", "bouncing_speakers", "chaser_cannons", "cyber_rain",
-        "cyber_tunnel", "dancing_banana", "dancing_skeleton", "derby_flower", "disco_ball",
-        "disco_floor", "disco_pinwheel", "dna_spiral", "doge_wow", "domain_warp",
-        "equalizer_city", "fire", "fire_tornado", "fireworks", "freq_bars", "flappy_bird",
-        "galaxy_spiral", "game_of_life", "hamster_dance", "hazard_pulsar", "hypno_spirals",
-        "julia_orbit", "kaleidoscope", "laser_harp", "laser_scanner", "laser_show",
-        "lava_lamp", "liquid_oil", "lissajous", "mario_stomp", "matrix_rain", "metaballs",
-        "mirror_cavern", "moving_heads", "neon_heart", "nyan_cat", "octopus_scanner",
-        "outrun_drive", "pacman_chase", "party_dancers", "party_duck", "party_minion",
-        "plasma", "polar_lights", "police_strobe", "popcat", "pulse_ball", "radial_spectrum",
-        "retro_breakout", "ripple", "rotating_fish", "rotozoom", "spectrogram", "spectrum_orb",
-        "spinning_vinyl", "starfield", "strobe_blinder", "stroboscope", "supernova",
-        "text_effects", "ufo_abduction", "water_caustics", "yin_yang",
+        "arcade_invaders",
+        "audio_mesh",
+        "audio_pulse",
+        "audio_tunnel",
+        "audio_waveform",
+        "black_hole",
+        "bongo_cat",
+        "bouncing_speakers",
+        "chaser_cannons",
+        "cyber_rain",
+        "cyber_tunnel",
+        "dancing_banana",
+        "dancing_skeleton",
+        "derby_flower",
+        "disco_ball",
+        "disco_floor",
+        "disco_pinwheel",
+        "dna_spiral",
+        "doge_wow",
+        "domain_warp",
+        "equalizer_city",
+        "fire",
+        "fire_tornado",
+        "fireworks",
+        "freq_bars",
+        "flappy_bird",
+        "galaxy_spiral",
+        "game_of_life",
+        "hamster_dance",
+        "hazard_pulsar",
+        "hypno_spirals",
+        "julia_orbit",
+        "kaleidoscope",
+        "laser_harp",
+        "laser_scanner",
+        "laser_show",
+        "lava_lamp",
+        "liquid_oil",
+        "lissajous",
+        "mario_stomp",
+        "matrix_rain",
+        "metaballs",
+        "mirror_cavern",
+        "moving_heads",
+        "neon_heart",
+        "nyan_cat",
+        "octopus_scanner",
+        "outrun_drive",
+        "pacman_chase",
+        "party_dancers",
+        "party_duck",
+        "party_minion",
+        "plasma",
+        "polar_lights",
+        "police_strobe",
+        "popcat",
+        "pulse_ball",
+        "radial_spectrum",
+        "retro_breakout",
+        "ripple",
+        "rotating_fish",
+        "rotozoom",
+        "spectrogram",
+        "spectrum_orb",
+        "spinning_vinyl",
+        "starfield",
+        "strobe_blinder",
+        "stroboscope",
+        "supernova",
+        "text_effects",
+        "ufo_abduction",
+        "water_caustics",
+        "yin_yang",
     ];
     assert_eq!(playlist.id, "sound-default");
     assert_eq!(playlist.name, "Sound reactive");
     assert!(playlist.r#loop);
     assert_eq!(playlist.entries.len(), expected.len());
-    assert_eq!(playlist.entries.iter().map(|entry| entry.effect_id.as_str()).collect::<Vec<_>>(), expected);
-    assert!(playlist.entries.iter().all(|entry| entry.duration_ms == 10_000));
+    assert_eq!(
+        playlist
+            .entries
+            .iter()
+            .map(|entry| entry.effect_id.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert!(playlist
+        .entries
+        .iter()
+        .all(|entry| entry.duration_ms == 10_000));
 }
 
 #[test]
@@ -170,11 +268,22 @@ fn default_playlist_can_be_installed_as_named_playlist_and_keeps_boot_off() {
         .unwrap();
     assert_eq!(engine.playlist_collection().playlists.len(), 1);
     let snapshot = engine.snapshot();
-    assert!(!engine.is_on(), "installing defaults must not turn LED output on");
-    let preset = snapshot["playlistCollection"]["playlists"].as_array().unwrap().iter()
-        .find(|entry| entry["id"] == "sound-default").unwrap();
+    assert!(
+        !engine.is_on(),
+        "installing defaults must not turn LED output on"
+    );
+    let preset = snapshot["playlistCollection"]["playlists"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["id"] == "sound-default")
+        .unwrap();
     assert_eq!(preset["entries"].as_array().unwrap().len(), 73);
-    assert!(preset["entries"].as_array().unwrap().iter().all(|entry| entry["durationMs"] == 10_000));
+    assert!(preset["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|entry| entry["durationMs"] == 10_000));
     assert_eq!(snapshot["playlist"]["status"], "stopped");
 }
 
@@ -182,16 +291,23 @@ fn default_playlist_can_be_installed_as_named_playlist_and_keeps_boot_off() {
 fn default_playlist_does_not_overflow_a_full_user_playlist_collection() {
     let mut engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
     for index in 0..MAX_STORED_PLAYLISTS {
-        engine.save_named_playlist(StoredPlaylist {
-            id: format!("list-{index}"),
-            name: format!("List {index}"),
-            entries: vec![StoredPlaylistEntry { effect_id: "audio_pulse".into(), duration_ms: 1_000 }],
-            r#loop: false,
-        }).unwrap();
+        engine
+            .save_named_playlist(StoredPlaylist {
+                id: format!("list-{index}"),
+                name: format!("List {index}"),
+                entries: vec![StoredPlaylistEntry {
+                    effect_id: "audio_pulse".into(),
+                    duration_ms: 1_000,
+                }],
+                r#loop: false,
+            })
+            .unwrap();
     }
     let existing = engine.playlist_collection().playlists.clone();
     assert_eq!(existing.len(), MAX_STORED_PLAYLISTS);
-    assert!(engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()).is_err());
+    assert!(engine
+        .install_default_sound_playlist(matrix_effects::default_sound_playlist())
+        .is_err());
     assert_eq!(engine.playlist_collection().playlists, existing);
 }
 
@@ -199,32 +315,60 @@ fn default_playlist_does_not_overflow_a_full_user_playlist_collection() {
 fn default_playlist_installs_when_collection_has_room_without_dropping_playlists() {
     let mut engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
     for index in 0..MAX_STORED_PLAYLISTS - 1 {
-        engine.save_named_playlist(StoredPlaylist {
-            id: format!("list-{index}"),
-            name: format!("List {index}"),
-            entries: vec![StoredPlaylistEntry { effect_id: "audio_pulse".into(), duration_ms: 1_000 }],
-            r#loop: false,
-        }).unwrap();
+        engine
+            .save_named_playlist(StoredPlaylist {
+                id: format!("list-{index}"),
+                name: format!("List {index}"),
+                entries: vec![StoredPlaylistEntry {
+                    effect_id: "audio_pulse".into(),
+                    duration_ms: 1_000,
+                }],
+                r#loop: false,
+            })
+            .unwrap();
     }
-    engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()).unwrap();
-    assert_eq!(engine.playlist_collection().playlists.len(), MAX_STORED_PLAYLISTS);
-    assert!(engine.playlist_collection().playlists.iter().any(|playlist| playlist.id == "sound-default"));
+    engine
+        .install_default_sound_playlist(matrix_effects::default_sound_playlist())
+        .unwrap();
+    assert_eq!(
+        engine.playlist_collection().playlists.len(),
+        MAX_STORED_PLAYLISTS
+    );
+    assert!(engine
+        .playlist_collection()
+        .playlists
+        .iter()
+        .any(|playlist| playlist.id == "sound-default"));
 }
 
 #[test]
 fn default_playlist_is_not_installed_when_collection_is_full() {
     let mut engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
     for index in 0..MAX_STORED_PLAYLISTS {
-        engine.save_named_playlist(StoredPlaylist {
-            id: format!("list-{index}"),
-            name: format!("List {index}"),
-            entries: vec![StoredPlaylistEntry { effect_id: "audio_pulse".into(), duration_ms: 1_000 }],
-            r#loop: false,
-        }).unwrap();
+        engine
+            .save_named_playlist(StoredPlaylist {
+                id: format!("list-{index}"),
+                name: format!("List {index}"),
+                entries: vec![StoredPlaylistEntry {
+                    effect_id: "audio_pulse".into(),
+                    duration_ms: 1_000,
+                }],
+                r#loop: false,
+            })
+            .unwrap();
     }
-    assert!(engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()).is_err());
-    assert_eq!(engine.playlist_collection().playlists.len(), MAX_STORED_PLAYLISTS);
-    assert!(!engine.playlist_collection().playlists.iter().any(|playlist| playlist.id == "sound-default"));
+    assert!(engine
+        .install_default_sound_playlist(matrix_effects::default_sound_playlist())
+        .is_err());
+    assert_eq!(
+        engine.playlist_collection().playlists.len(),
+        MAX_STORED_PLAYLISTS
+    );
+    assert!(!engine
+        .playlist_collection()
+        .playlists
+        .iter()
+        .any(|playlist| playlist.id == "sound-default"));
 }
 
 #[test]
@@ -233,13 +377,26 @@ fn default_playlist_install_does_not_overwrite_a_user_edited_default_playlist() 
     let edited = StoredPlaylist {
         id: "sound-default".into(),
         name: "My sound playlist".into(),
-        entries: vec![StoredPlaylistEntry { effect_id: "audio_pulse".into(), duration_ms: 12_000 }],
+        entries: vec![StoredPlaylistEntry {
+            effect_id: "audio_pulse".into(),
+            duration_ms: 12_000,
+        }],
         r#loop: false,
     };
     engine.save_named_playlist(edited.clone()).unwrap();
-    engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()).unwrap();
-    let saved = engine.playlist_collection().playlists.iter().find(|playlist| playlist.id == "sound-default").unwrap();
-    assert_eq!(saved, &edited, "boot-time default installation must preserve user edits");
+    engine
+        .install_default_sound_playlist(matrix_effects::default_sound_playlist())
+        .unwrap();
+    let saved = engine
+        .playlist_collection()
+        .playlists
+        .iter()
+        .find(|playlist| playlist.id == "sound-default")
+        .unwrap();
+    assert_eq!(
+        saved, &edited,
+        "boot-time default installation must preserve user edits"
+    );
 }
 
 #[test]
@@ -248,22 +405,38 @@ fn default_playlist_install_preserves_existing_user_playback_and_custom_playlist
     let custom = StoredPlaylist {
         id: "custom".into(),
         name: "Custom".into(),
-        entries: vec![StoredPlaylistEntry { effect_id: "audio_pulse".into(), duration_ms: 12_000 }],
+        entries: vec![StoredPlaylistEntry {
+            effect_id: "audio_pulse".into(),
+            duration_ms: 12_000,
+        }],
         r#loop: false,
     };
     engine.save_named_playlist(custom.clone()).unwrap();
     engine.apply("light", r#"{"state":"ON"}"#).unwrap();
-    engine.apply("playlist_control", r#"{"action":"start"}"#).unwrap();
+    engine
+        .apply("playlist_control", r#"{"action":"start"}"#)
+        .unwrap();
     let active_before = engine.snapshot()["playlist"].clone();
     let was_on = engine.is_on();
 
-    engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()).unwrap();
+    engine
+        .install_default_sound_playlist(matrix_effects::default_sound_playlist())
+        .unwrap();
     let snapshot = engine.snapshot();
     assert_eq!(snapshot["playlist"]["entries"], active_before["entries"]);
     assert_eq!(snapshot["playlist"]["status"], active_before["status"]);
     assert_eq!(snapshot["playlistCollection"]["selectedId"], "custom");
-    assert_eq!(snapshot["playlistCollection"]["playlists"].as_array().unwrap().len(), 2);
-    assert_eq!(snapshot["playlistCollection"]["playlists"][0]["id"], "custom");
+    assert_eq!(
+        snapshot["playlistCollection"]["playlists"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        snapshot["playlistCollection"]["playlists"][0]["id"],
+        "custom"
+    );
     assert_eq!(engine.is_on(), was_on);
 }
 
@@ -319,10 +492,16 @@ fn starting_playlist_from_boot_off_turns_display_on_and_selects_first_entry() {
     let mut engine = engine();
     config(&mut engine, &[("a", 1_000), ("b", 2_000)], false);
 
-    assert!(!engine.is_on(), "boot remains dark until explicit user action");
+    assert!(
+        !engine.is_on(),
+        "boot remains dark until explicit user action"
+    );
     control(&mut engine, "start");
 
-    assert!(engine.is_on(), "explicit playlist start should turn output on");
+    assert!(
+        engine.is_on(),
+        "explicit playlist start should turn output on"
+    );
     assert_eq!(playlist(&engine)["status"], "running");
     assert_eq!(playlist(&engine)["index"], 0);
     assert_eq!(engine.current_effect().id(), "a");
@@ -519,7 +698,6 @@ fn playlist_configuration_persists_but_restore_never_resumes_playback_or_power()
     );
 }
 
-
 /// The UI may only ever receive error text, never a dead render thread. Unknown
 /// effect ids are rejected at the command boundary (defence at parse time) and
 /// the render loop degrades to a stopped queue with a notice (defence at render
@@ -537,7 +715,10 @@ fn unknown_effect_ids_are_rejected_at_the_command_boundary() {
     let error = engine
         .apply("playlist_config", &payload.to_string())
         .expect_err("a queue naming an unknown effect must be rejected");
-    assert!(error.contains("ghost"), "error must name the effect: {error}");
+    assert!(
+        error.contains("ghost"),
+        "error must name the effect: {error}"
+    );
     // Rejection is atomic: the previous queue is untouched.
     assert_eq!(playlist(&engine)["entries"], json!([]));
 }
@@ -561,7 +742,10 @@ fn a_saved_playlist_with_an_unknown_effect_is_not_restored_but_does_not_fail_the
     let mut restored = engine();
     restore_runtime_state(&mut restored, &saved.to_string())
         .expect("a stale queue must not abort the restore");
-    assert!(restored.playlist_collection().playlists.is_empty(), "the bad playlist must be dropped whole");
+    assert!(
+        restored.playlist_collection().playlists.is_empty(),
+        "the bad playlist must be dropped whole"
+    );
 }
 
 /// Persisting the shipped 73-entry default playlist used to fail with
@@ -577,8 +761,14 @@ fn the_default_playlist_persists_without_duplicating_its_entries() {
         name: "Saved".into(),
         r#loop: true,
         entries: vec![
-            StoredPlaylistEntry { effect_id: "a".into(), duration_ms: 1_000 },
-            StoredPlaylistEntry { effect_id: "b".into(), duration_ms: 2_000 },
+            StoredPlaylistEntry {
+                effect_id: "a".into(),
+                duration_ms: 1_000,
+            },
+            StoredPlaylistEntry {
+                effect_id: "b".into(),
+                duration_ms: 2_000,
+            },
         ],
     };
     source.save_named_playlist(stored).expect("playlist saves");
@@ -598,9 +788,16 @@ fn the_default_playlist_persists_without_duplicating_its_entries() {
     let mut restored_engine = engine();
     restore_runtime_state(&mut restored_engine, &saved).expect("state restores");
     let active = playlist(&restored_engine);
-    assert_eq!(active["entries"].as_array().unwrap().len(), 2, "queue restored");
+    assert_eq!(
+        active["entries"].as_array().unwrap().len(),
+        2,
+        "queue restored"
+    );
     assert_eq!(active["loop"], true);
-    assert_eq!(restored_engine.playlist_collection().selected_id.as_deref(), Some("saved"));
+    assert_eq!(
+        restored_engine.playlist_collection().selected_id.as_deref(),
+        Some("saved")
+    );
 }
 
 /// An unsaved draft queue is not in the collection, so it must still be written
@@ -616,5 +813,11 @@ fn an_unsaved_draft_queue_is_still_persisted() {
     );
     let mut restored_engine = engine();
     restore_runtime_state(&mut restored_engine, &saved).expect("state restores");
-    assert_eq!(playlist(&restored_engine)["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        playlist(&restored_engine)["entries"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
 }

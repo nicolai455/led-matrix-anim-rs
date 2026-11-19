@@ -1,8 +1,6 @@
 use crate::text::{draw_char, text_width, FONT_SPACING, FONT_WIDTH};
 use crate::util::{audio_bass, hsv_to_rgb, to_byte};
-use matrix_core::{
-    Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, WIDTH,
-};
+use matrix_core::{Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, WIDTH};
 use std::f32::consts::PI;
 
 const MODES: &[&str] = &[
@@ -96,7 +94,9 @@ impl Effect for TextEffectsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -140,7 +140,11 @@ impl Effect for TextEffectsEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let speed = self.values[2];
@@ -178,20 +182,30 @@ impl Effect for TextEffectsEffect {
                     0 => {
                         // Rainbow Wave
                         let h = (self.time_phase / (2.0 * PI) + char_offset * 0.5) % 1.0;
-                        let y_bounce = ((self.time_phase * 2.0 + char_offset).sin() * 2.0).round() as i32;
+                        let y_bounce =
+                            ((self.time_phase * 2.0 + char_offset).sin() * 2.0).round() as i32;
                         (base_y + y_bounce, hsv_to_rgb(h, 1.0, 1.0))
                     }
                     1 => {
                         // Bounce Wave
-                        let y_bounce = ((self.time_phase * 3.0 + char_offset * 2.0).sin() * 4.5).round() as i32;
-                        let col = if context.color == Rgb::BLACK { Rgb::WHITE } else { context.color };
+                        let y_bounce = ((self.time_phase * 3.0 + char_offset * 2.0).sin() * 4.5)
+                            .round() as i32;
+                        let col = if context.color == Rgb::BLACK {
+                            Rgb::WHITE
+                        } else {
+                            context.color
+                        };
                         (base_y + y_bounce, col)
                     }
                     2 => {
                         // Neon Glow (Glow border)
                         let pulse = 0.7 + 0.3 * (self.glow_phase).sin();
                         let neon = if context.color == Rgb::BLACK {
-                            Rgb::new(to_byte(40.0 * pulse), to_byte(255.0 * pulse), to_byte(230.0 * pulse))
+                            Rgb::new(
+                                to_byte(40.0 * pulse),
+                                to_byte(255.0 * pulse),
+                                to_byte(230.0 * pulse),
+                            )
                         } else {
                             Rgb::new(
                                 to_byte(context.color.r as f32 * pulse),
@@ -210,7 +224,8 @@ impl Effect for TextEffectsEffect {
                     3 => {
                         // Matrix Drip (Green digital rain drip on characters)
                         let drip_h = (char_idx * 7) as f32;
-                        let drip_y = (((self.time_phase * 5.0 + drip_h) % 32.0) - 16.0).round() as i32;
+                        let drip_y =
+                            (((self.time_phase * 5.0 + drip_h) % 32.0) - 16.0).round() as i32;
                         let y = (base_y + drip_y).clamp(0, 24);
                         let g = 255;
                         let r = 30;

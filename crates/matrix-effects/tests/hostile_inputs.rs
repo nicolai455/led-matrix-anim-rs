@@ -12,8 +12,7 @@ fn engine_with(effect_id: &str) -> Engine {
     engine
         .apply(
             "light",
-            &serde_json::json!({"state": "ON", "effect": effect_id, "brightness": 255})
-                .to_string(),
+            &serde_json::json!({"state": "ON", "effect": effect_id, "brightness": 255}).to_string(),
         )
         .unwrap_or_else(|error| panic!("effect '{effect_id}' not selectable: {error}"));
     engine
@@ -22,49 +21,64 @@ fn engine_with(effect_id: &str) -> Engine {
 /// Audio snapshots that a broken DSP, a corrupt restore, or a divide-by-zero
 /// can produce.
 fn hostile_audio() -> Vec<(&'static str, AudioSnapshot)> {
-    let mut cases = Vec::new();
-
-    let mut nan = AudioSnapshot::default();
-    nan.available = true;
-    nan.level = f32::NAN;
-    nan.peak = f32::NAN;
-    nan.bands = [f32::NAN; 16];
-    nan.waveform = [f32::NAN; 128];
-    cases.push(("all-nan", nan));
-
-    let mut infinite = AudioSnapshot::default();
-    infinite.available = true;
-    infinite.level = f32::INFINITY;
-    infinite.peak = f32::NEG_INFINITY;
-    infinite.bands = [f32::INFINITY; 16];
-    infinite.waveform = [f32::NEG_INFINITY; 128];
-    cases.push(("all-infinite", infinite));
-
-    let mut out_of_range = AudioSnapshot::default();
-    out_of_range.available = true;
-    out_of_range.level = 1e30;
-    out_of_range.peak = -1e30;
-    out_of_range.bands = [1e30; 16];
-    out_of_range.waveform = [-1e30; 128];
-    cases.push(("out-of-range", out_of_range));
-
-    let mut subnormal = AudioSnapshot::default();
-    subnormal.available = true;
-    subnormal.level = f32::MIN_POSITIVE / 2.0;
-    subnormal.peak = f32::MIN_POSITIVE / 2.0;
-    subnormal.bands = [f32::MIN_POSITIVE / 2.0; 16];
-    subnormal.waveform = [f32::MIN_POSITIVE / 2.0; 128];
-    cases.push(("subnormal", subnormal));
-
-    let mut negative = AudioSnapshot::default();
-    negative.available = true;
-    negative.level = -1.0;
-    negative.peak = -1.0;
-    negative.bands = [-1.0; 16];
-    negative.waveform = [-1.0; 128];
-    cases.push(("negative", negative));
-
-    cases.push(("unavailable", AudioSnapshot::default()));
+    let cases = vec![
+        (
+            "all-nan",
+            AudioSnapshot {
+                available: true,
+                level: f32::NAN,
+                peak: f32::NAN,
+                bands: [f32::NAN; 16],
+                waveform: [f32::NAN; 128],
+                ..AudioSnapshot::default()
+            },
+        ),
+        (
+            "all-infinite",
+            AudioSnapshot {
+                available: true,
+                level: f32::INFINITY,
+                peak: f32::NEG_INFINITY,
+                bands: [f32::INFINITY; 16],
+                waveform: [f32::NEG_INFINITY; 128],
+                ..AudioSnapshot::default()
+            },
+        ),
+        (
+            "out-of-range",
+            AudioSnapshot {
+                available: true,
+                level: 1e30,
+                peak: -1e30,
+                bands: [1e30; 16],
+                waveform: [-1e30; 128],
+                ..AudioSnapshot::default()
+            },
+        ),
+        (
+            "subnormal",
+            AudioSnapshot {
+                available: true,
+                level: f32::MIN_POSITIVE / 2.0,
+                peak: f32::MIN_POSITIVE / 2.0,
+                bands: [f32::MIN_POSITIVE / 2.0; 16],
+                waveform: [f32::MIN_POSITIVE / 2.0; 128],
+                ..AudioSnapshot::default()
+            },
+        ),
+        (
+            "negative",
+            AudioSnapshot {
+                available: true,
+                level: -1.0,
+                peak: -1.0,
+                bands: [-1.0; 16],
+                waveform: [-1.0; 128],
+                ..AudioSnapshot::default()
+            },
+        ),
+        ("unavailable", AudioSnapshot::default()),
+    ];
     cases
 }
 
@@ -146,7 +160,9 @@ fn every_effect_parameter_rejects_out_of_range_and_nan() {
                 if outcome.is_ok() {
                     let frame = engine.render(1_000, &AudioSnapshot::default());
                     if !frame_is_finite(&frame) {
-                        problems.push(format!("{id}/{param} accepted {hostile} then rendered non-finite"));
+                        problems.push(format!(
+                            "{id}/{param} accepted {hostile} then rendered non-finite"
+                        ));
                     }
                 }
             }
@@ -206,7 +222,10 @@ fn rapid_effect_switch_and_reset_stays_stable() {
             let _ = engine.apply("light", &serde_json::json!({"effect": id}).to_string());
             for tick in 0..3u64 {
                 let frame = engine.render(round * 10_000 + tick * 16, &audio);
-                assert!(frame_is_finite(&frame), "switch to {id} rendered non-finite");
+                assert!(
+                    frame_is_finite(&frame),
+                    "switch to {id} rendered non-finite"
+                );
             }
         }
     }
@@ -220,7 +239,7 @@ fn every_effect_survives_an_unclamped_delta_and_stays_within_a_frame_budget() {
     // `game_of_life` used to step once per elapsed generation with no cap: a
     // resumed host (delta ~1e9) stalled the render thread for minutes in a debug
     // build. A real frame budget is the assertion that catches that class.
-    use matrix_core::{Effect, RenderContext, Rgb};
+    use matrix_core::{RenderContext, Rgb};
     use std::time::{Duration, Instant};
 
     const BUDGET: Duration = Duration::from_millis(400);
@@ -229,7 +248,11 @@ fn every_effect_survives_an_unclamped_delta_and_stays_within_a_frame_budget() {
 
     for effect in matrix_effects::builtin_effects().iter_mut() {
         let id = effect.id().to_string();
-        let audio = hostile_audio().into_iter().next().expect("a hostile case").1;
+        let audio = hostile_audio()
+            .into_iter()
+            .next()
+            .expect("a hostile case")
+            .1;
         let started = Instant::now();
         for frame_idx in 0..40u64 {
             // Alternate an exploding clock with a stuck one.
@@ -259,7 +282,10 @@ fn every_effect_survives_an_unclamped_delta_and_stays_within_a_frame_budget() {
         }
     }
 
-    assert!(nonfinite.is_empty(), "non-finite frames from: {nonfinite:?}");
+    assert!(
+        nonfinite.is_empty(),
+        "non-finite frames from: {nonfinite:?}"
+    );
     assert!(
         slow.is_empty(),
         "effects exceeded a {BUDGET:?} budget for 40 frames at delta=1e9:\n{}",

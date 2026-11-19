@@ -1,10 +1,13 @@
 use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
-use matrix_core::{
-    Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, WIDTH,
-};
+use matrix_core::{Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, WIDTH};
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Emerald 532nm", "Electric Cyan & Pink", "Red & Blue Laser", "Rainbow Fan"];
+const PALETTES: &[&str] = &[
+    "Emerald 532nm",
+    "Electric Cyan & Pink",
+    "Red & Blue Laser",
+    "Rainbow Fan",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -146,7 +149,9 @@ impl Effect for LaserHarpEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -199,9 +204,21 @@ impl Effect for LaserHarpEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -234,8 +251,13 @@ impl Effect for LaserHarpEffect {
 
         // Update string vibration & plucks
         for s_idx in 0..total_strings {
-            let band_val = if audio_active { context.audio.bands[s_idx % 16] } else { 0.0 };
-            let should_pluck = (band_val > 0.55) || (beat && (s_idx == 0 || s_idx == total_strings - 1));
+            let band_val = if audio_active {
+                context.audio.bands[s_idx % 16]
+            } else {
+                0.0
+            };
+            let should_pluck =
+                (band_val > 0.55) || (beat && (s_idx == 0 || s_idx == total_strings - 1));
 
             if should_pluck {
                 self.string_pluck[s_idx] = 1.0;
@@ -257,7 +279,11 @@ impl Effect for LaserHarpEffect {
             let is_hot = pluck_int > 0.45;
             let col = Self::string_color(s_idx, pal, self.color_cycle, is_hot);
 
-            let band_val = if audio_active { context.audio.bands[s_idx % 16] } else { 0.2 };
+            let band_val = if audio_active {
+                context.audio.bands[s_idx % 16]
+            } else {
+                0.2
+            };
 
             // Trace beam line upward from base_y down to 0
             for py in 0..=30i32 {
@@ -265,7 +291,8 @@ impl Effect for LaserHarpEffect {
                 let mut beam_x = base_x + (ceiling_target_x - base_x) * t;
 
                 // Standing wave vibration on plucked string
-                let standing_wave = (t * PI).sin() * (self.vibration_phase + s_idx as f32 * 2.0).sin();
+                let standing_wave =
+                    (t * PI).sin() * (self.vibration_phase + s_idx as f32 * 2.0).sin();
                 let vib_amp = pluck_int * 2.5 + band_val * 1.5;
                 beam_x += standing_wave * vib_amp;
 
@@ -281,8 +308,12 @@ impl Effect for LaserHarpEffect {
 
                     // Pluck hand sparkle ring at mid height (py ~ 14)
                     if is_hot && py == 14 {
-                        if px_i > 0 { frame.set((px_i - 1) as usize, py as usize, Rgb::WHITE); }
-                        if px_i + 1 < WIDTH as i32 { frame.set((px_i + 1) as usize, py as usize, Rgb::WHITE); }
+                        if px_i > 0 {
+                            frame.set((px_i - 1) as usize, py as usize, Rgb::WHITE);
+                        }
+                        if px_i + 1 < WIDTH as i32 {
+                            frame.set((px_i + 1) as usize, py as usize, Rgb::WHITE);
+                        }
                     }
                 }
             }
@@ -307,11 +338,18 @@ impl Effect for LaserHarpEffect {
         }
         if audio_active && mid > 0.35 {
             let cur = frame.get(15, 10);
-            frame.set(15, 10, Rgb::new(cur.r.saturating_add(80), cur.g.saturating_add(80), cur.b.saturating_add(80)));
+            frame.set(
+                15,
+                10,
+                Rgb::new(
+                    cur.r.saturating_add(80),
+                    cur.g.saturating_add(80),
+                    cur.b.saturating_add(80),
+                ),
+            );
         }
     }
 }
-
 
 #[cfg(test)]
 mod timing_regression {
@@ -325,8 +363,20 @@ mod timing_regression {
         let audio = AudioSnapshot::default();
         let mut frame = Frame::default();
         for dt in [0.1, 0.0, 0.1] {
-            effect.render(&mut frame, &RenderContext { now_ms: 0, delta_seconds: dt, audio: &audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
-            if dt == 0.0 { assert!((effect.string_pluck[0] - 0.5).abs() < 1e-5); }
+            effect.render(
+                &mut frame,
+                &RenderContext {
+                    now_ms: 0,
+                    delta_seconds: dt,
+                    audio: &audio,
+                    color: Rgb::WHITE,
+                    text: "",
+                    scroll_speed: 1.0,
+                },
+            );
+            if dt == 0.0 {
+                assert!((effect.string_pluck[0] - 0.5).abs() < 1e-5);
+            }
         }
         assert_eq!(effect.string_pluck[0], 0.0);
     }

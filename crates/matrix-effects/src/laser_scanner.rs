@@ -4,8 +4,18 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const GEOMETRIES: &[&str] = &["Hexagon Tunnel", "Liquid Sky Fan", "Laser Star", "Rotating Triangle"];
-const PALETTES: &[&str] = &["Emerald 532nm", "RGB Concert", "Red & Blue Laser", "Rainbow Galvo"];
+const GEOMETRIES: &[&str] = &[
+    "Hexagon Tunnel",
+    "Liquid Sky Fan",
+    "Laser Star",
+    "Rotating Triangle",
+];
+const PALETTES: &[&str] = &[
+    "Emerald 532nm",
+    "RGB Concert",
+    "Red & Blue Laser",
+    "Rainbow Galvo",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -126,7 +136,15 @@ impl LaserScannerEffect {
         }
     }
 
-    fn draw_laser_line(frame: &mut Frame, x0: f32, y0: f32, x1: f32, y1: f32, col: Rgb, hot_core: bool) {
+    fn draw_laser_line(
+        frame: &mut Frame,
+        x0: f32,
+        y0: f32,
+        x1: f32,
+        y1: f32,
+        col: Rgb,
+        hot_core: bool,
+    ) {
         let dx = x1 - x0;
         let dy = y1 - y0;
         let steps = raster_steps(dx.abs().max(dy.abs()), 2.0);
@@ -167,7 +185,9 @@ impl Effect for LaserScannerEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -219,9 +239,21 @@ impl Effect for LaserScannerEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -293,7 +325,11 @@ impl Effect for LaserScannerEffect {
                     let points = 5;
                     for p in 0..(points * 2) {
                         let rad0 = if p % 2 == 0 { scale } else { scale * 0.45 };
-                        let rad1 = if (p + 1) % 2 == 0 { scale } else { scale * 0.45 };
+                        let rad1 = if (p + 1) % 2 == 0 {
+                            scale
+                        } else {
+                            scale * 0.45
+                        };
 
                         let a0 = rot + (p as f32) * (PI / points as f32);
                         let a1 = rot + ((p + 1) as f32) * (PI / points as f32);

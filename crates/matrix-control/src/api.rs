@@ -31,7 +31,6 @@ pub fn body_limit_for(method: &str, path: &str) -> usize {
     }
 }
 
-
 // Keep persistence and live command submission ordered across concurrent requests.
 static CONFIG_REQUEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -160,7 +159,11 @@ fn handle_api_request_inner(
             HttpResponse::ok_json(Value::Object(audio))
         }
 
-        ("GET", "/api/state") => HttpResponse { status: 200, content_type: "application/json", body: ctx.hub.snapshot_json().as_ref().clone() },
+        ("GET", "/api/state") => HttpResponse {
+            status: 200,
+            content_type: "application/json",
+            body: ctx.hub.snapshot_json().as_ref().clone(),
+        },
 
         ("GET", "/api/effects") | ("GET", "/api/catalog") => HttpResponse {
             status: 200,
@@ -274,12 +277,10 @@ fn handle_api_request_inner(
             )
         }
 
-        ("POST", "/api/state/save") => {
-            match ctx.hub.save_runtime_state(&ctx.state_store) {
-                Ok(()) => HttpResponse::ok_json(json!({ "ok": true })),
-                Err(e) => HttpResponse::err_json(500, &e),
-            }
-        }
+        ("POST", "/api/state/save") => match ctx.hub.save_runtime_state(&ctx.state_store) {
+            Ok(()) => HttpResponse::ok_json(json!({ "ok": true })),
+            Err(e) => HttpResponse::err_json(500, &e),
+        },
 
         ("POST", "/api/state/clear") => match ctx.state_store.clear() {
             Ok(_) => HttpResponse::ok_json(json!({ "ok": true })),

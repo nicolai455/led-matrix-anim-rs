@@ -86,12 +86,48 @@ impl Default for LavaLampEffect {
         Self {
             values: [35.0, 4.0, 50.0, 3.0, 1.0],
             blobs: [
-                WaxBlob { x: 15.0, y: 24.0, vy: -4.0, radius: 4.2, heat: 1.0 },
-                WaxBlob { x: 17.0, y: 18.0, vy: -3.0, radius: 3.6, heat: 0.8 },
-                WaxBlob { x: 14.0, y: 10.0, vy: 2.5, radius: 4.0, heat: 0.2 },
-                WaxBlob { x: 18.0, y: 6.0, vy: 3.5, radius: 3.2, heat: 0.1 },
-                WaxBlob { x: 16.0, y: 22.0, vy: -2.0, radius: 3.0, heat: 0.9 },
-                WaxBlob { x: 15.0, y: 14.0, vy: 1.5, radius: 2.8, heat: 0.4 },
+                WaxBlob {
+                    x: 15.0,
+                    y: 24.0,
+                    vy: -4.0,
+                    radius: 4.2,
+                    heat: 1.0,
+                },
+                WaxBlob {
+                    x: 17.0,
+                    y: 18.0,
+                    vy: -3.0,
+                    radius: 3.6,
+                    heat: 0.8,
+                },
+                WaxBlob {
+                    x: 14.0,
+                    y: 10.0,
+                    vy: 2.5,
+                    radius: 4.0,
+                    heat: 0.2,
+                },
+                WaxBlob {
+                    x: 18.0,
+                    y: 6.0,
+                    vy: 3.5,
+                    radius: 3.2,
+                    heat: 0.1,
+                },
+                WaxBlob {
+                    x: 16.0,
+                    y: 22.0,
+                    vy: -2.0,
+                    radius: 3.0,
+                    heat: 0.9,
+                },
+                WaxBlob {
+                    x: 15.0,
+                    y: 14.0,
+                    vy: 1.5,
+                    radius: 2.8,
+                    heat: 0.4,
+                },
             ],
             color_cycle: 0.0,
             bubble_phase: 0.0,
@@ -197,7 +233,9 @@ impl Effect for LavaLampEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -230,12 +268,48 @@ impl Effect for LavaLampEffect {
 
     fn reset(&mut self) {
         self.blobs = [
-            WaxBlob { x: 15.0, y: 24.0, vy: -4.0, radius: 4.2, heat: 1.0 },
-            WaxBlob { x: 17.0, y: 18.0, vy: -3.0, radius: 3.6, heat: 0.8 },
-            WaxBlob { x: 14.0, y: 10.0, vy: 2.5, radius: 4.0, heat: 0.2 },
-            WaxBlob { x: 18.0, y: 6.0, vy: 3.5, radius: 3.2, heat: 0.1 },
-            WaxBlob { x: 16.0, y: 22.0, vy: -2.0, radius: 3.0, heat: 0.9 },
-            WaxBlob { x: 15.0, y: 14.0, vy: 1.5, radius: 2.8, heat: 0.4 },
+            WaxBlob {
+                x: 15.0,
+                y: 24.0,
+                vy: -4.0,
+                radius: 4.2,
+                heat: 1.0,
+            },
+            WaxBlob {
+                x: 17.0,
+                y: 18.0,
+                vy: -3.0,
+                radius: 3.6,
+                heat: 0.8,
+            },
+            WaxBlob {
+                x: 14.0,
+                y: 10.0,
+                vy: 2.5,
+                radius: 4.0,
+                heat: 0.2,
+            },
+            WaxBlob {
+                x: 18.0,
+                y: 6.0,
+                vy: 3.5,
+                radius: 3.2,
+                heat: 0.1,
+            },
+            WaxBlob {
+                x: 16.0,
+                y: 22.0,
+                vy: -2.0,
+                radius: 3.0,
+                heat: 0.9,
+            },
+            WaxBlob {
+                x: 15.0,
+                y: 14.0,
+                vy: 1.5,
+                radius: 2.8,
+                heat: 0.4,
+            },
         ];
         self.color_cycle = 0.0;
         self.bubble_phase = 0.0;
@@ -250,9 +324,21 @@ impl Effect for LavaLampEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let speed = (self.values[0] / 30.0) * (1.0 + bass * 0.9);
@@ -319,7 +405,15 @@ impl Effect for LavaLampEffect {
                         let nx = (xf - center_x) / half_w;
                         let specular = (1.0 - nx.abs()).powi(3);
                         let metal_bright = to_byte(80.0 + 175.0 * specular + mid * 40.0);
-                        frame.set(x, y, Rgb::new(metal_bright, metal_bright, to_byte(metal_bright as f32 * 1.1)));
+                        frame.set(
+                            x,
+                            y,
+                            Rgb::new(
+                                metal_bright,
+                                metal_bright,
+                                to_byte(metal_bright as f32 * 1.1),
+                            ),
+                        );
                     } else {
                         // Glass interior liquid: compute Metaball Wax Field
                         let mut field = 0.0f32;
@@ -336,11 +430,15 @@ impl Effect for LavaLampEffect {
                         let dist_to_left = (xf - left_wall).abs();
                         let is_glass_glint = dist_to_left < 1.2 && yf > 6.0 && yf < 23.0;
 
-                        let mut pixel_c = Self::liquid_and_wax_color(pal, self.color_cycle, field, yf / 32.0);
+                        let mut pixel_c =
+                            Self::liquid_and_wax_color(pal, self.color_cycle, field, yf / 32.0);
 
                         // Micro-sparkle bubbles from treble
                         #[allow(clippy::manual_is_multiple_of)]
-                        if audio_active && treble > 0.4 && (xf as usize * 7 + yf as usize * 13) % 23 == 0 {
+                        if audio_active
+                            && treble > 0.4
+                            && (xf as usize * 7 + yf as usize * 13) % 23 == 0
+                        {
                             pixel_c = Rgb::WHITE;
                         }
 

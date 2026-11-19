@@ -104,12 +104,12 @@ impl DogeWowEffect {
                 Rgb::new(210, 140, 60),
             ),
             1 => (
-                Rgb::new(45, 40, 45),    // Black & Tan Shiba
+                Rgb::new(45, 40, 45), // Black & Tan Shiba
                 Rgb::new(240, 230, 215),
                 Rgb::new(190, 140, 70),
             ),
             2 => (
-                Rgb::new(0, 230, 255),   // Cyber Cyan
+                Rgb::new(0, 230, 255), // Cyber Cyan
                 Rgb::new(245, 250, 255),
                 Rgb::new(255, 20, 140),
             ),
@@ -170,7 +170,9 @@ impl Effect for DogeWowEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -221,9 +223,21 @@ impl Effect for DogeWowEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let _mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let _mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -258,9 +272,16 @@ impl Effect for DogeWowEffect {
         // Left Ear (tipped back/left)
         let l_ear_poly = [
             (cx - 10.0, cy - 12.0),
-            (cx - 9.0, cy - 11.0), (cx - 8.0, cy - 11.0),
-            (cx - 11.0, cy - 10.0), (cx - 10.0, cy - 10.0), (cx - 9.0, cy - 10.0), (cx - 8.0, cy - 10.0),
-            (cx - 11.0, cy - 9.0), (cx - 10.0, cy - 9.0), (cx - 9.0, cy - 9.0), (cx - 8.0, cy - 9.0),
+            (cx - 9.0, cy - 11.0),
+            (cx - 8.0, cy - 11.0),
+            (cx - 11.0, cy - 10.0),
+            (cx - 10.0, cy - 10.0),
+            (cx - 9.0, cy - 10.0),
+            (cx - 8.0, cy - 10.0),
+            (cx - 11.0, cy - 9.0),
+            (cx - 10.0, cy - 9.0),
+            (cx - 9.0, cy - 9.0),
+            (cx - 8.0, cy - 9.0),
         ];
         for (i, &(ex, ey)) in l_ear_poly.iter().enumerate() {
             let px = ex.round() as i32;
@@ -273,9 +294,16 @@ impl Effect for DogeWowEffect {
         // Right Ear
         let r_ear_poly = [
             (cx + 9.0, cy - 12.0),
-            (cx + 8.0, cy - 11.0), (cx + 9.0, cy - 11.0),
-            (cx + 7.0, cy - 10.0), (cx + 8.0, cy - 10.0), (cx + 9.0, cy - 10.0), (cx + 10.0, cy - 10.0),
-            (cx + 7.0, cy - 9.0), (cx + 8.0, cy - 9.0), (cx + 9.0, cy - 9.0), (cx + 10.0, cy - 9.0),
+            (cx + 8.0, cy - 11.0),
+            (cx + 9.0, cy - 11.0),
+            (cx + 7.0, cy - 10.0),
+            (cx + 8.0, cy - 10.0),
+            (cx + 9.0, cy - 10.0),
+            (cx + 10.0, cy - 10.0),
+            (cx + 7.0, cy - 9.0),
+            (cx + 8.0, cy - 9.0),
+            (cx + 9.0, cy - 9.0),
+            (cx + 10.0, cy - 9.0),
         ];
         for (i, &(ex, ey)) in r_ear_poly.iter().enumerate() {
             let px = ex.round() as i32;
@@ -304,7 +332,8 @@ impl Effect for DogeWowEffect {
                         || (dy == -1 && (dx as f32).abs() < 3.0);
 
                     // Cheek fluff highlights
-                    let is_eyebrow = (dy == -4 || dy == -5) && ((dx as f32).abs() >= 3.5 && (dx as f32).abs() <= 5.5);
+                    let is_eyebrow = (dy == -4 || dy == -5)
+                        && ((dx as f32).abs() >= 3.5 && (dx as f32).abs() <= 5.5);
 
                     let col = if is_eyebrow || is_muzzle {
                         muzzle_c
@@ -406,8 +435,12 @@ impl Effect for DogeWowEffect {
                 let flare_y = (gy + 1) as usize;
                 if flare_x < WIDTH && flare_y < HEIGHT {
                     frame.set(flare_x, flare_y, Rgb::new(255, 255, 120));
-                    if flare_x + 1 < WIDTH { frame.set(flare_x + 1, flare_y, Rgb::WHITE); }
-                    if flare_y > 0 { frame.set(flare_x, flare_y - 1, Rgb::WHITE); }
+                    if flare_x + 1 < WIDTH {
+                        frame.set(flare_x + 1, flare_y, Rgb::WHITE);
+                    }
+                    if flare_y > 0 {
+                        frame.set(flare_x, flare_y - 1, Rgb::WHITE);
+                    }
                 }
             }
         }
@@ -415,10 +448,10 @@ impl Effect for DogeWowEffect {
         // 6. Floating Meme Words (Comic Doge phrases)
         if self.values[2] > 0.5 {
             let phrases = [
-                ("WOW", 18, 3, Rgb::new(255, 230, 40)),     // Golden Yellow
-                ("MUCH", 2, 4, Rgb::new(255, 60, 180)),    // Neon Magenta
-                ("SO", 21, 25, Rgb::new(40, 240, 255)),    // Electric Cyan
-                ("SUCH", 2, 25, Rgb::new(80, 255, 120)),   // Lime Green
+                ("WOW", 18, 3, Rgb::new(255, 230, 40)),  // Golden Yellow
+                ("MUCH", 2, 4, Rgb::new(255, 60, 180)),  // Neon Magenta
+                ("SO", 21, 25, Rgb::new(40, 240, 255)),  // Electric Cyan
+                ("SUCH", 2, 25, Rgb::new(80, 255, 120)), // Lime Green
             ];
 
             let (word, wx, wy, wcol) = phrases[self.word_index];

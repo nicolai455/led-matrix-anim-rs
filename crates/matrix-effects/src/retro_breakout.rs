@@ -90,7 +90,14 @@ impl Default for RetroBreakoutEffect {
             ball_vy: -18.0,
             paddle_x: 13.0,
             bricks: [[1; BRICK_COLS]; BRICK_ROWS],
-            sparks: [BrickSpark { x: 0.0, y: 0.0, vx: 0.0, vy: 0.0, life: 0.0, color: Rgb::WHITE }; 16],
+            sparks: [BrickSpark {
+                x: 0.0,
+                y: 0.0,
+                vx: 0.0,
+                vy: 0.0,
+                life: 0.0,
+                color: Rgb::WHITE,
+            }; 16],
             color_cycle: 0.0,
             rng: XorShift32::new(192837),
         };
@@ -154,7 +161,9 @@ impl Effect for RetroBreakoutEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -205,9 +214,21 @@ impl Effect for RetroBreakoutEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let _mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let _mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let speed_mult = (self.values[0] / 45.0) * (1.0 + bass * 0.7);
@@ -244,7 +265,8 @@ impl Effect for RetroBreakoutEffect {
         // Bottom Paddle Bounce
         let paddle_y = 29.0f32;
         if self.ball_y >= (paddle_y - 1.2) && self.ball_y <= (paddle_y + 1.2) {
-            let hit_offset = (self.ball_x - (self.paddle_x + base_paddle_w * 0.5)) / (base_paddle_w * 0.5);
+            let hit_offset =
+                (self.ball_x - (self.paddle_x + base_paddle_w * 0.5)) / (base_paddle_w * 0.5);
             if (-1.2..=1.2).contains(&hit_offset) {
                 self.ball_vy = -self.ball_vy.abs();
                 self.ball_vx = hit_offset * 18.0;
@@ -275,7 +297,11 @@ impl Effect for RetroBreakoutEffect {
                     let bx0 = brick_start_x + (c * (BRICK_W + 1)) as f32;
                     let bx1 = bx0 + BRICK_W as f32;
 
-                    if self.ball_x >= bx0 && self.ball_x <= bx1 && self.ball_y >= by0 && self.ball_y <= by1 {
+                    if self.ball_x >= bx0
+                        && self.ball_x <= bx1
+                        && self.ball_y >= by0
+                        && self.ball_y <= by1
+                    {
                         // Brick hit! Destroy brick and bounce ball
                         *brick = 0;
                         self.ball_vy = -self.ball_vy;
@@ -326,7 +352,11 @@ impl Effect for RetroBreakoutEffect {
         // 5. Draw Paddle (at y=29)
         let px_start = self.paddle_x.round() as i32;
         let pw = base_paddle_w.round() as i32;
-        let pad_col = if beat { Rgb::WHITE } else { Rgb::new(0, 240, 255) };
+        let pad_col = if beat {
+            Rgb::WHITE
+        } else {
+            Rgb::new(0, 240, 255)
+        };
 
         for x in px_start..(px_start + pw) {
             if x >= 0 && x < WIDTH as i32 {
@@ -368,7 +398,11 @@ impl Effect for RetroBreakoutEffect {
         }
 
         // Border walls at left (x=0) and right (x=31)
-        let wall_c = Rgb::new(to_byte(40.0 + treble * 50.0), to_byte(40.0 + treble * 50.0), 60);
+        let wall_c = Rgb::new(
+            to_byte(40.0 + treble * 50.0),
+            to_byte(40.0 + treble * 50.0),
+            60,
+        );
         for y in 0..HEIGHT {
             frame.set(0, y, wall_c);
             frame.set(31, y, wall_c);

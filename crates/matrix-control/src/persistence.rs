@@ -239,28 +239,49 @@ pub fn normalize_runtime_state(val: &Value) -> Value {
 
 /// Normalize scalars while passing the parameter object through without a Value tree.
 pub fn normalize_json(input: &str) -> Result<String, String> {
-    let value: Value = serde_json::from_str(input).map_err(|e| format!("invalid state JSON: {e}"))?;
-    let obj = value.as_object().ok_or("runtime state must be a JSON object")?;
+    let value: Value =
+        serde_json::from_str(input).map_err(|e| format!("invalid state JSON: {e}"))?;
+    let obj = value
+        .as_object()
+        .ok_or("runtime state must be a JSON object")?;
     let mut normalized = normalize_runtime_state(&value);
 
     if let Some(collection) = obj.get("playlistCollection") {
         let collection: PlaylistCollection = serde_json::from_value(collection.clone())
             .map_err(|e| format!("invalid playlistCollection: {e}"))?;
         collection.validate()?;
-        normalized.as_object_mut().ok_or("invalid normalized state")?
-            .insert("playlistCollection".into(), serde_json::to_value(collection).map_err(|e| e.to_string())?);
+        normalized
+            .as_object_mut()
+            .ok_or("invalid normalized state")?
+            .insert(
+                "playlistCollection".into(),
+                serde_json::to_value(collection).map_err(|e| e.to_string())?,
+            );
     }
 
     let playlist = obj.get("playlistConfig").or_else(|| obj.get("playlist"));
     if let Some(playlist) = playlist {
-        let entries_valid = playlist.get("entries").and_then(Value::as_array).is_some_and(|entries| {
-            entries.len() <= 73 && entries.iter().all(|entry| {
-                entry.get("effectId").and_then(Value::as_str).is_some_and(|id| !id.is_empty() && id.len() <= 64)
-                    && entry.get("durationMs").and_then(Value::as_u64).is_some_and(|duration| (1_000..=86_400_000).contains(&duration))
-            })
-        });
+        let entries_valid = playlist
+            .get("entries")
+            .and_then(Value::as_array)
+            .is_some_and(|entries| {
+                entries.len() <= 73
+                    && entries.iter().all(|entry| {
+                        entry
+                            .get("effectId")
+                            .and_then(Value::as_str)
+                            .is_some_and(|id| !id.is_empty() && id.len() <= 64)
+                            && entry
+                                .get("durationMs")
+                                .and_then(Value::as_u64)
+                                .is_some_and(|duration| (1_000..=86_400_000).contains(&duration))
+                    })
+            });
         if entries_valid && playlist.get("loop").and_then(Value::as_bool).is_some() {
-            normalized.as_object_mut().ok_or("invalid normalized state")?.insert("playlistConfig".into(), playlist.clone());
+            normalized
+                .as_object_mut()
+                .ok_or("invalid normalized state")?
+                .insert("playlistConfig".into(), playlist.clone());
         }
     }
 
@@ -274,7 +295,9 @@ pub fn normalize_json(input: &str) -> Result<String, String> {
                 }
             }
             result.pop();
-            if normalized.as_object().is_some_and(|o| !o.is_empty()) { result.push(','); }
+            if normalized.as_object().is_some_and(|o| !o.is_empty()) {
+                result.push(',');
+            }
             result.push_str("\"params\":");
             result.push_str(&params.to_string());
             result.push('}');
@@ -329,12 +352,19 @@ impl StateStore {
 
     pub fn save_json(&self, snapshot: &[u8]) -> Result<(), String> {
         if snapshot.len() > MAX_STORAGE_LOAD_BYTES as usize {
-            return Err(format!("runtime state exceeds {} byte limit", MAX_STORAGE_LOAD_BYTES));
+            return Err(format!(
+                "runtime state exceeds {} byte limit",
+                MAX_STORAGE_LOAD_BYTES
+            ));
         }
         let text = std::str::from_utf8(snapshot).map_err(|e| e.to_string())?;
         let json = normalize_json(text)?;
-        if let Some(ref backend) = self.backend { backend.store(&json)?; }
-        if let Ok(mut lock) = self.saved.write() { *lock = Some(json); }
+        if let Some(ref backend) = self.backend {
+            backend.store(&json)?;
+        }
+        if let Ok(mut lock) = self.saved.write() {
+            *lock = Some(json);
+        }
         Ok(())
     }
 
@@ -343,12 +373,17 @@ impl StateStore {
     }
 
     pub fn load(&self) -> Option<Value> {
-        self.saved.read().ok().and_then(|lock| lock.as_ref().and_then(|s| serde_json::from_str(s).ok()))
+        self.saved
+            .read()
+            .ok()
+            .and_then(|lock| lock.as_ref().and_then(|s| serde_json::from_str(s).ok()))
     }
 
     pub fn restore(&self, engine: &mut matrix_core::Engine) -> Result<(), String> {
         if let Ok(lock) = self.saved.read() {
-            if let Some(json) = lock.as_ref() { matrix_core::restore_runtime_state(engine, json)?; }
+            if let Some(json) = lock.as_ref() {
+                matrix_core::restore_runtime_state(engine, json)?;
+            }
         }
         let _ = engine.apply("light", "{\"state\":\"OFF\"}");
         Ok(())
@@ -383,9 +418,25 @@ mod large_playlist_tests {
         });
         let normalized = normalize_json(&input.to_string()).unwrap();
         let output: Value = serde_json::from_str(&normalized).unwrap();
-        assert_eq!(output["playlistConfig"]["entries"].as_array().unwrap().len(), 73);
-        assert_eq!(output["playlistCollection"]["playlists"][0]["entries"].as_array().unwrap().len(), 73);
-        assert!(output["playlistConfig"]["entries"].as_array().unwrap().iter().all(|entry| entry["durationMs"] == 10_000));
+        assert_eq!(
+            output["playlistConfig"]["entries"]
+                .as_array()
+                .unwrap()
+                .len(),
+            73
+        );
+        assert_eq!(
+            output["playlistCollection"]["playlists"][0]["entries"]
+                .as_array()
+                .unwrap()
+                .len(),
+            73
+        );
+        assert!(output["playlistConfig"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["durationMs"] == 10_000));
     }
 }
 
@@ -407,8 +458,24 @@ mod tests {
         });
         let normalized = normalize_json(&input.to_string()).unwrap();
         let output: Value = serde_json::from_str(&normalized).unwrap();
-        assert_eq!(output["playlistConfig"]["entries"].as_array().unwrap().len(), 73);
-        assert_eq!(output["playlistCollection"]["playlists"][0]["entries"].as_array().unwrap().len(), 73);
-        assert!(output["playlistConfig"]["entries"].as_array().unwrap().iter().all(|entry| entry["durationMs"] == 10_000));
+        assert_eq!(
+            output["playlistConfig"]["entries"]
+                .as_array()
+                .unwrap()
+                .len(),
+            73
+        );
+        assert_eq!(
+            output["playlistCollection"]["playlists"][0]["entries"]
+                .as_array()
+                .unwrap()
+                .len(),
+            73
+        );
+        assert!(output["playlistConfig"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["durationMs"] == 10_000));
     }
 }

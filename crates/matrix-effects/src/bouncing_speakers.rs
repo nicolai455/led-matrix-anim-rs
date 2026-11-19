@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Boombox Silver", "Subwoofer Carbon", "Neon Soundclash", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Boombox Silver",
+    "Subwoofer Carbon",
+    "Neon Soundclash",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -94,15 +99,27 @@ impl BouncingSpeakersEffect {
         match pal {
             0 => {
                 // Boombox Silver
-                (Rgb::new(160, 160, 175), Rgb::new(45, 45, 55), Rgb::new(210, 210, 225))
+                (
+                    Rgb::new(160, 160, 175),
+                    Rgb::new(45, 45, 55),
+                    Rgb::new(210, 210, 225),
+                )
             }
             1 => {
                 // Subwoofer Carbon
-                (Rgb::new(25, 25, 30), Rgb::new(15, 15, 18), Rgb::new(240, 60, 20))
+                (
+                    Rgb::new(25, 25, 30),
+                    Rgb::new(15, 15, 18),
+                    Rgb::new(240, 60, 20),
+                )
             }
             2 => {
                 // Neon Soundclash
-                (Rgb::new(20, 10, 35), Rgb::new(255, 0, 140), Rgb::new(0, 240, 255))
+                (
+                    Rgb::new(20, 10, 35),
+                    Rgb::new(255, 0, 140),
+                    Rgb::new(0, 240, 255),
+                )
             }
             _ => {
                 // Rainbow
@@ -179,7 +196,9 @@ impl Effect for BouncingSpeakersEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -224,9 +243,21 @@ impl Effect for BouncingSpeakersEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let speed = (self.values[0] / 30.0) * (1.0 + bass * 0.7);
@@ -264,7 +295,11 @@ impl Effect for BouncingSpeakersEffect {
             for x in 2..=29 {
                 let is_edge = x == 2 || x == 29 || y == 1 || y == 30;
                 let c = if is_edge {
-                    Rgb::new(to_byte(cab_col.r as f32 * 1.3), to_byte(cab_col.g as f32 * 1.3), to_byte(cab_col.b as f32 * 1.3))
+                    Rgb::new(
+                        to_byte(cab_col.r as f32 * 1.3),
+                        to_byte(cab_col.g as f32 * 1.3),
+                        to_byte(cab_col.b as f32 * 1.3),
+                    )
                 } else {
                     cab_col
                 };
@@ -274,7 +309,15 @@ impl Effect for BouncingSpeakersEffect {
 
         // 2. High-Frequency Tweeter Horn at Top (cx=15.5, cy=6.0, r=3.5)
         let tweeter_shake = if audio_active { treble * 1.2 } else { 0.0 };
-        Self::draw_woofer(frame, 15.5, 6.0, 3.5, tweeter_shake, Rgb::new(20, 20, 25), cap_col);
+        Self::draw_woofer(
+            frame,
+            15.5,
+            6.0,
+            3.5,
+            tweeter_shake,
+            Rgb::new(20, 20, 25),
+            cap_col,
+        );
 
         // 3. Dual Main Subwoofers:
         // Left Woofer at (cx=9.5, cy=19.5)

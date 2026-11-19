@@ -85,11 +85,19 @@ impl DancingBananaEffect {
             }
             1 => {
                 // Neon Rave
-                (Rgb::new(0, 255, 160), Rgb::new(255, 0, 140), Rgb::new(220, 240, 255))
+                (
+                    Rgb::new(0, 255, 160),
+                    Rgb::new(255, 0, 140),
+                    Rgb::new(220, 240, 255),
+                )
             }
             2 => {
                 // Disco Gold
-                (Rgb::new(255, 195, 30), Rgb::new(140, 90, 10), Rgb::new(255, 255, 200))
+                (
+                    Rgb::new(255, 195, 30),
+                    Rgb::new(140, 90, 10),
+                    Rgb::new(255, 255, 200),
+                )
             }
             _ => {
                 // Rainbow
@@ -113,7 +121,9 @@ impl Effect for DancingBananaEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -157,9 +167,21 @@ impl Effect for DancingBananaEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -180,7 +202,11 @@ impl Effect for DancingBananaEffect {
             #[allow(clippy::manual_is_multiple_of)]
             let stage_on = (x + (self.step_time * 6.0) as usize) % 4 == 0;
             let stage_c = if stage_on {
-                Rgb::new(to_byte(180.0 + mid * 75.0), to_byte(30.0 + bass * 150.0), 240)
+                Rgb::new(
+                    to_byte(180.0 + mid * 75.0),
+                    to_byte(30.0 + bass * 150.0),
+                    240,
+                )
             } else {
                 Rgb::new(20, 15, 30)
             };
@@ -205,7 +231,7 @@ impl Effect for DancingBananaEffect {
             }
 
             let y_norm = dy as f32 / 11.0; // -1.0 (top tip) to +1.0 (bottom tip)
-            // Crescent bend: banana curves laterally
+                                           // Crescent bend: banana curves laterally
             let bend = (1.0 - y_norm * y_norm) * 3.2 * sway.signum();
             let half_w = (1.0 - y_norm.abs().powf(1.8)) * 3.8;
 
@@ -240,14 +266,22 @@ impl Effect for DancingBananaEffect {
         let eye_x2 = (cx + 1.5).round() as i32;
 
         if eye_y >= 0 && eye_y < HEIGHT as i32 {
-            if eye_x1 >= 0 && eye_x1 < WIDTH as i32 { frame.set(eye_x1 as usize, eye_y as usize, Rgb::BLACK); }
-            if eye_x2 >= 0 && eye_x2 < WIDTH as i32 { frame.set(eye_x2 as usize, eye_y as usize, Rgb::BLACK); }
+            if eye_x1 >= 0 && eye_x1 < WIDTH as i32 {
+                frame.set(eye_x1 as usize, eye_y as usize, Rgb::BLACK);
+            }
+            if eye_x2 >= 0 && eye_x2 < WIDTH as i32 {
+                frame.set(eye_x2 as usize, eye_y as usize, Rgb::BLACK);
+            }
         }
 
         let mouth_y = (cy - 1.0).round() as i32;
         let mouth_x = cx.round() as i32;
         if mouth_y >= 0 && mouth_y < HEIGHT as i32 && mouth_x >= 0 && mouth_x < WIDTH as i32 {
-            let m_c = if beat { Rgb::new(255, 50, 60) } else { Rgb::BLACK };
+            let m_c = if beat {
+                Rgb::new(255, 50, 60)
+            } else {
+                Rgb::BLACK
+            };
             frame.set(mouth_x as usize, mouth_y as usize, m_c);
         }
 
@@ -286,8 +320,12 @@ impl Effect for DancingBananaEffect {
         // Maraca sparkles on treble
         if audio_active && treble > 0.35 {
             let s_c = Rgb::new(255, 240, 100);
-            if l_hand_x > 0 && l_hand_y > 0 { frame.set((l_hand_x - 1) as usize, (l_hand_y - 1) as usize, s_c); }
-            if r_hand_x + 1 < WIDTH as i32 && r_hand_y > 0 { frame.set((r_hand_x + 1) as usize, (r_hand_y - 1) as usize, s_c); }
+            if l_hand_x > 0 && l_hand_y > 0 {
+                frame.set((l_hand_x - 1) as usize, (l_hand_y - 1) as usize, s_c);
+            }
+            if r_hand_x + 1 < WIDTH as i32 && r_hand_y > 0 {
+                frame.set((r_hand_x + 1) as usize, (r_hand_y - 1) as usize, s_c);
+            }
         }
     }
 }

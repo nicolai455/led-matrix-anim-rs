@@ -134,7 +134,9 @@ impl Effect for RotozoomEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -179,9 +181,21 @@ impl Effect for RotozoomEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -201,7 +215,8 @@ impl Effect for RotozoomEffect {
         let texture_density = self.values[2] * 0.1;
 
         // Smooth zoom factor: oscillates between close and far + beat plunge
-        let zoom = (1.5 + (self.zoom_phase).sin() * 0.9) * (1.0 + bass * 0.4 + self.beat_bump * 0.5);
+        let zoom =
+            (1.5 + (self.zoom_phase).sin() * 0.9) * (1.0 + bass * 0.4 + self.beat_bump * 0.5);
 
         let cos_a = self.angle.cos() * zoom * texture_density;
         let sin_a = self.angle.sin() * zoom * texture_density;
@@ -224,7 +239,11 @@ impl Effect for RotozoomEffect {
                 let w2 = (v).cos();
                 let w3 = ((u + v) * 0.707).sin();
                 let w4 = (dist * 1.2 - self.color_cycle * 2.0 * PI).sin();
-                let high_ripple = if audio_active { (u * 3.0).sin() * (v * 3.0).cos() * treble * 0.3 } else { 0.0 };
+                let high_ripple = if audio_active {
+                    (u * 3.0).sin() * (v * 3.0).cos() * treble * 0.3
+                } else {
+                    0.0
+                };
 
                 let val = 0.5 + 0.125 * (w1 + w2 + w3 + w4 + mid * 0.4 + high_ripple);
                 let col = Self::sample_color(pal, self.color_cycle, val);

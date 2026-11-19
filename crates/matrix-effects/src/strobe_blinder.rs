@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PATTERNS: &[&str] = &["Beat Drop Blast", "Stage Sweep", "Cross Chaser", "Audio Matrix"];
+const PATTERNS: &[&str] = &[
+    "Beat Drop Blast",
+    "Stage Sweep",
+    "Cross Chaser",
+    "Audio Matrix",
+];
 const PALETTES: &[&str] = &["Warm Halogen", "Atomic Cool", "Neon Purple", "Rainbow"];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
@@ -150,7 +155,9 @@ impl Effect for StrobeBlinderEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -195,9 +202,21 @@ impl Effect for StrobeBlinderEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let _mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let _treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let _mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let _treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         // Beat triggers all blinders 100% white hot!
@@ -245,7 +264,11 @@ impl Effect for StrobeBlinderEffect {
                         let is_diag1 = lx == ly;
                         let is_diag2 = (lx + ly) == 3;
                         let alt = (self.phase * 1.5).sin() > 0.0;
-                        if alt { is_diag1 } else { is_diag2 }
+                        if alt {
+                            is_diag1
+                        } else {
+                            is_diag2
+                        }
                     }
                     _ => {
                         // Audio Matrix (Mapped to 16 bands)

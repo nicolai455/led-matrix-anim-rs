@@ -1,10 +1,13 @@
 use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
-use matrix_core::{
-    Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, WIDTH,
-};
+use matrix_core::{Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, WIDTH};
 
 const PATTERNS: &[&str] = &["Checkerboard", "Radial Pulse", "Color Wash", "Audio Waves"];
-const PALETTES: &[&str] = &["Saturday Night", "Synthwave 1984", "Funky Grooves", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Saturday Night",
+    "Synthwave 1984",
+    "Funky Grooves",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -143,7 +146,9 @@ impl Effect for DiscoFloorEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -188,9 +193,21 @@ impl Effect for DiscoFloorEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -227,18 +244,26 @@ impl Effect for DiscoFloorEffect {
                         let active = if self.beat_flip { !is_even } else { is_even };
                         let pulse = if active { 0.95f32 } else { 0.25f32 };
                         #[allow(clippy::manual_is_multiple_of)]
-                        let extra = if (current_step + tx) % 3 == 0 { 0.15f32 } else { 0.0f32 };
+                        let extra = if (current_step + tx) % 3 == 0 {
+                            0.15f32
+                        } else {
+                            0.0f32
+                        };
                         ((pulse + extra).min(1.0f32), tx + current_step, ty)
                     }
                     1 => {
                         // Radial Pulse outward
-                        let ring = ((dist * 1.5 - self.step_time * 1.2).sin() * 0.5 + 0.5).powf(2.0);
+                        let ring =
+                            ((dist * 1.5 - self.step_time * 1.2).sin() * 0.5 + 0.5).powf(2.0);
                         let e = ring * (1.0 + self.bass_pulse * 0.5) + bass * 0.3;
                         (e.clamp(0.2, 1.0), tx, ty + current_step)
                     }
                     2 => {
                         // Color Wash Sweep
-                        let sweep = ((tx as f32 * 0.5 + ty as f32 * 0.5 - self.step_time).sin() * 0.5 + 0.5).powf(1.5);
+                        let sweep = ((tx as f32 * 0.5 + ty as f32 * 0.5 - self.step_time).sin()
+                            * 0.5
+                            + 0.5)
+                            .powf(1.5);
                         (sweep.clamp(0.25, 1.0), tx + current_step, ty)
                     }
                     _ => {
@@ -255,7 +280,8 @@ impl Effect for DiscoFloorEffect {
                     }
                 };
 
-                let color = Self::tile_color(pal, self.color_cycle, active_tx, active_ty, tile_energy);
+                let color =
+                    Self::tile_color(pal, self.color_cycle, active_tx, active_ty, tile_energy);
 
                 // Render 4x4 tile pixels
                 let px_start = tx * TILE_SIZE;
@@ -269,7 +295,8 @@ impl Effect for DiscoFloorEffect {
                         // Gridline check
                         let is_grid = show_grid && (px == 0 || py == 0);
                         if is_grid {
-                            let grid_bright = to_byte(40.0 + treble * 120.0 + self.bass_pulse * 90.0);
+                            let grid_bright =
+                                to_byte(40.0 + treble * 120.0 + self.bass_pulse * 90.0);
                             frame.set(x, y, Rgb::new(grid_bright, grid_bright, grid_bright));
                         } else {
                             // Tile interior with subtle bevel / center brightness

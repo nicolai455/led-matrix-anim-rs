@@ -4,8 +4,18 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const MODES: &[&str] = &["Wig-Wag Quad Strobe", "Rotating Dual Beacon", "Split Blinder", "Audio Beat Blast"];
-const PALETTES: &[&str] = &["Red & Blue Police", "Amber & White", "Magenta & Cyan", "Rainbow Strobe"];
+const MODES: &[&str] = &[
+    "Wig-Wag Quad Strobe",
+    "Rotating Dual Beacon",
+    "Split Blinder",
+    "Audio Beat Blast",
+];
+const PALETTES: &[&str] = &[
+    "Red & Blue Police",
+    "Amber & White",
+    "Magenta & Cyan",
+    "Rainbow Strobe",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -120,7 +130,9 @@ impl Effect for PoliceStrobeEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -174,9 +186,21 @@ impl Effect for PoliceStrobeEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let _mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let _mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -218,8 +242,16 @@ impl Effect for PoliceStrobeEffect {
                 };
 
                 // Fast attack, configurable phosphor decay
-                if target_l > self.flash_l { self.flash_l = target_l; } else { self.flash_l = (self.flash_l - dt * 14.0 * decay_rate).max(0.0); }
-                if target_r > self.flash_r { self.flash_r = target_r; } else { self.flash_r = (self.flash_r - dt * 14.0 * decay_rate).max(0.0); }
+                if target_l > self.flash_l {
+                    self.flash_l = target_l;
+                } else {
+                    self.flash_l = (self.flash_l - dt * 14.0 * decay_rate).max(0.0);
+                }
+                if target_r > self.flash_r {
+                    self.flash_r = target_r;
+                } else {
+                    self.flash_r = (self.flash_r - dt * 14.0 * decay_rate).max(0.0);
+                }
 
                 // Audio beat strobe boost
                 if beat {
@@ -247,7 +279,11 @@ impl Effect for PoliceStrobeEffect {
                             let pixel_c = if is_core {
                                 Rgb::WHITE
                             } else {
-                                Rgb::new(to_byte(col.r as f32 * b), to_byte(col.g as f32 * b), to_byte(col.b as f32 * b))
+                                Rgb::new(
+                                    to_byte(col.r as f32 * b),
+                                    to_byte(col.g as f32 * b),
+                                    to_byte(col.b as f32 * b),
+                                )
                             };
                             frame.set(x, y, pixel_c);
                         }
@@ -276,11 +312,15 @@ impl Effect for PoliceStrobeEffect {
 
                         // Angular distance to beam 1 (Color A)
                         let mut diff1 = (p_ang - ang1).abs();
-                        if diff1 > PI { diff1 = 2.0 * PI - diff1; }
+                        if diff1 > PI {
+                            diff1 = 2.0 * PI - diff1;
+                        }
 
                         // Angular distance to beam 2 (Color B)
                         let mut diff2 = (p_ang - ang2).abs();
-                        if diff2 > PI { diff2 = 2.0 * PI - diff2; }
+                        if diff2 > PI {
+                            diff2 = 2.0 * PI - diff2;
+                        }
 
                         let beam_w = 0.55 + bass * 0.25;
 
@@ -325,7 +365,11 @@ impl Effect for PoliceStrobeEffect {
                 // Split Blinder (Top Red, Bottom Blue rapid alternations with center blinders)
                 #[allow(clippy::manual_is_multiple_of)]
                 let alt = ((self.timer * 4.0).floor() as usize) % 2 == 0;
-                let (top_c, bot_c) = if alt { (color_a, color_b) } else { (color_b, color_a) };
+                let (top_c, bot_c) = if alt {
+                    (color_a, color_b)
+                } else {
+                    (color_b, color_a)
+                };
 
                 for y in 0..HEIGHT {
                     let is_top = y < 16;
@@ -335,20 +379,42 @@ impl Effect for PoliceStrobeEffect {
                     for x in 0..WIDTH {
                         let strobe_col = (x % 4 == 0) || (y % 4 == 0);
                         let b = if strobe_col { 1.0 } else { 0.35 * row_boost };
-                        frame.set(x, y, Rgb::new(to_byte(c.r as f32 * b), to_byte(c.g as f32 * b), to_byte(c.b as f32 * b)));
+                        frame.set(
+                            x,
+                            y,
+                            Rgb::new(
+                                to_byte(c.r as f32 * b),
+                                to_byte(c.g as f32 * b),
+                                to_byte(c.b as f32 * b),
+                            ),
+                        );
                     }
                 }
             }
             _ => {
                 // Audio Beat Blast: Full panel explodes with Red/Blue/White strobing strobe rays on audio level
-                let blast_int = (context.audio.level * 1.5 + bass * 1.2 + self.beat_shock * 1.8).clamp(0.0, 1.0);
+                let blast_int = (context.audio.level * 1.5 + bass * 1.2 + self.beat_shock * 1.8)
+                    .clamp(0.0, 1.0);
                 for y in 0..HEIGHT {
                     for x in 0..WIDTH {
                         #[allow(clippy::manual_is_multiple_of)]
                         let checker = ((x / 4) + (y / 4)) % 2 == 0;
                         let col = if checker { color_a } else { color_b };
-                        let b = blast_int * (0.4 + 0.6 * ((x as f32 * 0.8 + y as f32 * 0.8 - self.timer * 8.0).sin() * 0.5 + 0.5));
-                        frame.set(x, y, Rgb::new(to_byte(col.r as f32 * b), to_byte(col.g as f32 * b), to_byte(col.b as f32 * b)));
+                        let b = blast_int
+                            * (0.4
+                                + 0.6
+                                    * ((x as f32 * 0.8 + y as f32 * 0.8 - self.timer * 8.0).sin()
+                                        * 0.5
+                                        + 0.5));
+                        frame.set(
+                            x,
+                            y,
+                            Rgb::new(
+                                to_byte(col.r as f32 * b),
+                                to_byte(col.g as f32 * b),
+                                to_byte(col.b as f32 * b),
+                            ),
+                        );
                     }
                 }
             }

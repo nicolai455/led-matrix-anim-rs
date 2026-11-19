@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Classic Web98", "Cotton Candy", "Cyber Rave", "Rainbow Choir"];
+const PALETTES: &[&str] = &[
+    "Classic Web98",
+    "Cotton Candy",
+    "Cyber Rave",
+    "Rainbow Choir",
+];
 
 const PARAMETERS: [ParameterDescriptor; 4] = [
     ParameterDescriptor {
@@ -92,7 +97,7 @@ impl HamsterDanceEffect {
                 Rgb::new(35, 15, 35),
             ),
             2 => (
-                Rgb::new(0, 230, 180),   // Cyber Mint
+                Rgb::new(0, 230, 180), // Cyber Mint
                 Rgb::new(240, 255, 255),
                 Rgb::new(255, 40, 160),
                 Rgb::new(15, 10, 28),
@@ -106,7 +111,15 @@ impl HamsterDanceEffect {
         }
     }
 
-    fn draw_hamster(frame: &mut Frame, cx: i32, cy: i32, fur_c: Rgb, belly_c: Rgb, ear_c: Rgb, hands_up: bool) {
+    fn draw_hamster(
+        frame: &mut Frame,
+        cx: i32,
+        cy: i32,
+        fur_c: Rgb,
+        belly_c: Rgb,
+        ear_c: Rgb,
+        hands_up: bool,
+    ) {
         // Round 7x7 Hamster body
         for dy in -3..=3i32 {
             let py = cy + dy;
@@ -132,15 +145,25 @@ impl HamsterDanceEffect {
 
         // Tiny round pink ears at (cx - 2, cy - 4) and (cx + 2, cy - 4)
         if cy - 4 >= 0 && cy - 4 < HEIGHT as i32 {
-            if cx - 2 >= 0 && cx - 2 < WIDTH as i32 { frame.set((cx - 2) as usize, (cy - 4) as usize, ear_c); }
-            if cx + 2 < WIDTH as i32 { frame.set((cx + 2) as usize, (cy - 4) as usize, ear_c); }
+            if cx - 2 >= 0 && cx - 2 < WIDTH as i32 {
+                frame.set((cx - 2) as usize, (cy - 4) as usize, ear_c);
+            }
+            if cx + 2 < WIDTH as i32 {
+                frame.set((cx + 2) as usize, (cy - 4) as usize, ear_c);
+            }
         }
 
         // Tiny Black Sunglasses / Eyes at (cx - 1, cy - 1) and (cx + 1, cy - 1)
         if cy > 0 && cy - 1 < HEIGHT as i32 {
-            if cx > 0 && cx - 1 < WIDTH as i32 { frame.set((cx - 1) as usize, (cy - 1) as usize, Rgb::BLACK); }
-            if cx >= 0 && cx < WIDTH as i32 { frame.set(cx as usize, (cy - 1) as usize, Rgb::BLACK); } // Bridge
-            if cx + 1 < WIDTH as i32 { frame.set((cx + 1) as usize, (cy - 1) as usize, Rgb::BLACK); }
+            if cx > 0 && cx - 1 < WIDTH as i32 {
+                frame.set((cx - 1) as usize, (cy - 1) as usize, Rgb::BLACK);
+            }
+            if cx >= 0 && cx < WIDTH as i32 {
+                frame.set(cx as usize, (cy - 1) as usize, Rgb::BLACK);
+            } // Bridge
+            if cx + 1 < WIDTH as i32 {
+                frame.set((cx + 1) as usize, (cy - 1) as usize, Rgb::BLACK);
+            }
         }
 
         // Cute pink nose at (cx, cy)
@@ -151,8 +174,12 @@ impl HamsterDanceEffect {
         // Animated Paws (Up for wave / cheering, Down for clap)
         let paw_y = if hands_up { cy - 2 } else { cy + 1 };
         if paw_y >= 0 && paw_y < HEIGHT as i32 {
-            if cx - 4 >= 0 && cx - 4 < WIDTH as i32 { frame.set((cx - 4) as usize, paw_y as usize, fur_c); }
-            if cx + 4 < WIDTH as i32 { frame.set((cx + 4) as usize, paw_y as usize, fur_c); }
+            if cx - 4 >= 0 && cx - 4 < WIDTH as i32 {
+                frame.set((cx - 4) as usize, paw_y as usize, fur_c);
+            }
+            if cx + 4 < WIDTH as i32 {
+                frame.set((cx + 4) as usize, paw_y as usize, fur_c);
+            }
         }
     }
 }
@@ -169,7 +196,9 @@ impl Effect for HamsterDanceEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -211,9 +240,21 @@ impl Effect for HamsterDanceEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -273,7 +314,11 @@ impl Effect for HamsterDanceEffect {
             #[allow(clippy::manual_is_multiple_of)]
             let tile_on = (x + (self.timer * 8.0) as usize) % 3 == 0;
             let tile_c = if tile_on {
-                Rgb::new(to_byte(230.0 + mid * 25.0), to_byte(180.0 + bass * 75.0), 40)
+                Rgb::new(
+                    to_byte(230.0 + mid * 25.0),
+                    to_byte(180.0 + bass * 75.0),
+                    40,
+                )
             } else {
                 Rgb::new(30, 20, 45)
             };

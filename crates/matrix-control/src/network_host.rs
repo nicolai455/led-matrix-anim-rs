@@ -118,10 +118,18 @@ pub fn apply(body: &[u8]) -> (u16, Value) {
     }
     let incoming: Value = match serde_json::from_slice(body) {
         Ok(value) => value,
-        Err(_) => return (400, json!({ "error": "invalid network configuration JSON" })),
+        Err(_) => {
+            return (
+                400,
+                json!({ "error": "invalid network configuration JSON" }),
+            )
+        }
     };
     let Some(object) = incoming.as_object() else {
-        return (400, json!({ "error": "network configuration must be an object" }));
+        return (
+            400,
+            json!({ "error": "network configuration must be an object" }),
+        );
     };
     const FIELDS: [&str; 8] = [
         "wifiProfiles",
@@ -134,7 +142,10 @@ pub fn apply(body: &[u8]) -> (u16, Value) {
         "mqttPassword",
     ];
     if object.keys().any(|key| !FIELDS.contains(&key.as_str())) {
-        return (400, json!({ "error": "unknown network configuration field" }));
+        return (
+            400,
+            json!({ "error": "unknown network configuration field" }),
+        );
     }
 
     let mut next = match store().lock() {
@@ -160,9 +171,8 @@ pub fn apply(body: &[u8]) -> (u16, Value) {
             };
             let ssid = profile.get("ssid").and_then(Value::as_str).unwrap_or("");
             if ssid.is_empty() || ssid.len() > 32 {
-                let (status, message) = invalid(&format!(
-                    "profile {index} ssid must be 1..=32 UTF-8 bytes"
-                ));
+                let (status, message) =
+                    invalid(&format!("profile {index} ssid must be 1..=32 UTF-8 bytes"));
                 return (status, json!({ "error": message }));
             }
             if parsed.iter().any(|existing| existing.ssid == ssid) {
@@ -192,7 +202,9 @@ pub fn apply(body: &[u8]) -> (u16, Value) {
             let resolved = match (password, keep) {
                 (Some(""), _) => None,
                 (Some(password), _) => Some(password.to_string()),
-                (None, true) => previous.and_then(|existing| existing.password.clone()).or(stored),
+                (None, true) => previous
+                    .and_then(|existing| existing.password.clone())
+                    .or(stored),
                 (None, false) => None,
             };
             parsed.push(HostProfile {
@@ -215,7 +227,10 @@ pub fn apply(body: &[u8]) -> (u16, Value) {
 
     if let Some(ssid) = object.get("fallbackApSsid").and_then(Value::as_str) {
         if ssid.len() > 32 {
-            return (400, json!({ "error": "fallbackApSsid must be at most 32 bytes" }));
+            return (
+                400,
+                json!({ "error": "fallbackApSsid must be at most 32 bytes" }),
+            );
         }
         next.fallback_ap_ssid = ssid.to_string();
     }

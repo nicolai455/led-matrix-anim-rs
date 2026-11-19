@@ -275,7 +275,7 @@ fn test_lazy_effect_constructor_drop_counters_and_activation_lifecycle() {
 #[test]
 fn test_render_on_demand_and_drop_before_new_allocation_invariant() {
     let mut effects = builtin_effects();
-assert!(effects.len() >= 21);
+    assert!(effects.len() >= 21);
 
     let mut frame = Frame::default();
     let audio = AudioSnapshot::default();
@@ -466,9 +466,20 @@ fn test_frames_effect_buffer_release_on_deactivate() {
 fn boot_catalog_peak_allocation_is_bounded() {
     if std::env::var_os("MATRIX_BOOT_MEMORY_CHILD").is_none() {
         let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "boot_catalog_peak_allocation_is_bounded", "--nocapture"])
-            .env("MATRIX_BOOT_MEMORY_CHILD", "1").output().unwrap();
-        assert!(output.status.success(), "{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            .args([
+                "--exact",
+                "boot_catalog_peak_allocation_is_bounded",
+                "--nocapture",
+            ])
+            .env("MATRIX_BOOT_MEMORY_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         print!("{}", String::from_utf8_lossy(&output.stdout));
         return;
     }
@@ -481,7 +492,16 @@ fn boot_catalog_peak_allocation_is_bounded() {
     let bytes = engine.catalog_json().unwrap();
     let peak = PEAK_ALLOCATED.load(Ordering::SeqCst) - before;
     let retained = CURRENT_ALLOCATED.load(Ordering::SeqCst) - before;
-    eprintln!("wrappers={wrappers} catalog_peak={peak} catalog_retained={retained} catalog_bytes={}", bytes.len());
-    assert!(peak < 75_000, "catalog serialization peak exceeds heap budget");
-    assert_eq!(serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(), engine.catalog());
+    eprintln!(
+        "wrappers={wrappers} catalog_peak={peak} catalog_retained={retained} catalog_bytes={}",
+        bytes.len()
+    );
+    assert!(
+        peak < 75_000,
+        "catalog serialization peak exceeds heap budget"
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        engine.catalog()
+    );
 }

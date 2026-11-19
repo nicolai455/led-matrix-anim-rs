@@ -73,7 +73,11 @@ fn blit_text(canvas: &mut RgbaImage, text: &str, x: u32, y: u32, scale: u32, col
                     for dx in 0..scale {
                         let px = cursor + i64::from(col * scale + dx);
                         let py = i64::from(y + row * scale + dy);
-                        if px >= 0 && py >= 0 && (px as u32) < canvas.width() && (py as u32) < canvas.height() {
+                        if px >= 0
+                            && py >= 0
+                            && (px as u32) < canvas.width()
+                            && (py as u32) < canvas.height()
+                        {
                             canvas.put_pixel(px as u32, py as u32, color);
                         }
                     }
@@ -127,7 +131,14 @@ pub fn build_sheet(info: &EffectInfo, samples: &[Frame], cell_scale: u32) -> Rgb
     let height = MARGIN + header_height + ROWS * cell_height + (ROWS - 1) * ROW_GAP + MARGIN;
 
     let mut canvas = RgbaImage::from_pixel(width, height, BACKGROUND);
-    blit_text(&mut canvas, &title, MARGIN, MARGIN, title_scale, LABEL_COLOR);
+    blit_text(
+        &mut canvas,
+        &title,
+        MARGIN,
+        MARGIN,
+        title_scale,
+        LABEL_COLOR,
+    );
 
     for (slot, frame) in samples.iter().take(SAMPLE_PERCENT.len()).enumerate() {
         let column = slot as u32 % COLUMNS;
@@ -136,7 +147,14 @@ pub fn build_sheet(info: &EffectInfo, samples: &[Frame], cell_scale: u32) -> Rgb
         let cell_y = MARGIN + header_height + row * (cell_height + ROW_GAP);
 
         let label = fit_text(&info.id, image_size, label_scale);
-        blit_text(&mut canvas, &label, cell_x, cell_y, label_scale, LABEL_COLOR);
+        blit_text(
+            &mut canvas,
+            &label,
+            cell_x,
+            cell_y,
+            label_scale,
+            LABEL_COLOR,
+        );
         let cell = scale_frame(frame, cell_scale);
         image::imageops::replace(
             &mut canvas,
@@ -172,8 +190,13 @@ pub fn save_png(sheet: &RgbaImage, path: &Path) -> Result<u64, String> {
     sheet
         .save_with_format(&part, image::ImageFormat::Png)
         .map_err(|error| format!("cannot write {}: {error}", part.display()))?;
-    std::fs::rename(&part, path)
-        .map_err(|error| format!("cannot move {} to {}: {error}", part.display(), path.display()))?;
+    std::fs::rename(&part, path).map_err(|error| {
+        format!(
+            "cannot move {} to {}: {error}",
+            part.display(),
+            path.display()
+        )
+    })?;
     std::fs::metadata(path)
         .map(|meta| meta.len())
         .map_err(|error| format!("cannot stat {}: {error}", path.display()))

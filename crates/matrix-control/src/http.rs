@@ -62,10 +62,14 @@ pub fn start_http_server(
                         };
 
                         let mut headers = Vec::with_capacity(3);
-                        if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], res.content_type.as_bytes()) {
+                        if let Ok(h) =
+                            Header::from_bytes(&b"Content-Type"[..], res.content_type.as_bytes())
+                        {
                             headers.push(h);
                         }
-                        if let Ok(h) = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]) {
+                        if let Ok(h) =
+                            Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                        {
                             headers.push(h);
                         }
                         if res.content_type.starts_with("text/html") {

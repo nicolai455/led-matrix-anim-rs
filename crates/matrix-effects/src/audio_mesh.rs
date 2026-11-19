@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Cyan Cyberwire", "Synthwave Neon", "Emerald Matrix", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Cyan Cyberwire",
+    "Synthwave Neon",
+    "Emerald Matrix",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -144,7 +149,11 @@ impl AudioMeshEffect {
                 // Synthwave Neon (Dark violet valley -> Hot pink ridges -> Yellow peaks)
                 if el > 0.7 {
                     let yel = (el - 0.7) / 0.3;
-                    Rgb::new(to_byte(255.0 * b), to_byte(220.0 * yel * b), to_byte(40.0 * b))
+                    Rgb::new(
+                        to_byte(255.0 * b),
+                        to_byte(220.0 * yel * b),
+                        to_byte(40.0 * b),
+                    )
                 } else {
                     let r = to_byte(255.0 * b);
                     let g = to_byte(20.0 * b);
@@ -180,7 +189,9 @@ impl Effect for AudioMeshEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -226,9 +237,21 @@ impl Effect for AudioMeshEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -267,13 +290,22 @@ impl Effect for AudioMeshEffect {
                 let dist = (du * du + dv * dv).sqrt();
 
                 let ripple = (dist * 7.0 - self.phase * 2.0).sin();
-                let beat_pulse = ((dist * 8.0 - (1.0 - self.drop_wave) * 12.0).abs() < 1.5) as i32 as f32 * self.drop_wave;
+                let beat_pulse = ((dist * 8.0 - (1.0 - self.drop_wave) * 12.0).abs() < 1.5) as i32
+                    as f32
+                    * self.drop_wave;
 
                 // Frequency band modulation along U
                 let band_idx = (ui * 16 / grid_n).min(15);
-                let band_boost = if audio_active { context.audio.bands[band_idx] * 0.6 } else { 0.0 };
+                let band_boost = if audio_active {
+                    context.audio.bands[band_idx] * 0.6
+                } else {
+                    0.0
+                };
 
-                let elevation = (ripple * 0.5 + 0.5) * max_height + beat_pulse * 4.0 + band_boost * 3.0 + mid * (dist * 12.0).cos() * 0.8;
+                let elevation = (ripple * 0.5 + 0.5) * max_height
+                    + beat_pulse * 4.0
+                    + band_boost * 3.0
+                    + mid * (dist * 12.0).cos() * 0.8;
                 let el_norm = (elevation / (max_height + 4.0)).clamp(0.0, 1.0);
 
                 // Perspective screen mapping

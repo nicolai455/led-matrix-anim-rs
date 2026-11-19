@@ -87,7 +87,13 @@ impl PolarLightsEffect {
         Self::default()
     }
 
-    fn curtain_color(pal: usize, color_cycle: f32, brightness: f32, y_norm: f32, curtain_idx: usize) -> Rgb {
+    fn curtain_color(
+        pal: usize,
+        color_cycle: f32,
+        brightness: f32,
+        y_norm: f32,
+        curtain_idx: usize,
+    ) -> Rgb {
         let b = clamp01(brightness);
         match pal {
             0 => {
@@ -132,7 +138,9 @@ impl Effect for PolarLightsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -178,8 +186,16 @@ impl Effect for PolarLightsEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -204,7 +220,11 @@ impl Effect for PolarLightsEffect {
 
             for x in 0..WIDTH {
                 let x_norm = x as f32 / WIDTH as f32;
-                let ripple = if audio_active { (x_norm * 16.0 * PI + self.phase * 3.0).sin() * mid * 1.5 } else { 0.0 };
+                let ripple = if audio_active {
+                    (x_norm * 16.0 * PI + self.phase * 3.0).sin() * mid * 1.5
+                } else {
+                    0.0
+                };
 
                 let cy = c_base_y
                     + (x_norm * wave_freq * 2.0 * PI + c_phase).sin() * c_amp
@@ -223,11 +243,14 @@ impl Effect for PolarLightsEffect {
                         (-dist * 0.65).exp()
                     };
 
-                    let brightness = vert_falloff * global_intensity * (0.8 + 0.2 * (x_norm * 8.0 * PI + self.phase).sin());
+                    let brightness = vert_falloff
+                        * global_intensity
+                        * (0.8 + 0.2 * (x_norm * 8.0 * PI + self.phase).sin());
 
                     if brightness > 0.03 {
                         let y_norm = yf / HEIGHT as f32;
-                        let col = Self::curtain_color(pal, self.color_cycle, brightness, y_norm, curtain);
+                        let col =
+                            Self::curtain_color(pal, self.color_cycle, brightness, y_norm, curtain);
                         let cur = frame.get(x, y);
                         frame.set(
                             x,

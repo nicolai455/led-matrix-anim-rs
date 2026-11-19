@@ -76,7 +76,10 @@ impl Effect for LazyEffect {
         } else if let Some((_, v)) = self.params.iter().find(|(k, _)| *k == id) {
             Some(*v)
         } else {
-            self.parameters.iter().find(|p| p.id == id).map(|p| p.default)
+            self.parameters
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.default)
         }
     }
 

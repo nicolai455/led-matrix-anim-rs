@@ -146,10 +146,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(saved_state) = saved_state.as_ref() {
         matrix_core::restore_runtime_state(&mut engine, &saved_state.to_string())?;
     }
-    let has_default = saved_state.as_ref().and_then(|state| state.get("playlistCollection"))
+    let has_default = saved_state
+        .as_ref()
+        .and_then(|state| state.get("playlistCollection"))
         .and_then(|collection| collection.get("playlists"))
         .and_then(serde_json::Value::as_array)
-        .is_some_and(|playlists| playlists.iter().any(|playlist| playlist.get("id").and_then(serde_json::Value::as_str) == Some("sound-default")));
+        .is_some_and(|playlists| {
+            playlists.iter().any(|playlist| {
+                playlist.get("id").and_then(serde_json::Value::as_str) == Some("sound-default")
+            })
+        });
     if !has_default {
         engine.install_default_sound_playlist(matrix_effects::default_sound_playlist())?;
     }

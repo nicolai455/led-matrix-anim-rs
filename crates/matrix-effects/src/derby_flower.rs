@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Classic Derby RGBY", "Red & Blue Strobe", "Cyberpunk Violet", "Rainbow Flower"];
+const PALETTES: &[&str] = &[
+    "Classic Derby RGBY",
+    "Red & Blue Strobe",
+    "Cyberpunk Violet",
+    "Rainbow Flower",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -144,7 +149,9 @@ impl Effect for DerbyFlowerEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -198,9 +205,21 @@ impl Effect for DerbyFlowerEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -231,7 +250,11 @@ impl Effect for DerbyFlowerEffect {
 
         for c_idx in 0..num_clusters {
             let is_inner_wheel = c_idx % 2 == 0;
-            let tumble = if is_inner_wheel { self.tumble_a } else { self.tumble_b };
+            let tumble = if is_inner_wheel {
+                self.tumble_a
+            } else {
+                self.tumble_b
+            };
 
             // Cluster center orbits around the display
             let cluster_dist = if is_inner_wheel {
@@ -268,7 +291,11 @@ impl Effect for DerbyFlowerEffect {
                             if d2 <= 2.0 {
                                 let edge = 1.0 - (d2 / 2.0) * 0.5;
                                 let is_center_dot = dx == 0 && dy == 0;
-                                let hot = if is_center_dot && self.strobe_pulse > 0.2 { 0.5 } else { 0.0 };
+                                let hot = if is_center_dot && self.strobe_pulse > 0.2 {
+                                    0.5
+                                } else {
+                                    0.0
+                                };
 
                                 let intensity = clamp01(edge * (0.85 + bass * 0.35) + hot);
 
@@ -319,7 +346,17 @@ mod beat_regression {
             ..AudioSnapshot::default()
         };
         let render = |effect: &mut DerbyFlowerEffect, frame: &mut Frame, audio: &AudioSnapshot| {
-            effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: 0.016, audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
+            effect.render(
+                frame,
+                &RenderContext {
+                    now_ms: 0,
+                    delta_seconds: 0.016,
+                    audio,
+                    color: Rgb::WHITE,
+                    text: "",
+                    scroll_speed: 1.0,
+                },
+            );
         };
         render(&mut effect, &mut frame, &audio);
         assert_eq!(effect.direction, -1.0);

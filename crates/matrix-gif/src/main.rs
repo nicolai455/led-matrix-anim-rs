@@ -11,8 +11,8 @@ mod gif;
 mod model;
 mod render;
 
-use std::path::{Path, PathBuf};
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use matrix_core::{Engine, Frame};
@@ -68,7 +68,11 @@ enum Command {
     /// Render a 2x3 PNG contact sheet per effect instead of GIFs.
     ContactSheets {
         /// Output directory for `<index>-<id>.png` files.
-        #[arg(long, value_name = "DIR", default_value = "docs/effects/contact-sheets")]
+        #[arg(
+            long,
+            value_name = "DIR",
+            default_value = "docs/effects/contact-sheets"
+        )]
         out: PathBuf,
 
         /// Render every effect in catalog order.
@@ -114,7 +118,10 @@ enum Command {
         out: PathBuf,
 
         /// Repository URL linked in the page header.
-        #[arg(long, default_value = "https://github.com/nicolai455/led-matrix-anim-rs")]
+        #[arg(
+            long,
+            default_value = "https://github.com/nicolai455/led-matrix-anim-rs"
+        )]
         repo: String,
     },
 }
@@ -160,10 +167,22 @@ fn run(cli: Cli) -> Result<i32, String> {
             scale,
             audio,
             summary,
-        }) => contact_sheets(&out, all, effects, seconds, fps, scale, audio, summary.as_deref()),
-        Some(Command::Gallery { dir, summary, out, repo }) => {
-            gallery_page(&dir, &summary, &out, &repo)
-        }
+        }) => contact_sheets(
+            &out,
+            all,
+            effects,
+            seconds,
+            fps,
+            scale,
+            audio,
+            summary.as_deref(),
+        ),
+        Some(Command::Gallery {
+            dir,
+            summary,
+            out,
+            repo,
+        }) => gallery_page(&dir, &summary, &out, &repo),
         None => gifs(
             &cli.out,
             cli.all,
@@ -197,9 +216,14 @@ fn select(effects: &[EffectInfo], all: bool, wanted: &[String]) -> Result<Vec<Ef
     for id in wanted {
         let found = effects
             .iter()
-            .find(|effect| effect.id.eq_ignore_ascii_case(id) || effect.name.eq_ignore_ascii_case(id))
+            .find(|effect| {
+                effect.id.eq_ignore_ascii_case(id) || effect.name.eq_ignore_ascii_case(id)
+            })
             .ok_or_else(|| format!("unknown effect '{id}'"))?;
-        if !chosen.iter().any(|existing: &EffectInfo| existing.id == found.id) {
+        if !chosen
+            .iter()
+            .any(|existing: &EffectInfo| existing.id == found.id)
+        {
             chosen.push(found.clone());
         }
     }
@@ -261,7 +285,15 @@ fn gifs(
         }
     }
 
-    finish(&rows, summary_path, fps, seconds, scale, audio, catalog.len())
+    finish(
+        &rows,
+        summary_path,
+        fps,
+        seconds,
+        scale,
+        audio,
+        catalog.len(),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -362,7 +394,15 @@ fn contact_sheets(
         }
     }
 
-    finish(&rows, summary_path, fps, seconds, scale, audio, catalog.len())
+    finish(
+        &rows,
+        summary_path,
+        fps,
+        seconds,
+        scale,
+        audio,
+        catalog.len(),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -387,13 +427,14 @@ fn render_sheet(
     for index in 0..frames {
         let now_ms = render::frame_time_ms(index, fps);
         let snapshot = audio.snapshot(now_ms);
-        let frame = catch_unwind(AssertUnwindSafe(|| engine.render(now_ms, &snapshot)))
-            .map_err(|payload| {
+        let frame = catch_unwind(AssertUnwindSafe(|| engine.render(now_ms, &snapshot))).map_err(
+            |payload| {
                 format!(
                     "effect panicked at frame {index} (t={now_ms} ms): {}",
                     panic_message(payload)
                 )
-            })?;
+            },
+        )?;
         stats.absorb(&frame);
         while next < wanted.len() && wanted[next] == index {
             samples[next] = Some(frame.clone());
@@ -470,7 +511,13 @@ fn gallery_page(dir: &Path, summary_path: &Path, out: &Path, repo: &str) -> Resu
             row.index + 1,
             row.id
                 .chars()
-                .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
+                .map(
+                    |c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                        c
+                    } else {
+                        '_'
+                    }
+                )
                 .collect::<String>()
         );
         for candidate in [
@@ -502,7 +549,8 @@ fn gallery_page(dir: &Path, summary_path: &Path, out: &Path, repo: &str) -> Resu
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
     }
-    std::fs::write(out, html).map_err(|error| format!("cannot write {}: {error}", out.display()))?;
+    std::fs::write(out, html)
+        .map_err(|error| format!("cannot write {}: {error}", out.display()))?;
     println!(
         "gallery: {} effects -> {} ({} bytes)",
         doc.effects.len(),
@@ -622,8 +670,8 @@ mod tests {
     fn panic_message_reads_str_and_string_payloads() {
         let from_str = catch_unwind(|| panic!("boom &str")).unwrap_err();
         assert_eq!(panic_message(from_str), "boom &str");
-        let from_string = catch_unwind(|| std::panic::panic_any(String::from("boom String")))
-            .unwrap_err();
+        let from_string =
+            catch_unwind(|| std::panic::panic_any(String::from("boom String"))).unwrap_err();
         assert_eq!(panic_message(from_string), "boom String");
     }
 
@@ -633,13 +681,15 @@ mod tests {
         // must surface as an Err string (and therefore as a summary error row)
         // instead of unwinding through the whole run.
         let mut calls = 0u32;
-        let result: Result<u32, String> =
-            catch_unwind(AssertUnwindSafe(|| {
-                calls += 1;
-                panic!("simulated effect panic");
-            }))
-            .map_err(|payload| format!("effect panicked: {}", panic_message(payload)));
+        let result: Result<u32, String> = catch_unwind(AssertUnwindSafe(|| {
+            calls += 1;
+            panic!("simulated effect panic");
+        }))
+        .map_err(|payload| format!("effect panicked: {}", panic_message(payload)));
         assert_eq!(calls, 1);
-        assert_eq!(result.unwrap_err(), "effect panicked: simulated effect panic");
+        assert_eq!(
+            result.unwrap_err(),
+            "effect panicked: simulated effect panic"
+        );
     }
 }

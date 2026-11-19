@@ -132,7 +132,9 @@ impl Effect for DomainWarpEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -176,9 +178,21 @@ impl Effect for DomainWarpEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -218,11 +232,13 @@ impl Effect for DomainWarpEffect {
                 };
 
                 // Final composite pattern
-                let final_val = 0.5 + 0.5 * ((px + warp_factor * rx + t * 0.4).cos()
-                    * (py + warp_factor * ry - t * 0.4).sin()
-                    + (qx * qy * 0.5)
-                    + (mid * 0.2)
-                    + ripple);
+                let final_val = 0.5
+                    + 0.5
+                        * ((px + warp_factor * rx + t * 0.4).cos()
+                            * (py + warp_factor * ry - t * 0.4).sin()
+                            + (qx * qy * 0.5)
+                            + (mid * 0.2)
+                            + ripple);
 
                 let q_mag = (qx * qx + qy * qy).sqrt().min(1.0);
                 let col = Self::sample_color(pal, self.color_cycle, final_val, q_mag);

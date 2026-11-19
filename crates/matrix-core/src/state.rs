@@ -43,7 +43,7 @@ pub fn serialize_runtime_state(engine: &Engine) -> String {
     // entry (~3.7 KB for the 73-entry default), which pushed a legitimate state
     // past MAX_RUNTIME_STATE_BYTES and made "Save queue" fail with
     // "runtime state exceeds 16384 byte limit".
-    let redundant = crate::engine::active_queue_is_redundant(&playlist_collection, &active_queue);
+    let redundant = crate::engine::active_queue_is_redundant(playlist_collection, &active_queue);
 
     let mut doc = json!({
         "version": 1,
@@ -87,12 +87,23 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
     }
 
     // Parse large parameter sets as borrowed raw JSON; allocate only one effect at a time.
-    let serialized_doc: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| format!("invalid JSON: {e}"))?;
-    let auto_cycle = serialized_doc.get("autoCycle").and_then(|value| value.as_bool());
-    let audio = serialized_doc.get("audio").and_then(|value| value.as_str()).map(str::to_owned);
-    let audio_source = serialized_doc.get("audioSource").and_then(|value| value.as_str()).map(str::to_owned);
-    let audio_status = serialized_doc.get("audioStatus").and_then(|value| value.as_str()).map(str::to_owned);
+    let serialized_doc: serde_json::Value =
+        serde_json::from_str(json_str).map_err(|e| format!("invalid JSON: {e}"))?;
+    let auto_cycle = serialized_doc
+        .get("autoCycle")
+        .and_then(|value| value.as_bool());
+    let audio = serialized_doc
+        .get("audio")
+        .and_then(|value| value.as_str())
+        .map(str::to_owned);
+    let audio_source = serialized_doc
+        .get("audioSource")
+        .and_then(|value| value.as_str())
+        .map(str::to_owned);
+    let audio_status = serialized_doc
+        .get("audioStatus")
+        .and_then(|value| value.as_str())
+        .map(str::to_owned);
     let speed = serialized_doc.get("speed").and_then(|value| value.as_u64());
     let mic = serialized_doc.get("mic").cloned();
     let mut fields: std::collections::BTreeMap<&str, &serde_json::value::RawValue> =
@@ -139,12 +150,20 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
         let _ = engine.apply("mic", &mic.to_string());
     }
 
-    let restored_collection = doc.get("playlistCollection")
-        .and_then(|value| serde_json::from_value::<crate::engine::PlaylistCollection>(value.clone()).ok())
+    let restored_collection = doc
+        .get("playlistCollection")
+        .and_then(|value| {
+            serde_json::from_value::<crate::engine::PlaylistCollection>(value.clone()).ok()
+        })
         .filter(|collection| engine.restore_named_playlist_state(collection).is_ok());
-    let selected_restored = restored_collection.as_ref()
+    let selected_restored = restored_collection
+        .as_ref()
         .and_then(|collection| collection.selected_id.as_deref())
-        .is_some_and(|id| engine.apply("playlist_select", &json!({"id":id}).to_string()).is_ok());
+        .is_some_and(|id| {
+            engine
+                .apply("playlist_select", &json!({"id":id}).to_string())
+                .is_ok()
+        });
     if !selected_restored {
         if let Some(playlist) = doc.get("playlistConfig").or_else(|| doc.get("playlist")) {
             let _ = engine.apply("playlist_config", &playlist.to_string());
@@ -165,7 +184,10 @@ pub fn restore_runtime_state(engine: &mut Engine, json_str: &str) -> Result<(), 
         light.insert("color".into(), color.clone());
     }
     if let Some(effect) = doc.get("effect").and_then(|value| value.as_str()) {
-        if engine.effects().iter().any(|candidate| candidate.name().eq_ignore_ascii_case(effect) || candidate.id().eq_ignore_ascii_case(effect)) {
+        if engine.effects().iter().any(|candidate| {
+            candidate.name().eq_ignore_ascii_case(effect)
+                || candidate.id().eq_ignore_ascii_case(effect)
+        }) {
             light.insert("effect".into(), json!(effect));
         }
     }
@@ -242,18 +264,27 @@ mod tests {
     #[test]
     fn test_save_emits_only_overridden_parameters_for_bounded_persistence() {
         let engine = Engine::new(vec![Box::new(TestEffect {
-            id: "fx1", name: "Effect 1", val: 10.0,
-        })]).unwrap();
-        let state: serde_json::Value = serde_json::from_str(&serialize_runtime_state(&engine)).unwrap();
+            id: "fx1",
+            name: "Effect 1",
+            val: 10.0,
+        })])
+        .unwrap();
+        let state: serde_json::Value =
+            serde_json::from_str(&serialize_runtime_state(&engine)).unwrap();
         assert_eq!(state["params"], json!({}));
 
         let mut changed = Engine::new(vec![Box::new(TestEffect {
-            id: "fx1", name: "Effect 1", val: 25.0,
-        })]).unwrap();
-        let state: serde_json::Value = serde_json::from_str(&serialize_runtime_state(&changed)).unwrap();
+            id: "fx1",
+            name: "Effect 1",
+            val: 25.0,
+        })])
+        .unwrap();
+        let state: serde_json::Value =
+            serde_json::from_str(&serialize_runtime_state(&changed)).unwrap();
         assert_eq!(state["params"]["fx1"]["p1"], 25.0);
         changed.apply("light", r#"{"state":"ON"}"#).unwrap();
-        let state: serde_json::Value = serde_json::from_str(&serialize_runtime_state(&changed)).unwrap();
+        let state: serde_json::Value =
+            serde_json::from_str(&serialize_runtime_state(&changed)).unwrap();
         assert!(state.get("state").is_none());
     }
 

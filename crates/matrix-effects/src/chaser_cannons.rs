@@ -4,8 +4,18 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const CHASE_MODES: &[&str] = &["Outward Cannon Burst", "Inward Implosion", "Dual Alternating", "Audio Pulse Wave"];
-const PALETTES: &[&str] = &["Warm Halogen", "RGB Prism", "Red & Blue Police", "Cyberpunk Neon"];
+const CHASE_MODES: &[&str] = &[
+    "Outward Cannon Burst",
+    "Inward Implosion",
+    "Dual Alternating",
+    "Audio Pulse Wave",
+];
+const PALETTES: &[&str] = &[
+    "Warm Halogen",
+    "RGB Prism",
+    "Red & Blue Police",
+    "Cyberpunk Neon",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -141,7 +151,9 @@ impl Effect for ChaserCannonsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -193,9 +205,21 @@ impl Effect for ChaserCannonsEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -218,13 +242,21 @@ impl Effect for ChaserCannonsEffect {
                 0 => {
                     // Outward Cannon Burst: 0 -> 1 -> 2 -> 3 -> 4 -> 5
                     let diff = (self.phase - r_idx as f32).abs();
-                    if diff < 0.6 { 1.0 - (diff / 0.6) } else { 0.0 }
+                    if diff < 0.6 {
+                        1.0 - (diff / 0.6)
+                    } else {
+                        0.0
+                    }
                 }
                 1 => {
                     // Inward Implosion: 5 -> 4 -> 3 -> 2 -> 1 -> 0
                     let inv_phase = 5.0 - self.phase;
                     let diff = (inv_phase - r_idx as f32).abs();
-                    if diff < 0.6 { 1.0 - (diff / 0.6) } else { 0.0 }
+                    if diff < 0.6 {
+                        1.0 - (diff / 0.6)
+                    } else {
+                        0.0
+                    }
                 }
                 2 => {
                     // Dual Alternating: Even rings fire, then Odd rings fire
@@ -232,11 +264,19 @@ impl Effect for ChaserCannonsEffect {
                     let is_even_cycle = (self.phase.floor() as usize) % 2 == 0;
                     #[allow(clippy::manual_is_multiple_of)]
                     let is_even_ring = r_idx % 2 == 0;
-                    if is_even_cycle == is_even_ring { 1.0 } else { 0.0 }
+                    if is_even_cycle == is_even_ring {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 }
                 _ => {
                     // Audio Pulse Wave
-                    let band_val = if audio_active { context.audio.bands[r_idx * 2] } else { 0.0 };
+                    let band_val = if audio_active {
+                        context.audio.bands[r_idx * 2]
+                    } else {
+                        0.0
+                    };
                     (band_val * 1.5 + bass * 0.6).min(1.0)
                 }
             };
@@ -245,7 +285,8 @@ impl Effect for ChaserCannonsEffect {
             if target_energy > self.ring_energy[r_idx] {
                 self.ring_energy[r_idx] = target_energy;
             } else {
-                self.ring_energy[r_idx] = (self.ring_energy[r_idx] - dt * 8.0 * decay_mult).max(0.0);
+                self.ring_energy[r_idx] =
+                    (self.ring_energy[r_idx] - dt * 8.0 * decay_mult).max(0.0);
             }
 
             if beat && (r_idx == 0 || r_idx == 5) {
@@ -280,7 +321,8 @@ impl Effect for ChaserCannonsEffect {
 
                             if in_lamp {
                                 let lamp_bright = (1.0 - lamp_cut / 0.4) * ring_falloff * energy;
-                                let b = (lamp_bright + self.strobe_pulse * 0.25 + mid * 0.1).clamp(0.0, 1.0);
+                                let b = (lamp_bright + self.strobe_pulse * 0.25 + mid * 0.1)
+                                    .clamp(0.0, 1.0);
                                 let col = Self::blinder_color(pal, r_idx, b, self.color_cycle);
 
                                 frame.blend_add(x, y, col);

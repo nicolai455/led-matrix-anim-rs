@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Optical Mono", "Psychedelic Purple", "Hypno Emerald", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Optical Mono",
+    "Psychedelic Purple",
+    "Hypno Emerald",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -132,7 +137,9 @@ impl Effect for HypnoSpiralsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -179,9 +186,21 @@ impl Effect for HypnoSpiralsEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -224,14 +243,23 @@ impl Effect for HypnoSpiralsEffect {
                 // Circular shockwave ring from beat
                 let ring = if self.beat_pulse > 0.1 {
                     let target_r = (1.0 - self.beat_pulse) * 16.0;
-                    if (r - target_r).abs() < 1.5 { 0.4 * self.beat_pulse } else { 0.0 }
+                    if (r - target_r).abs() < 1.5 {
+                        0.4 * self.beat_pulse
+                    } else {
+                        0.0
+                    }
                 } else {
                     0.0
                 };
 
-                let high_sparkle = if audio_active { treble * ((r * 8.0).sin() * 0.2).max(0.0) } else { 0.0 };
+                let high_sparkle = if audio_active {
+                    treble * ((r * 8.0).sin() * 0.2).max(0.0)
+                } else {
+                    0.0
+                };
 
-                let total_intensity = (moire.powf(1.8) + ring + high_sparkle + mid * 0.1).clamp(0.0, 1.0);
+                let total_intensity =
+                    (moire.powf(1.8) + ring + high_sparkle + mid * 0.1).clamp(0.0, 1.0);
 
                 let col = Self::moire_color(pal, self.color_cycle, total_intensity, r_norm);
                 frame.set(x, y, col);

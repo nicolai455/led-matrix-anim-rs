@@ -148,7 +148,9 @@ impl Effect for NyanCatEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -193,8 +195,16 @@ impl Effect for NyanCatEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -226,10 +236,18 @@ impl Effect for NyanCatEffect {
                 // 4-point cross sparkle for bright stars
                 if twinkle > 0.85 {
                     let dim = Rgb::new(b / 3, b / 3, b / 3);
-                    if xi > 0 { frame.set((xi - 1) as usize, yi as usize, dim); }
-                    if xi + 1 < WIDTH as i32 { frame.set((xi + 1) as usize, yi as usize, dim); }
-                    if yi > 0 { frame.set(xi as usize, (yi - 1) as usize, dim); }
-                    if yi + 1 < HEIGHT as i32 { frame.set(xi as usize, (yi + 1) as usize, dim); }
+                    if xi > 0 {
+                        frame.set((xi - 1) as usize, yi as usize, dim);
+                    }
+                    if xi + 1 < WIDTH as i32 {
+                        frame.set((xi + 1) as usize, yi as usize, dim);
+                    }
+                    if yi > 0 {
+                        frame.set(xi as usize, (yi - 1) as usize, dim);
+                    }
+                    if yi + 1 < HEIGHT as i32 {
+                        frame.set(xi as usize, (yi + 1) as usize, dim);
+                    }
                 }
             }
         }
@@ -245,7 +263,8 @@ impl Effect for NyanCatEffect {
         // 2. Render Undulating Rainbow Trail (Left edge x=0 up to cat_base_x)
         for x in 0..=(cat_base_x as usize) {
             let xf = x as f32;
-            let wave_offset = ((xf * 0.45 - self.flight_time * 0.8).sin() * base_amp).round() as i32;
+            let wave_offset =
+                ((xf * 0.45 - self.flight_time * 0.8).sin() * base_amp).round() as i32;
             let rainbow_top = cat_y + 1 + wave_offset;
 
             for stripe in 0..6 {

@@ -1,4 +1,6 @@
-use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte};
+use crate::util::{
+    audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -124,7 +126,9 @@ impl Effect for SpinningVinylEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -168,9 +172,21 @@ impl Effect for SpinningVinylEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         // Beat scratch impulse
@@ -214,7 +230,8 @@ impl Effect for SpinningVinylEffect {
                         frame.set(x, y, Rgb::WHITE);
                     } else if d2 <= l_sq {
                         // Center record label
-                        let (_, label_col) = Self::vinyl_colors(pal, self.color_cycle, dist / vinyl_r, 0.0);
+                        let (_, label_col) =
+                            Self::vinyl_colors(pal, self.color_cycle, dist / vinyl_r, 0.0);
                         // Rotating label text/design marker
                         let marker = (rel_theta * 2.0).sin() > 0.8;
                         let col = if marker { Rgb::WHITE } else { label_col };
@@ -225,7 +242,8 @@ impl Effect for SpinningVinylEffect {
                         let groove_ripple = (dist * 4.0).sin() * 0.2;
                         let sheen = (sheen_angle + groove_ripple + treble * 0.35).clamp(0.0, 1.0);
 
-                        let (groove_col, _) = Self::vinyl_colors(pal, self.color_cycle, dist / vinyl_r, sheen);
+                        let (groove_col, _) =
+                            Self::vinyl_colors(pal, self.color_cycle, dist / vinyl_r, sheen);
                         frame.set(x, y, groove_col);
                     }
                 }
@@ -278,7 +296,11 @@ impl Effect for SpinningVinylEffect {
         for y in 10..=22 {
             #[allow(clippy::manual_is_multiple_of)]
             if (y + (self.rotation * 4.0) as usize) % 2 == 0 {
-                let strobe_c = Rgb::new(to_byte(40.0 + mid * 120.0), to_byte(220.0 + treble * 35.0), 255);
+                let strobe_c = Rgb::new(
+                    to_byte(40.0 + mid * 120.0),
+                    to_byte(220.0 + treble * 35.0),
+                    255,
+                );
                 frame.set(0, y, strobe_c);
             }
         }

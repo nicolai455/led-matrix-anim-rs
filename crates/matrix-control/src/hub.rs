@@ -1,7 +1,7 @@
-use matrix_core::audio::MicSettings;
-use matrix_core::{AudioMode, AudioSnapshot, Engine, Frame, PanelConfig};
-use matrix_core::engine::DetachedSnapshot;
 use crate::persistence::StateStore;
+use matrix_core::audio::MicSettings;
+use matrix_core::engine::DetachedSnapshot;
+use matrix_core::{AudioMode, AudioSnapshot, Engine, Frame, PanelConfig};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, SyncSender};
@@ -59,7 +59,10 @@ pub enum SubmitOutcome {
 }
 
 #[cfg(test)]
-fn publish_snapshot_with<E>(cache: &RwLock<Arc<Vec<u8>>>, build: impl FnOnce() -> Result<Vec<u8>, E>) {
+fn publish_snapshot_with<E>(
+    cache: &RwLock<Arc<Vec<u8>>>,
+    build: impl FnOnce() -> Result<Vec<u8>, E>,
+) {
     if let Ok(bytes) = build() {
         let bytes = Arc::new(bytes);
         if let Ok(mut lock) = cache.write() {
@@ -70,35 +73,66 @@ fn publish_snapshot_with<E>(cache: &RwLock<Arc<Vec<u8>>>, build: impl FnOnce() -
 
 type Replies = Vec<(SyncSender<Result<(), String>>, Result<(), String>)>;
 struct Telemetry {
-    state: Arc<DetachedSnapshot>, audio: AudioSnapshot, mode: AudioMode,
-    history: std::collections::VecDeque<(u64, [u8; 16])>, fps: f32, errors: u32,
-    uptime: u64, has_mic: bool, metrics: Option<(f32, f32)>, now_ms: u64, replies: Replies,
+    state: Arc<DetachedSnapshot>,
+    audio: AudioSnapshot,
+    mode: AudioMode,
+    history: std::collections::VecDeque<(u64, [u8; 16])>,
+    fps: f32,
+    errors: u32,
+    uptime: u64,
+    has_mic: bool,
+    metrics: Option<(f32, f32)>,
+    now_ms: u64,
+    replies: Replies,
 }
 fn publish_telemetry(cache: &RwLock<Arc<Vec<u8>>>, item: Telemetry) {
     let result = (|| -> Result<(), String> {
         let value = serde_json::to_value(item.state.as_ref()).map_err(|e| e.to_string())?;
         let mut snap = value;
         let obj = snap.as_object_mut().ok_or("invalid snapshot")?;
-        obj.insert("fps".into(), json!(item.fps)); obj.insert("outputErrors".into(), json!(item.errors));
-        obj.insert("uptime".into(), json!(item.uptime)); obj.insert("hasMic".into(), json!(item.has_mic));
-        if let Some((raw, gain)) = item.metrics { obj.insert("micRawDbfs".into(), json!(raw)); obj.insert("micGainDb".into(), json!(gain)); }
-        obj.insert("bands".into(), json!(item.audio.bands)); obj.insert("level".into(), json!(item.audio.level));
-        obj.insert("peak".into(), json!(item.audio.peak)); obj.insert("beat".into(), json!(item.audio.beat));
+        obj.insert("fps".into(), json!(item.fps));
+        obj.insert("outputErrors".into(), json!(item.errors));
+        obj.insert("uptime".into(), json!(item.uptime));
+        obj.insert("hasMic".into(), json!(item.has_mic));
+        if let Some((raw, gain)) = item.metrics {
+            obj.insert("micRawDbfs".into(), json!(raw));
+            obj.insert("micGainDb".into(), json!(gain));
+        }
+        obj.insert("bands".into(), json!(item.audio.bands));
+        obj.insert("level".into(), json!(item.audio.level));
+        obj.insert("peak".into(), json!(item.audio.peak));
+        obj.insert("beat".into(), json!(item.audio.beat));
         obj.insert("renderTimeMs".into(), json!(item.now_ms));
         if item.mode == AudioMode::External {
             obj.insert("audioHistory".into(), json!(item.history));
-            let waveform: Vec<i8> = item.audio.waveform.iter().map(|v| (v.clamp(-1.0, 1.0) * 127.0).round() as i8).collect();
+            let waveform: Vec<i8> = item
+                .audio
+                .waveform
+                .iter()
+                .map(|v| (v.clamp(-1.0, 1.0) * 127.0).round() as i8)
+                .collect();
             obj.insert("waveform".into(), json!(waveform));
         }
         obj.insert("bass".into(), json!(item.audio.bass));
         obj.insert("onset".into(), json!(item.audio.onset));
         obj.insert("bpm".into(), json!(item.audio.bpm));
-        obj.insert("mid".into(), json!(item.audio.bands[4..10].iter().sum::<f32>() / 6.0));
-        obj.insert("treble".into(), json!(item.audio.bands[10..16].iter().sum::<f32>() / 6.0));
+        obj.insert(
+            "mid".into(),
+            json!(item.audio.bands[4..10].iter().sum::<f32>() / 6.0),
+        );
+        obj.insert(
+            "treble".into(),
+            json!(item.audio.bands[10..16].iter().sum::<f32>() / 6.0),
+        );
         let bytes = serde_json::to_vec(&snap).map_err(|e| e.to_string())?;
-        *cache.write().map_err(|_| "snapshot cache poisoned".to_string())? = Arc::new(bytes); Ok(())
+        *cache
+            .write()
+            .map_err(|_| "snapshot cache poisoned".to_string())? = Arc::new(bytes);
+        Ok(())
     })();
-    for (reply, command_result) in item.replies { let _ = reply.try_send(command_result.and_then(|()| result.clone())); }
+    for (reply, command_result) in item.replies {
+        let _ = reply.try_send(command_result.and_then(|()| result.clone()));
+    }
 }
 
 pub struct ControlHubInner {
@@ -148,9 +182,12 @@ impl ControlHub {
         mut audio: Option<Box<dyn AudioInput>>,
     ) -> Result<Self, String> {
         let has_mic_hardware = audio.is_some();
-        let initial_catalog =
-            Arc::new(engine.catalog_json().map_err(|e| e.to_string())?);
-        let initial_snapshot = Arc::new(engine.snapshot_json(&serde_json::Map::new()).map_err(|e| e.to_string())?);
+        let initial_catalog = Arc::new(engine.catalog_json().map_err(|e| e.to_string())?);
+        let initial_snapshot = Arc::new(
+            engine
+                .snapshot_json(&serde_json::Map::new())
+                .map_err(|e| e.to_string())?,
+        );
         let initial_frame = Frame::default();
 
         let (command_tx, command_rx) = mpsc::sync_channel::<CommandMessage>(32);
@@ -159,7 +196,9 @@ impl ControlHub {
         let cached_snapshot = Arc::new(RwLock::new(initial_snapshot));
         let (telemetry_tx, telemetry_rx) = mpsc::sync_channel::<Telemetry>(2);
         let worker_cache = cached_snapshot.clone();
-        std::thread::Builder::new().name("telemetry-worker".into()).stack_size(12288)
+        std::thread::Builder::new()
+            .name("telemetry-worker".into())
+            .stack_size(12288)
             .spawn(move || {
                 #[cfg(target_os = "espidf")]
                 let mut last_stack_log = Instant::now();
@@ -249,10 +288,13 @@ impl ControlHub {
                     let mut state_changed = false;
                     if let Some(item) = pending.take() {
                         match telemetry_tx.try_send(item) {
-                            Ok(()) => {},
+                            Ok(()) => {}
                             Err(mpsc::TrySendError::Full(item)) => pending = Some(item),
                             Err(mpsc::TrySendError::Disconnected(item)) => {
-                                for (reply, _) in item.replies { let _ = reply.try_send(Err("telemetry worker stopped".into())); } break;
+                                for (reply, _) in item.replies {
+                                    let _ = reply.try_send(Err("telemetry worker stopped".into()));
+                                }
+                                break;
                             }
                         }
                     }
@@ -273,10 +315,16 @@ impl ControlHub {
                                         Err(e) => Err(format!("invalid panel config: {e}")),
                                     }
                                 } else if cmd.kind == "playlist_default_install" {
-                                    let playlist = serde_json::from_str::<matrix_core::StoredPlaylist>(&cmd.payload)
-                                        .map_err(|error| format!("invalid default playlist: {error}"));
+                                    let playlist = serde_json::from_str::<
+                                        matrix_core::StoredPlaylist,
+                                    >(
+                                        &cmd.payload
+                                    )
+                                    .map_err(|error| format!("invalid default playlist: {error}"));
                                     match playlist {
-                                        Ok(playlist) => engine.install_default_sound_playlist(playlist),
+                                        Ok(playlist) => {
+                                            engine.install_default_sound_playlist(playlist)
+                                        }
                                         Err(error) => Err(error),
                                     }
                                 } else {
@@ -378,19 +426,51 @@ impl ControlHub {
                         fps_frames = 0;
                     }
 
-                    let snapshot_interval = if engine.audio_mode() == AudioMode::External { Duration::from_millis(200) } else { Duration::from_millis(1000) };
-                    if engine.is_dirty() || state_changed || engine.audio_status() != previous_audio_status { state = Arc::new(engine.capture_snapshot()); engine.clear_dirty(); }
-                    if pending.is_none() && (!Arc::ptr_eq(&state, &published_state) || !replies.is_empty() || last_snapshot_sync.elapsed() >= snapshot_interval) {
-                        let item = Telemetry { state: state.clone(), audio: audio_snap.clone(), mode: engine.audio_mode(),
-                            history: audio_history.clone(), fps: fps_for_thread.read().map(|l| *l).unwrap_or(0.0),
-                            errors: output_errors_for_thread.load(Ordering::Relaxed), uptime: start_time.elapsed().as_secs(),
-                            has_mic: has_mic_hardware, metrics: live_metrics_for_thread.read().ok().and_then(|m| *m),
-                            now_ms, replies: std::mem::take(&mut replies) };
+                    let snapshot_interval = if engine.audio_mode() == AudioMode::External {
+                        Duration::from_millis(200)
+                    } else {
+                        Duration::from_millis(1000)
+                    };
+                    if engine.is_dirty()
+                        || state_changed
+                        || engine.audio_status() != previous_audio_status
+                    {
+                        state = Arc::new(engine.capture_snapshot());
+                        engine.clear_dirty();
+                    }
+                    if pending.is_none()
+                        && (!Arc::ptr_eq(&state, &published_state)
+                            || !replies.is_empty()
+                            || last_snapshot_sync.elapsed() >= snapshot_interval)
+                    {
+                        let item = Telemetry {
+                            state: state.clone(),
+                            audio: audio_snap.clone(),
+                            mode: engine.audio_mode(),
+                            history: audio_history.clone(),
+                            fps: fps_for_thread.read().map(|l| *l).unwrap_or(0.0),
+                            errors: output_errors_for_thread.load(Ordering::Relaxed),
+                            uptime: start_time.elapsed().as_secs(),
+                            has_mic: has_mic_hardware,
+                            metrics: live_metrics_for_thread.read().ok().and_then(|m| *m),
+                            now_ms,
+                            replies: std::mem::take(&mut replies),
+                        };
                         match telemetry_tx.try_send(item) {
-                            Ok(()) => { published_state = state.clone(); last_snapshot_sync = Instant::now(); },
-                            Err(mpsc::TrySendError::Full(item)) => { if !item.replies.is_empty() { pending = Some(item); } },
+                            Ok(()) => {
+                                published_state = state.clone();
+                                last_snapshot_sync = Instant::now();
+                            }
+                            Err(mpsc::TrySendError::Full(item)) => {
+                                if !item.replies.is_empty() {
+                                    pending = Some(item);
+                                }
+                            }
                             Err(mpsc::TrySendError::Disconnected(item)) => {
-                                for (reply, _) in item.replies { let _ = reply.try_send(Err("telemetry worker stopped".into())); } break;
+                                for (reply, _) in item.replies {
+                                    let _ = reply.try_send(Err("telemetry worker stopped".into()));
+                                }
+                                break;
                             }
                         }
                     }
@@ -400,7 +480,9 @@ impl ControlHub {
                     // 4. Physical blocking output is frame backpressure!
                     // Notice: no lock is held across show().
                     match output.show(&frame, brightness) {
-                        Ok(()) => { output_successes_for_thread.fetch_add(1, Ordering::Relaxed); }
+                        Ok(()) => {
+                            output_successes_for_thread.fetch_add(1, Ordering::Relaxed);
+                        }
                         Err(e) => {
                             output_errors_for_thread.fetch_add(1, Ordering::Relaxed);
                             if let Ok(mut lock) = last_output_error_for_thread.write() {
@@ -426,25 +508,39 @@ impl ControlHub {
         Ok(ControlHub { inner })
     }
 
-    pub fn set_default_sound_playlist(&self, playlist: matrix_core::StoredPlaylist) -> Result<(), String> {
+    pub fn set_default_sound_playlist(
+        &self,
+        playlist: matrix_core::StoredPlaylist,
+    ) -> Result<(), String> {
         let result = self.submit_sync(
             "playlist_default_install",
             &serde_json::to_string(&playlist).map_err(|error| error.to_string())?,
             Duration::from_secs(2),
         )?;
-        if matches!(result, SubmitOutcome::Applied) { Ok(()) } else { Err("busy: default sound playlist install pending".into()) }
+        if matches!(result, SubmitOutcome::Applied) {
+            Ok(())
+        } else {
+            Err("busy: default sound playlist install pending".into())
+        }
     }
 
     /// Successful physical output calls and errors, for startup validation.
     pub fn render_progress(&self) -> u32 {
         #[cfg(test)]
-        { self.inner.render_progress.load(Ordering::Relaxed) }
+        {
+            self.inner.render_progress.load(Ordering::Relaxed)
+        }
         #[cfg(not(test))]
-        { self.inner.output_successes.load(Ordering::Relaxed) }
+        {
+            self.inner.output_successes.load(Ordering::Relaxed)
+        }
     }
 
     pub fn output_progress(&self) -> (u32, u32) {
-        (self.inner.output_successes.load(Ordering::Relaxed), self.inner.output_errors.load(Ordering::Relaxed))
+        (
+            self.inner.output_successes.load(Ordering::Relaxed),
+            self.inner.output_errors.load(Ordering::Relaxed),
+        )
     }
 
     /// Submits a command asynchronously with nonblocking queue acceptance.
@@ -526,18 +622,25 @@ impl ControlHub {
 
     /// Shared serialized state, without rebuilding the effect parameter tree.
     pub fn snapshot_json(&self) -> Arc<Vec<u8>> {
-        self.inner.cached_snapshot.read().map(|v| v.clone()).unwrap_or_else(|_| Arc::new(b"null".to_vec()))
+        self.inner
+            .cached_snapshot
+            .read()
+            .map(|v| v.clone())
+            .unwrap_or_else(|_| Arc::new(b"null".to_vec()))
     }
 
     /// Deserialize only scalar fields; skip the potentially large effects object.
     pub fn snapshot_scalar(&self) -> Value {
         let bytes = self.snapshot_json();
-        let fields: Result<std::collections::BTreeMap<&str, &serde_json::value::RawValue>, _> = serde_json::from_slice(&bytes);
+        let fields: Result<std::collections::BTreeMap<&str, &serde_json::value::RawValue>, _> =
+            serde_json::from_slice(&bytes);
         let mut result = serde_json::Map::new();
         if let Ok(fields) = fields {
             for (key, raw) in fields {
                 if key != "effects" {
-                    if let Ok(value) = serde_json::from_str(raw.get()) { result.insert(key.to_owned(), value); }
+                    if let Ok(value) = serde_json::from_str(raw.get()) {
+                        result.insert(key.to_owned(), value);
+                    }
                 }
             }
         }
@@ -547,36 +650,73 @@ impl ControlHub {
     /// Persist the latest engine snapshot without transient telemetry.
     pub fn save_runtime_state(&self, store: &StateStore) -> Result<(), String> {
         let snapshot = self.snapshot_json();
-        let value: Value = serde_json::from_slice(snapshot.as_slice()).map_err(|e| e.to_string())?;
+        let value: Value =
+            serde_json::from_slice(snapshot.as_slice()).map_err(|e| e.to_string())?;
         let mut state = crate::persistence::normalize_runtime_state(&value);
         let object = state.as_object_mut().ok_or("invalid runtime snapshot")?;
         object.remove("params");
         for key in ["playlistCollection", "playlistConfig"] {
-            if let Some(value) = value.get(key) { object.insert(key.to_owned(), value.clone()); }
+            if let Some(value) = value.get(key) {
+                object.insert(key.to_owned(), value.clone());
+            }
         }
         let mut changed = serde_json::Map::new();
         let catalog = self.catalog();
-        if let (Some(effect_id), Some(parameters)) = (value.get("effect_id").and_then(Value::as_str), value.get("effects").and_then(Value::as_object).and_then(|effects| effects.get(value.get("effect_id").and_then(Value::as_str).unwrap_or_default()))) {
+        if let (Some(effect_id), Some(parameters)) = (
+            value.get("effect_id").and_then(Value::as_str),
+            value
+                .get("effects")
+                .and_then(Value::as_object)
+                .and_then(|effects| {
+                    effects.get(
+                        value
+                            .get("effect_id")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default(),
+                    )
+                }),
+        ) {
             if let Some(parameters) = parameters.as_object() {
-                if let Some(descriptors) = catalog.as_array().and_then(|items| items.iter().find(|item| item["id"].as_str() == Some(effect_id)).and_then(|item| item["parameters"].as_array())) {
+                if let Some(descriptors) = catalog.as_array().and_then(|items| {
+                    items
+                        .iter()
+                        .find(|item| item["id"].as_str() == Some(effect_id))
+                        .and_then(|item| item["parameters"].as_array())
+                }) {
                     let mut overrides = serde_json::Map::new();
                     for descriptor in descriptors {
-                        let (Some(id),Some(current),Some(default)) = (descriptor["id"].as_str(), descriptor["id"].as_str().and_then(|id| parameters.get(id)), descriptor.get("default")) else { continue; };
+                        let (Some(id), Some(current), Some(default)) = (
+                            descriptor["id"].as_str(),
+                            descriptor["id"].as_str().and_then(|id| parameters.get(id)),
+                            descriptor.get("default"),
+                        ) else {
+                            continue;
+                        };
                         let same = match (current, default) {
                             (Value::String(a), Value::String(b)) => a == b,
-                            (Value::String(a), Value::Number(b)) => a.parse::<f64>().ok() == b.as_f64(),
+                            (Value::String(a), Value::Number(b)) => {
+                                a.parse::<f64>().ok() == b.as_f64()
+                            }
                             (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
                             (Value::Bool(a), Value::Bool(b)) => a == b,
-                            (Value::String(a), Value::Bool(b)) => a.eq_ignore_ascii_case(if *b { "on" } else { "off" }),
+                            (Value::String(a), Value::Bool(b)) => {
+                                a.eq_ignore_ascii_case(if *b { "on" } else { "off" })
+                            }
                             _ => false,
                         };
-                        if !same { overrides.insert(id.to_owned(), current.clone()); }
+                        if !same {
+                            overrides.insert(id.to_owned(), current.clone());
+                        }
                     }
-                    if !overrides.is_empty() { changed.insert(effect_id.to_owned(), Value::Object(overrides)); }
+                    if !overrides.is_empty() {
+                        changed.insert(effect_id.to_owned(), Value::Object(overrides));
+                    }
                 }
             }
         }
-        if !changed.is_empty() { object.insert("params".into(), Value::Object(changed)); }
+        if !changed.is_empty() {
+            object.insert("params".into(), Value::Object(changed));
+        }
         store.save(&state)
     }
 
@@ -595,7 +735,11 @@ impl ControlHub {
     ///
     /// Never blocks on physical output.
     pub fn frame(&self) -> Frame {
-        self.inner.cached_frame.read().map(|frame| frame.clone()).unwrap_or_default()
+        self.inner
+            .cached_frame
+            .read()
+            .map(|frame| frame.clone())
+            .unwrap_or_default()
     }
 
     /// Current measured rendering frame rate.
@@ -681,7 +825,10 @@ mod snapshot_publish_tests {
         let mut restored = Engine::new(matrix_effects::builtin_effects()).unwrap();
         matrix_core::state::restore_runtime_state(&mut restored, &encoded).unwrap();
         let restored_snapshot = restored.snapshot();
-        assert_eq!(restored_snapshot["playlistCollection"], expected["playlistCollection"]);
+        assert_eq!(
+            restored_snapshot["playlistCollection"],
+            expected["playlistCollection"]
+        );
         engine.apply("light", r#"{"brightness":17}"#).unwrap();
         assert_eq!(serde_json::to_value(&detached).unwrap(), actual);
         assert_ne!(actual, engine.snapshot());
@@ -692,11 +839,18 @@ mod snapshot_publish_tests {
         let engine = Engine::new(matrix_effects::builtin_effects()).unwrap();
         struct Sink;
         impl LedOutput for Sink {
-            fn show(&mut self, _: &Frame, _: u8) -> Result<(), String> { Ok(()) }
+            fn show(&mut self, _: &Frame, _: u8) -> Result<(), String> {
+                Ok(())
+            }
         }
         let hub = ControlHub::spawn(engine, Sink, None).unwrap();
         for brightness in [17, 213, 48, 192] {
-            hub.submit_sync("light", &format!(r#"{{"brightness":{brightness}}}"#), Duration::from_secs(1)).unwrap();
+            hub.submit_sync(
+                "light",
+                &format!(r#"{{"brightness":{brightness}}}"#),
+                Duration::from_secs(1),
+            )
+            .unwrap();
             assert_eq!(hub.snapshot()["brightness"], brightness);
         }
         hub.join();
@@ -714,21 +868,41 @@ mod snapshot_publish_tests {
             }
         }
         let frames = Arc::new(AtomicUsize::new(0));
-        let hub = ControlHub::spawn(Engine::new(matrix_effects::builtin_effects()).unwrap(), CountingSink(frames.clone()), None).unwrap();
+        let hub = ControlHub::spawn(
+            Engine::new(matrix_effects::builtin_effects()).unwrap(),
+            CountingSink(frames.clone()),
+            None,
+        )
+        .unwrap();
         let guard = hub.inner.cached_snapshot.write().unwrap();
         let mut receivers = Vec::new();
         for n in 0..24 {
             let (tx, rx) = mpsc::sync_channel(1);
-            hub.inner.command_tx.send(CommandMessage { kind: "light".into(), payload: format!(r#"{{"brightness":{n}}}"#), reply: Some(tx) }).unwrap();
+            hub.inner
+                .command_tx
+                .send(CommandMessage {
+                    kind: "light".into(),
+                    payload: format!(r#"{{"brightness":{n}}}"#),
+                    reply: Some(tx),
+                })
+                .unwrap();
             receivers.push(rx);
             std::thread::sleep(Duration::from_millis(3));
         }
         let count = frames.load(Ordering::Relaxed);
         std::thread::sleep(Duration::from_millis(30));
-        assert!(frames.load(Ordering::Relaxed) > count, "output stalled behind cache worker");
-        assert!(receivers.iter().all(|rx| rx.try_recv().is_err()), "reply before publication");
+        assert!(
+            frames.load(Ordering::Relaxed) > count,
+            "output stalled behind cache worker"
+        );
+        assert!(
+            receivers.iter().all(|rx| rx.try_recv().is_err()),
+            "reply before publication"
+        );
         drop(guard);
-        for rx in receivers { assert_eq!(rx.recv_timeout(Duration::from_secs(3)).unwrap(), Ok(())); }
+        for rx in receivers {
+            assert_eq!(rx.recv_timeout(Duration::from_secs(3)).unwrap(), Ok(()));
+        }
         assert_eq!(hub.snapshot()["brightness"], 23);
         hub.join();
     }
@@ -747,7 +921,10 @@ mod snapshot_publish_tests {
             });
         });
         entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-        let old = cache.try_read().expect("serialization held snapshot lock").clone();
+        let old = cache
+            .try_read()
+            .expect("serialization held snapshot lock")
+            .clone();
         assert_eq!(&**old, b"old");
         release_tx.send(()).unwrap();
         writer.join().unwrap();

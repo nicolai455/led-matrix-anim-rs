@@ -297,7 +297,10 @@ mod tests {
 
     #[test]
     fn every_effect_gets_a_card_with_relative_artifact_paths() {
-        let rows = vec![row(0, "TestPattern", false, false), row(1, "fire", true, true)];
+        let rows = vec![
+            row(0, "TestPattern", false, false),
+            row(1, "fire", true, true),
+        ];
         let html = render(&rows, &meta());
         assert!(html.contains("gifs/001-TestPattern.gif"));
         assert!(html.contains("contact-sheets/001-TestPattern.png"));
@@ -319,7 +322,10 @@ mod tests {
 
     #[test]
     fn audio_and_parameter_flags_drive_filter_attributes() {
-        let html = render(&[row(0, "fire", true, true), row(1, "Solid", false, false)], &meta());
+        let html = render(
+            &[row(0, "fire", true, true), row(1, "Solid", false, false)],
+            &meta(),
+        );
         assert!(html.contains(r#"data-audio="true" data-params="true""#));
         assert!(html.contains(r#"data-audio="false" data-params="false""#));
     }

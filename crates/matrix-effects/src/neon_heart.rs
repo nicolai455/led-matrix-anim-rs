@@ -1,4 +1,6 @@
-use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{
+    alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -142,7 +144,9 @@ impl Effect for NeonHeartEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -188,9 +192,21 @@ impl Effect for NeonHeartEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -249,7 +265,10 @@ impl Effect for NeonHeartEffect {
                 let cos_t = t.cos();
 
                 let hx = 16.0 * sin_t * sin_t * sin_t;
-                let hy = -(13.0 * cos_t - 5.0 * (2.0 * t).cos() - 2.0 * (3.0 * t).cos() - (4.0 * t).cos());
+                let hy = -(13.0 * cos_t
+                    - 5.0 * (2.0 * t).cos()
+                    - 2.0 * (3.0 * t).cos()
+                    - (4.0 * t).cos());
 
                 // Scale to matrix coordinates
                 let px = (cx + (hx * 0.72) * layer_scale).round() as i32;
@@ -287,7 +306,11 @@ impl Effect for NeonHeartEffect {
 
                 let ey = (cy + spike).round() as i32;
                 if ey >= 0 && ey < HEIGHT as i32 {
-                    let ecg_col = Rgb::new(to_byte(120.0 + treble * 135.0), 255, to_byte(200.0 + mid * 55.0));
+                    let ecg_col = Rgb::new(
+                        to_byte(120.0 + treble * 135.0),
+                        255,
+                        to_byte(200.0 + mid * 55.0),
+                    );
                     let cur = &mut self.decay_buffer[ey as usize][x];
                     cur.r = cur.r.saturating_add(ecg_col.r);
                     cur.g = cur.g.saturating_add(ecg_col.g);

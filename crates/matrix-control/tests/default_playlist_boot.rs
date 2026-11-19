@@ -22,9 +22,15 @@ fn boot_engine_with_default_playlist() -> Engine {
         .get("entries")
         .and_then(serde_json::Value::as_array)
         .is_none_or(|entries| entries.is_empty());
-    assert!(active_queue_empty, "fresh engine must start with no active queue");
+    assert!(
+        active_queue_empty,
+        "fresh engine must start with no active queue"
+    );
     engine
-        .apply("playlist_select", &json!({"id": "sound-default"}).to_string())
+        .apply(
+            "playlist_select",
+            &json!({"id": "sound-default"}).to_string(),
+        )
         .expect("default playlist becomes the active queue");
     assert!(!engine.is_on());
     engine
@@ -40,7 +46,13 @@ fn fresh_boot_exposes_startable_default_playlist() {
 
     assert_eq!(snap["playlistCollection"]["selectedId"], "sound-default");
     assert_eq!(snap["playlist"]["entries"].as_array().unwrap().len(), 73);
-    assert_eq!(snap["playlistCollection"]["playlists"][0]["entries"].as_array().unwrap().len(), 73);
+    assert_eq!(
+        snap["playlistCollection"]["playlists"][0]["entries"]
+            .as_array()
+            .unwrap()
+            .len(),
+        73
+    );
     assert_eq!(snap["playlist"]["status"], "stopped");
     assert_eq!(snap["state"], "OFF", "boot must stay dark until Start");
     assert_eq!(snap["playlist"]["index"], serde_json::Value::Null);
@@ -55,8 +67,14 @@ fn fresh_boot_default_playlist_starts_on_request() {
     let snap = engine.snapshot();
     assert_eq!(snap["playlist"]["status"], "running");
     assert_eq!(snap["playlist"]["index"], 0);
-    assert_eq!(snap["state"], "ON", "Start is an explicit user action and wakes the output");
-    assert_eq!(snap["playlistConfig"]["entries"].as_array().unwrap().len(), 73);
+    assert_eq!(
+        snap["state"], "ON",
+        "Start is an explicit user action and wakes the output"
+    );
+    assert_eq!(
+        snap["playlistConfig"]["entries"].as_array().unwrap().len(),
+        73
+    );
 
     engine
         .apply("playlist_control", r#"{"action":"pause"}"#)
@@ -78,11 +96,20 @@ fn persisted_collection_without_selection_is_repaired_at_boot() {
         .expect("default playlist installs");
     let collection: PlaylistCollection =
         serde_json::from_value(engine.snapshot()["playlistCollection"].clone()).unwrap();
-    assert_eq!(collection.selected_id, None, "install alone leaves no selection");
-    assert!(engine.playlist_config()["entries"].as_array().unwrap().is_empty());
+    assert_eq!(
+        collection.selected_id, None,
+        "install alone leaves no selection"
+    );
+    assert!(engine.playlist_config()["entries"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 
     engine
-        .apply("playlist_select", &json!({"id": "sound-default"}).to_string())
+        .apply(
+            "playlist_select",
+            &json!({"id": "sound-default"}).to_string(),
+        )
         .expect("select repairs the missing active queue");
     let snap = engine.snapshot();
     assert_eq!(snap["playlistCollection"]["selectedId"], "sound-default");
@@ -99,7 +126,8 @@ fn boot_selection_keeps_a_saved_active_queue_untouched() {
     engine
         .apply(
             "playlist_config",
-            &json!({"entries":[{"effectId": first, "durationMs": 5000}], "loop": false}).to_string(),
+            &json!({"entries":[{"effectId": first, "durationMs": 5000}], "loop": false})
+                .to_string(),
         )
         .expect("custom queue applies");
     engine
@@ -111,6 +139,15 @@ fn boot_selection_keeps_a_saved_active_queue_untouched() {
         .get("entries")
         .and_then(serde_json::Value::as_array)
         .is_none_or(|entries| entries.is_empty());
-    assert!(!active_queue_empty, "a saved active queue must suppress the boot default");
-    assert_eq!(engine.snapshot()["playlist"]["entries"].as_array().unwrap().len(), 1);
+    assert!(
+        !active_queue_empty,
+        "a saved active queue must suppress the boot default"
+    );
+    assert_eq!(
+        engine.snapshot()["playlist"]["entries"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
 }

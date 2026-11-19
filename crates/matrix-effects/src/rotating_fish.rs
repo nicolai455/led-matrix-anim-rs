@@ -121,97 +121,425 @@ const BUBBLE_COUNT: usize = 6;
 
 const BASE_VERTICES: [FishVertex; VERTEX_COUNT] = [
     // 0: Snout tip
-    FishVertex { x: 1.15, y: -0.05, z: 0.0 },
+    FishVertex {
+        x: 1.15,
+        y: -0.05,
+        z: 0.0,
+    },
     // Ring 1: Head / Snout (x = 0.65)
-    FishVertex { x: 0.65, y: 0.32, z: 0.0 },
-    FishVertex { x: 0.65, y: -0.24, z: 0.0 },
-    FishVertex { x: 0.65, y: 0.02, z: 0.28 },
-    FishVertex { x: 0.65, y: 0.02, z: -0.28 },
+    FishVertex {
+        x: 0.65,
+        y: 0.32,
+        z: 0.0,
+    },
+    FishVertex {
+        x: 0.65,
+        y: -0.24,
+        z: 0.0,
+    },
+    FishVertex {
+        x: 0.65,
+        y: 0.02,
+        z: 0.28,
+    },
+    FishVertex {
+        x: 0.65,
+        y: 0.02,
+        z: -0.28,
+    },
     // Ring 2: Mid-body (x = 0.05) - widest part
-    FishVertex { x: 0.05, y: 0.52, z: 0.0 },
-    FishVertex { x: 0.05, y: -0.40, z: 0.0 },
-    FishVertex { x: 0.05, y: 0.05, z: 0.42 },
-    FishVertex { x: 0.05, y: 0.05, z: -0.42 },
+    FishVertex {
+        x: 0.05,
+        y: 0.52,
+        z: 0.0,
+    },
+    FishVertex {
+        x: 0.05,
+        y: -0.40,
+        z: 0.0,
+    },
+    FishVertex {
+        x: 0.05,
+        y: 0.05,
+        z: 0.42,
+    },
+    FishVertex {
+        x: 0.05,
+        y: 0.05,
+        z: -0.42,
+    },
     // Ring 3: Rear body (x = -0.5)
-    FishVertex { x: -0.5, y: 0.32, z: 0.0 },
-    FishVertex { x: -0.5, y: -0.24, z: 0.0 },
-    FishVertex { x: -0.5, y: 0.04, z: 0.22 },
-    FishVertex { x: -0.5, y: 0.04, z: -0.22 },
+    FishVertex {
+        x: -0.5,
+        y: 0.32,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -0.5,
+        y: -0.24,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -0.5,
+        y: 0.04,
+        z: 0.22,
+    },
+    FishVertex {
+        x: -0.5,
+        y: 0.04,
+        z: -0.22,
+    },
     // Ring 4: Tail peduncle base (x = -0.85)
-    FishVertex { x: -0.85, y: 0.12, z: 0.0 },
-    FishVertex { x: -0.85, y: -0.1, z: 0.0 },
-    FishVertex { x: -0.85, y: 0.0, z: 0.07 },
-    FishVertex { x: -0.85, y: 0.0, z: -0.07 },
+    FishVertex {
+        x: -0.85,
+        y: 0.12,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -0.85,
+        y: -0.1,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -0.85,
+        y: 0.0,
+        z: 0.07,
+    },
+    FishVertex {
+        x: -0.85,
+        y: 0.0,
+        z: -0.07,
+    },
     // Tail fin (caudal fin)
-    FishVertex { x: -1.38, y: 0.55, z: 0.0 },
-    FishVertex { x: -1.08, y: 0.0, z: 0.0 },
-    FishVertex { x: -1.38, y: -0.5, z: 0.0 },
+    FishVertex {
+        x: -1.38,
+        y: 0.55,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -1.08,
+        y: 0.0,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -1.38,
+        y: -0.5,
+        z: 0.0,
+    },
     // Dorsal fin
-    FishVertex { x: -0.1, y: 0.88, z: 0.0 },
-    FishVertex { x: -0.45, y: 0.40, z: 0.0 },
+    FishVertex {
+        x: -0.1,
+        y: 0.88,
+        z: 0.0,
+    },
+    FishVertex {
+        x: -0.45,
+        y: 0.40,
+        z: 0.0,
+    },
     // Ventral / Anal fin
-    FishVertex { x: -0.35, y: -0.55, z: 0.0 },
+    FishVertex {
+        x: -0.35,
+        y: -0.55,
+        z: 0.0,
+    },
     // Pectoral fins (right and left)
-    FishVertex { x: 0.2, y: -0.18, z: 0.65 },
-    FishVertex { x: 0.2, y: -0.18, z: -0.65 },
+    FishVertex {
+        x: 0.2,
+        y: -0.18,
+        z: 0.65,
+    },
+    FishVertex {
+        x: 0.2,
+        y: -0.18,
+        z: -0.65,
+    },
     // Eyes
-    FishVertex { x: 0.72, y: 0.14, z: 0.24 },
-    FishVertex { x: 0.72, y: 0.14, z: -0.24 },
+    FishVertex {
+        x: 0.72,
+        y: 0.14,
+        z: 0.24,
+    },
+    FishVertex {
+        x: 0.72,
+        y: 0.14,
+        z: -0.24,
+    },
 ];
 
 const TRIANGLES: [Triangle; TRIANGLE_COUNT] = [
     // Nose cone
-    Triangle { v0: 0, v1: 1, v2: 3, part: Part::Head },
-    Triangle { v0: 0, v1: 3, v2: 2, part: Part::Belly },
-    Triangle { v0: 0, v1: 2, v2: 4, part: Part::Belly },
-    Triangle { v0: 0, v1: 4, v2: 1, part: Part::Head },
+    Triangle {
+        v0: 0,
+        v1: 1,
+        v2: 3,
+        part: Part::Head,
+    },
+    Triangle {
+        v0: 0,
+        v1: 3,
+        v2: 2,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 0,
+        v1: 2,
+        v2: 4,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 0,
+        v1: 4,
+        v2: 1,
+        part: Part::Head,
+    },
     // Segment 1 (Head to Mid-body)
-    Triangle { v0: 1, v1: 5, v2: 7, part: Part::Back },
-    Triangle { v0: 1, v1: 7, v2: 3, part: Part::Flank },
-    Triangle { v0: 3, v1: 7, v2: 6, part: Part::Belly },
-    Triangle { v0: 3, v1: 6, v2: 2, part: Part::Belly },
-    Triangle { v0: 2, v1: 6, v2: 8, part: Part::Belly },
-    Triangle { v0: 2, v1: 8, v2: 4, part: Part::Belly },
-    Triangle { v0: 4, v1: 8, v2: 5, part: Part::Flank },
-    Triangle { v0: 4, v1: 5, v2: 1, part: Part::Back },
+    Triangle {
+        v0: 1,
+        v1: 5,
+        v2: 7,
+        part: Part::Back,
+    },
+    Triangle {
+        v0: 1,
+        v1: 7,
+        v2: 3,
+        part: Part::Flank,
+    },
+    Triangle {
+        v0: 3,
+        v1: 7,
+        v2: 6,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 3,
+        v1: 6,
+        v2: 2,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 2,
+        v1: 6,
+        v2: 8,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 2,
+        v1: 8,
+        v2: 4,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 4,
+        v1: 8,
+        v2: 5,
+        part: Part::Flank,
+    },
+    Triangle {
+        v0: 4,
+        v1: 5,
+        v2: 1,
+        part: Part::Back,
+    },
     // Segment 2 (Mid-body to Rear)
-    Triangle { v0: 5, v1: 9, v2: 11, part: Part::Back },
-    Triangle { v0: 5, v1: 11, v2: 7, part: Part::Flank },
-    Triangle { v0: 7, v1: 11, v2: 10, part: Part::Belly },
-    Triangle { v0: 7, v1: 10, v2: 6, part: Part::Belly },
-    Triangle { v0: 6, v1: 10, v2: 12, part: Part::Belly },
-    Triangle { v0: 6, v1: 12, v2: 8, part: Part::Belly },
-    Triangle { v0: 8, v1: 12, v2: 9, part: Part::Flank },
-    Triangle { v0: 8, v1: 9, v2: 5, part: Part::Back },
+    Triangle {
+        v0: 5,
+        v1: 9,
+        v2: 11,
+        part: Part::Back,
+    },
+    Triangle {
+        v0: 5,
+        v1: 11,
+        v2: 7,
+        part: Part::Flank,
+    },
+    Triangle {
+        v0: 7,
+        v1: 11,
+        v2: 10,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 7,
+        v1: 10,
+        v2: 6,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 6,
+        v1: 10,
+        v2: 12,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 6,
+        v1: 12,
+        v2: 8,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 8,
+        v1: 12,
+        v2: 9,
+        part: Part::Flank,
+    },
+    Triangle {
+        v0: 8,
+        v1: 9,
+        v2: 5,
+        part: Part::Back,
+    },
     // Segment 3 (Rear to Tail peduncle)
-    Triangle { v0: 9, v1: 13, v2: 15, part: Part::Back },
-    Triangle { v0: 9, v1: 15, v2: 11, part: Part::Flank },
-    Triangle { v0: 11, v1: 15, v2: 14, part: Part::Belly },
-    Triangle { v0: 11, v1: 14, v2: 10, part: Part::Belly },
-    Triangle { v0: 10, v1: 14, v2: 16, part: Part::Belly },
-    Triangle { v0: 10, v1: 16, v2: 12, part: Part::Belly },
-    Triangle { v0: 12, v1: 16, v2: 13, part: Part::Flank },
-    Triangle { v0: 12, v1: 13, v2: 9, part: Part::Back },
+    Triangle {
+        v0: 9,
+        v1: 13,
+        v2: 15,
+        part: Part::Back,
+    },
+    Triangle {
+        v0: 9,
+        v1: 15,
+        v2: 11,
+        part: Part::Flank,
+    },
+    Triangle {
+        v0: 11,
+        v1: 15,
+        v2: 14,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 11,
+        v1: 14,
+        v2: 10,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 10,
+        v1: 14,
+        v2: 16,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 10,
+        v1: 16,
+        v2: 12,
+        part: Part::Belly,
+    },
+    Triangle {
+        v0: 12,
+        v1: 16,
+        v2: 13,
+        part: Part::Flank,
+    },
+    Triangle {
+        v0: 12,
+        v1: 13,
+        v2: 9,
+        part: Part::Back,
+    },
     // Dorsal fin (two-sided)
-    Triangle { v0: 5, v1: 20, v2: 21, part: Part::Fin },
-    Triangle { v0: 5, v1: 21, v2: 9, part: Part::Fin },
-    Triangle { v0: 5, v1: 21, v2: 20, part: Part::Fin },
-    Triangle { v0: 5, v1: 9, v2: 21, part: Part::Fin },
+    Triangle {
+        v0: 5,
+        v1: 20,
+        v2: 21,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 5,
+        v1: 21,
+        v2: 9,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 5,
+        v1: 21,
+        v2: 20,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 5,
+        v1: 9,
+        v2: 21,
+        part: Part::Fin,
+    },
     // Ventral fin (two-sided)
-    Triangle { v0: 6, v1: 22, v2: 10, part: Part::Fin },
-    Triangle { v0: 6, v1: 10, v2: 22, part: Part::Fin },
+    Triangle {
+        v0: 6,
+        v1: 22,
+        v2: 10,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 6,
+        v1: 10,
+        v2: 22,
+        part: Part::Fin,
+    },
     // Tail fin (two-sided)
-    Triangle { v0: 13, v1: 17, v2: 18, part: Part::Tail },
-    Triangle { v0: 13, v1: 18, v2: 14, part: Part::Tail },
-    Triangle { v0: 14, v1: 18, v2: 19, part: Part::Tail },
-    Triangle { v0: 13, v1: 18, v2: 17, part: Part::Tail },
-    Triangle { v0: 13, v1: 14, v2: 18, part: Part::Tail },
-    Triangle { v0: 14, v1: 19, v2: 18, part: Part::Tail },
+    Triangle {
+        v0: 13,
+        v1: 17,
+        v2: 18,
+        part: Part::Tail,
+    },
+    Triangle {
+        v0: 13,
+        v1: 18,
+        v2: 14,
+        part: Part::Tail,
+    },
+    Triangle {
+        v0: 14,
+        v1: 18,
+        v2: 19,
+        part: Part::Tail,
+    },
+    Triangle {
+        v0: 13,
+        v1: 18,
+        v2: 17,
+        part: Part::Tail,
+    },
+    Triangle {
+        v0: 13,
+        v1: 14,
+        v2: 18,
+        part: Part::Tail,
+    },
+    Triangle {
+        v0: 14,
+        v1: 19,
+        v2: 18,
+        part: Part::Tail,
+    },
     // Pectoral fins (two-sided)
-    Triangle { v0: 3, v1: 23, v2: 7, part: Part::Fin },
-    Triangle { v0: 3, v1: 7, v2: 23, part: Part::Fin },
-    Triangle { v0: 4, v1: 8, v2: 24, part: Part::Fin },
-    Triangle { v0: 4, v1: 24, v2: 8, part: Part::Fin },
+    Triangle {
+        v0: 3,
+        v1: 23,
+        v2: 7,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 3,
+        v1: 7,
+        v2: 23,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 4,
+        v1: 8,
+        v2: 24,
+        part: Part::Fin,
+    },
+    Triangle {
+        v0: 4,
+        v1: 24,
+        v2: 8,
+        part: Part::Fin,
+    },
 ];
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Rgb {
@@ -276,7 +604,11 @@ fn get_part_color(part: Part, shade: f32, base_hue: f32, color_mode: usize, soli
             Part::Fin => h = (h + 0.75) % 1.0,
             Part::Flank => {}
         }
-        let sat = if part == Part::Belly { std::hint::black_box(0.65f32) } else { std::hint::black_box(0.95f32) };
+        let sat = if part == Part::Belly {
+            std::hint::black_box(0.65f32)
+        } else {
+            std::hint::black_box(0.95f32)
+        };
         hsv_to_rgb(h, sat, shade)
     } else {
         // Solid hue
@@ -340,7 +672,9 @@ impl Effect for RotatingFishEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -422,7 +756,11 @@ impl Effect for RotatingFishEffect {
             self.beat_pulse *= decay;
         }
 
-        let bass = if has_audio { audio_bass(context.audio) } else { 0.0 };
+        let bass = if has_audio {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
         let audio_drive = self.beat_pulse.max(bass) * reactivity;
 
         // Swimming tail wiggle
@@ -508,7 +846,11 @@ impl Effect for RotatingFishEffect {
             let ry = m10 * vx + m11 * vy + m12 * vz;
             let rz = m20 * vx + m21 * vy + m22 * vz;
 
-            v_rot[i] = Vec3 { x: rx, y: ry, z: rz };
+            v_rot[i] = Vec3 {
+                x: rx,
+                y: ry,
+                z: rz,
+            };
             let z_cam = (cam_dist - rz).max(0.5);
             let inv_z = 1.0 / z_cam;
             iz[i] = inv_z;
@@ -524,7 +866,11 @@ impl Effect for RotatingFishEffect {
             }
         }
 
-        let light = Vec3 { x: 0.45, y: 0.75, z: 0.48 };
+        let light = Vec3 {
+            x: 0.45,
+            y: 0.75,
+            z: 0.48,
+        };
         let l_len = (light.x * light.x + light.y * light.y + light.z * light.z).sqrt();
         let norm_light = Vec3 {
             x: light.x / l_len,
@@ -677,10 +1023,22 @@ mod tests {
         let mut frame0 = Frame::default();
         effect.render(&mut frame0, &ctx0);
         let lit0 = frame0.pixels.iter().filter(|&&p| p != Rgb::BLACK).count();
-        assert!(lit0 > 40 && lit0 < 400, "Lit pixel count out of expected range: {}", lit0);
-        assert_ne!(frame0.pixels[15 * WIDTH + 15], Rgb::BLACK, "Center must be lit");
+        assert!(
+            lit0 > 40 && lit0 < 400,
+            "Lit pixel count out of expected range: {}",
+            lit0
+        );
+        assert_ne!(
+            frame0.pixels[15 * WIDTH + 15],
+            Rgb::BLACK,
+            "Center must be lit"
+        );
         assert_eq!(frame0.pixels[0], Rgb::BLACK, "Top-left margin must be dark");
-        assert_eq!(frame0.pixels[HEIGHT * WIDTH - 1], Rgb::BLACK, "Bottom-right margin must be dark");
+        assert_eq!(
+            frame0.pixels[HEIGHT * WIDTH - 1],
+            Rgb::BLACK,
+            "Bottom-right margin must be dark"
+        );
 
         // Advance time - frame changes
         let ctx1 = RenderContext {
@@ -693,6 +1051,9 @@ mod tests {
         };
         let mut frame1 = Frame::default();
         effect.render(&mut frame1, &ctx1);
-        assert_ne!(frame0.pixels, frame1.pixels, "Frame must change as fish rotates");
+        assert_ne!(
+            frame0.pixels, frame1.pixels,
+            "Frame must change as fish rotates"
+        );
     }
 }

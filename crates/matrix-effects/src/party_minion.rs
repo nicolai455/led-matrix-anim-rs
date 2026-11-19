@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Classic Yellow", "Evil Purple", "Cyber Neon", "Rainbow Minion"];
+const PALETTES: &[&str] = &[
+    "Classic Yellow",
+    "Evil Purple",
+    "Cyber Neon",
+    "Rainbow Minion",
+];
 
 const PARAMETERS: [ParameterDescriptor; 4] = [
     ParameterDescriptor {
@@ -86,13 +91,13 @@ impl PartyMinionEffect {
                 Rgb::new(25, 25, 30),    // Black leather
             ),
             1 => (
-                Rgb::new(140, 40, 200),  // Evil Minion Purple
+                Rgb::new(140, 40, 200), // Evil Minion Purple
                 Rgb::new(35, 30, 45),
                 Rgb::new(140, 140, 150),
                 Rgb::new(15, 15, 20),
             ),
             2 => (
-                Rgb::new(0, 255, 180),   // Cyber Neon
+                Rgb::new(0, 255, 180), // Cyber Neon
                 Rgb::new(255, 20, 150),
                 Rgb::new(240, 250, 255),
                 Rgb::new(20, 10, 40),
@@ -119,7 +124,9 @@ impl Effect for PartyMinionEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -163,9 +170,21 @@ impl Effect for PartyMinionEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -187,7 +206,11 @@ impl Effect for PartyMinionEffect {
             #[allow(clippy::manual_is_multiple_of)]
             let stage_on = (x + (self.timer * 7.0) as usize) % 4 == 0;
             let c = if stage_on {
-                Rgb::new(to_byte(200.0 + mid * 55.0), to_byte(30.0 + bass * 180.0), 240)
+                Rgb::new(
+                    to_byte(200.0 + mid * 55.0),
+                    to_byte(30.0 + bass * 180.0),
+                    240,
+                )
             } else {
                 Rgb::new(25, 20, 40)
             };
@@ -208,9 +231,15 @@ impl Effect for PartyMinionEffect {
         let hair_top = (cy - 10.0).round() as i32;
         if hair_top >= 0 && hair_top < HEIGHT as i32 {
             let hx = cx.round() as usize;
-            if hx < WIDTH { frame.set(hx, hair_top as usize, black_c); }
-            if hx > 0 { frame.set(hx - 1, (hair_top + 1) as usize, black_c); }
-            if hx + 1 < WIDTH { frame.set(hx + 1, (hair_top + 1) as usize, black_c); }
+            if hx < WIDTH {
+                frame.set(hx, hair_top as usize, black_c);
+            }
+            if hx > 0 {
+                frame.set(hx - 1, (hair_top + 1) as usize, black_c);
+            }
+            if hx + 1 < WIDTH {
+                frame.set(hx + 1, (hair_top + 1) as usize, black_c);
+            }
         }
 
         // 3. Capsule Body (y: -8..+6 relative to cy, radius 6.5)
@@ -287,7 +316,7 @@ impl Effect for PartyMinionEffect {
                             let c = if d2 >= 6 {
                                 goggle_c // Metallic silver rim
                             } else if dx == 0 && dy == 0 {
-                                black_c  // Pupil
+                                black_c // Pupil
                             } else if dx == 1 && dy == 0 {
                                 Rgb::new(130, 70, 20) // Brown iris
                             } else {
@@ -333,9 +362,13 @@ impl Effect for PartyMinionEffect {
         let mouth_y = cy.round() as i32;
         let mouth_x = cx.round() as i32;
         if mouth_y >= 0 && mouth_y < HEIGHT as i32 {
-            if mouth_x > 0 { frame.set((mouth_x - 1) as usize, mouth_y as usize, black_c); }
+            if mouth_x > 0 {
+                frame.set((mouth_x - 1) as usize, mouth_y as usize, black_c);
+            }
             frame.set(mouth_x as usize, (mouth_y + 1) as usize, black_c);
-            if mouth_x + 1 < WIDTH as i32 { frame.set((mouth_x + 1) as usize, mouth_y as usize, black_c); }
+            if mouth_x + 1 < WIDTH as i32 {
+                frame.set((mouth_x + 1) as usize, mouth_y as usize, black_c);
+            }
             // Tongue if cheering
             if self.cheer_boost > 0.2 {
                 frame.set(mouth_x as usize, mouth_y as usize, Rgb::new(255, 60, 80));

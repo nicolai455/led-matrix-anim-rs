@@ -59,7 +59,12 @@ fn profiles_round_trip_and_secrets_stay_hidden() {
         {"ssid":"garage","password":"","priority":7}
     ],"fallbackApSsid":"MatrixSetup","fallbackApPassword":"appassword"}"#;
     let response = handle_api_request(&ctx, "POST", "/api/network", body.as_bytes());
-    assert_eq!(response.status, 200, "{}", String::from_utf8_lossy(&response.body));
+    assert_eq!(
+        response.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&response.body)
+    );
     assert!(
         !String::from_utf8_lossy(&response.body).contains("longenough"),
         "stored passphrases must never be returned"
@@ -82,9 +87,15 @@ fn invalid_configuration_is_rejected_with_an_explanation() {
     network_host::reset();
     let ctx = context();
     for (body, expected_status) in [
-        (r#"{"wifiProfiles":[{"ssid":"shortpw","password":"abc"}]}"#, 400),
+        (
+            r#"{"wifiProfiles":[{"ssid":"shortpw","password":"abc"}]}"#,
+            400,
+        ),
         (r#"{"wifiProfiles":[{"ssid":"dup"},{"ssid":"dup"}]}"#, 400),
-        (r#"{"wifiProfiles":[{"ssid":"ok"}],"fallbackApPassword":"tiny"}"#, 400),
+        (
+            r#"{"wifiProfiles":[{"ssid":"ok"}],"fallbackApPassword":"tiny"}"#,
+            400,
+        ),
         (r#"{"nope":true}"#, 400),
         ("not json", 400),
     ] {

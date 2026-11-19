@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Neon Rainbow", "Red & Blue Dual", "Gold & Purple", "Toxic Acid"];
+const PALETTES: &[&str] = &[
+    "Neon Rainbow",
+    "Red & Blue Dual",
+    "Gold & Purple",
+    "Toxic Acid",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -142,7 +147,9 @@ impl Effect for DiscoPinwheelEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -195,9 +202,21 @@ impl Effect for DiscoPinwheelEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -237,7 +256,8 @@ impl Effect for DiscoPinwheelEffect {
                 // Spiral logarithmic twist
                 let twisted_ang = ang + base_spin + r * twist;
                 // Sector normalization: 0..1 per blade pair
-                let blade_phase = ((twisted_ang * num_blades * 0.5) % (2.0 * PI) + (2.0 * PI)) % (2.0 * PI);
+                let blade_phase =
+                    ((twisted_ang * num_blades * 0.5) % (2.0 * PI) + (2.0 * PI)) % (2.0 * PI);
                 let blade_norm = blade_phase / (2.0 * PI);
 
                 // Blade duty cycle (half filled, half empty with anti-aliasing edge)
@@ -248,7 +268,9 @@ impl Effect for DiscoPinwheelEffect {
                     let edge_falloff = 1.0 - (blade_edge / 0.25).clamp(0.0, 1.0);
                     let rim_boost = if (r - split_r).abs() < 1.0 { 0.4 } else { 0.0 };
 
-                    let b = (edge_falloff * 0.85 + rim_boost + self.strobe_pulse * 0.35 + mid * 0.2).clamp(0.0, 1.0);
+                    let b =
+                        (edge_falloff * 0.85 + rim_boost + self.strobe_pulse * 0.35 + mid * 0.2)
+                            .clamp(0.0, 1.0);
                     let col = Self::blade_color(pal, blade_norm, self.color_cycle, b);
                     frame.set(x, y, col);
                 } else if (r - split_r).abs() < 1.0 {
@@ -260,7 +282,11 @@ impl Effect for DiscoPinwheelEffect {
         }
 
         // Center jewel cap at (15..16, 15..16)
-        let jewel_c = if beat { Rgb::WHITE } else { Rgb::new(255, 230, 80) };
+        let jewel_c = if beat {
+            Rgb::WHITE
+        } else {
+            Rgb::new(255, 230, 80)
+        };
         frame.set(15, 15, jewel_c);
         frame.set(16, 15, jewel_c);
         frame.set(15, 16, jewel_c);

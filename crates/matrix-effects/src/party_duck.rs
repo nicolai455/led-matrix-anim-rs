@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Rubber Ducky", "Mallard Drake", "Cyber Neon", "Rainbow Disco"];
+const PALETTES: &[&str] = &[
+    "Rubber Ducky",
+    "Mallard Drake",
+    "Cyber Neon",
+    "Rainbow Disco",
+];
 
 const PARAMETERS: [ParameterDescriptor; 4] = [
     ParameterDescriptor {
@@ -84,20 +89,20 @@ impl PartyDuckEffect {
         // (BodyYellow, BeakOrange, CapColor, SkateColor)
         match pal {
             0 => (
-                Rgb::new(255, 220, 20),  // Bright Yellow
-                Rgb::new(255, 110, 10),  // Orange Beak
-                Rgb::new(40, 100, 230),  // Blue Cap
-                Rgb::new(230, 30, 40),   // Red Skates
+                Rgb::new(255, 220, 20), // Bright Yellow
+                Rgb::new(255, 110, 10), // Orange Beak
+                Rgb::new(40, 100, 230), // Blue Cap
+                Rgb::new(230, 30, 40),  // Red Skates
             ),
             1 => (
-                Rgb::new(20, 160, 90),   // Mallard Emerald
+                Rgb::new(20, 160, 90), // Mallard Emerald
                 Rgb::new(245, 180, 20),
                 Rgb::new(120, 70, 30),
                 Rgb::new(20, 100, 220),
             ),
             2 => (
-                Rgb::new(0, 240, 255),   // Cyber Cyan
-                Rgb::new(255, 20, 160),  // Hot Magenta
+                Rgb::new(0, 240, 255),  // Cyber Cyan
+                Rgb::new(255, 20, 160), // Hot Magenta
                 Rgb::new(140, 40, 255),
                 Rgb::new(0, 255, 140),
             ),
@@ -123,7 +128,9 @@ impl Effect for PartyDuckEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -170,9 +177,21 @@ impl Effect for PartyDuckEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -199,7 +218,11 @@ impl Effect for PartyDuckEffect {
                 #[allow(clippy::manual_is_multiple_of)]
                 let grid = (x + y * 2 + (self.timer * 6.0) as usize) % 5 == 0;
                 let c = if grid {
-                    Rgb::new(to_byte(120.0 + mid * 80.0), 30, to_byte(180.0 + bass * 75.0))
+                    Rgb::new(
+                        to_byte(120.0 + mid * 80.0),
+                        30,
+                        to_byte(180.0 + bass * 75.0),
+                    )
                 } else {
                     Rgb::new(20, 15, 35)
                 };
@@ -293,7 +316,9 @@ impl Effect for PartyDuckEffect {
         if eye_x >= 0 && eye_x < WIDTH as i32 && eye_y >= 0 && eye_y < HEIGHT as i32 {
             frame.set(eye_x as usize, eye_y as usize, Rgb::BLACK);
             // Twinkle catchlight
-            if eye_y > 0 { frame.set(eye_x as usize, (eye_y - 1) as usize, Rgb::WHITE); }
+            if eye_y > 0 {
+                frame.set(eye_x as usize, (eye_y - 1) as usize, Rgb::WHITE);
+            }
         }
 
         // 6. Orange Bill / Beak (Quacking animated)
@@ -327,7 +352,11 @@ impl Effect for PartyDuckEffect {
                 // Roller skate wheels
                 if skate_y + 1 < HEIGHT as i32 {
                     frame.set(sx as usize, (skate_y + 1) as usize, Rgb::new(240, 240, 255));
-                    frame.set((sx + 1) as usize, (skate_y + 1) as usize, Rgb::new(240, 240, 255));
+                    frame.set(
+                        (sx + 1) as usize,
+                        (skate_y + 1) as usize,
+                        Rgb::new(240, 240, 255),
+                    );
                 }
             }
         }

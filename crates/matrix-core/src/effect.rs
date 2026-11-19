@@ -139,7 +139,9 @@ pub trait Effect: Send {
         &[]
     }
     /// Static metadata, if the implementation can share it without allocating.
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { None }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        None
+    }
     fn parameter(&self, _id: &str) -> Option<f32> {
         None
     }
