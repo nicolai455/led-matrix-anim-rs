@@ -119,11 +119,7 @@ enum Command {
 
         /// Output file for the GitHub-viewable markdown gallery. GitHub does not
         /// render `.html` from a repository, so this is what scrolls on github.com.
-        #[arg(
-            long,
-            value_name = "PATH",
-            default_value = "docs/effects/GALLERY.md"
-        )]
+        #[arg(long, value_name = "PATH", default_value = "docs/effects/GALLERY.md")]
         markdown: PathBuf,
 
         /// Repository URL linked in the page header.
@@ -585,7 +581,9 @@ fn gallery_page(
         out.display(),
         std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0),
         markdown.display(),
-        std::fs::metadata(markdown).map(|meta| meta.len()).unwrap_or(0)
+        std::fs::metadata(markdown)
+            .map(|meta| meta.len())
+            .unwrap_or(0)
     );
     Ok(0)
 }
