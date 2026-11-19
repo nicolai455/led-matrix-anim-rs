@@ -257,6 +257,65 @@ pub fn render(rows: &[EffectSummary], meta: &GalleryMeta<'_>) -> String {
     )
 }
 
+/// Renders a GitHub-viewable markdown gallery. GitHub does not execute or render
+/// `.html` from a repository, so the HTML page is for a static host / `file://`
+/// while this file is what actually scrolls on github.com. Relative image paths
+/// resolve against the repository tree.
+pub fn render_markdown(rows: &[EffectSummary], meta: &GalleryMeta<'_>) -> String {
+    let audio_count = rows.iter().filter(|row| row.audio_reactive).count();
+    let mut out = String::new();
+    out.push_str("# Effect gallery\n\n");
+    out.push_str(&format!(
+        "All **{}** built-in effects, rendered frame by frame by the real \
+`matrix_core::Engine` — not screenshots, not hardware footage. {} s at {} fps \
+with one synthetic audio track, identical on every run.\n\n",
+        rows.len(),
+        meta.seconds,
+        meta.fps
+    ));
+    out.push_str(&format!(
+        "{} are audio reactive. Contact sheets sample each clip at \
+10/30/50/70/85/95 %.\n\n",
+        audio_count
+    ));
+    out.push_str(&format!(
+        "Rendered by `cargo run -p matrix-gif -- --all`. Repository: <{}>\n\n---\n\n",
+        meta.repo
+    ));
+
+    for row in rows {
+        let stem = stem(row);
+        out.push_str(&format!("### {} · `{}`\n\n", row.name, row.id));
+        out.push_str(&format!(
+            "![{}]({GIF_DIR}/{stem}.gif)\n\n",
+            row.name.replace(']', "")
+        ));
+        let mut facts = vec![format!("{} colours", row.distinct_colors_max)];
+        if row.audio_reactive {
+            facts.push("audio reactive".to_string());
+        }
+        if row.has_parameters {
+            facts.push("parameters".to_string());
+        }
+        facts.push(format!("[contact sheet]({SHEET_DIR}/{stem}.png)"));
+        out.push_str(&facts.join(" · "));
+        out.push_str("\n\n");
+        if row.nonblack_frames == 0 {
+            out.push_str(
+                "> Renders black without an external audio/LFX source — documented \
+default, not a render fault.\n\n",
+            );
+        }
+    }
+
+    out.push_str("---\n\n");
+    out.push_str(
+        "A GIF shows what the panel would show. It is not a claim about brightness, \
+power draw or colour calibration on real hardware.\n",
+    );
+    out
+}
+
 /// Facts the page states about the render run.
 pub struct GalleryMeta<'a> {
     pub seconds: f64,

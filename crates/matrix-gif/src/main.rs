@@ -117,6 +117,15 @@ enum Command {
         #[arg(long, value_name = "PATH", default_value = "docs/effects/index.html")]
         out: PathBuf,
 
+        /// Output file for the GitHub-viewable markdown gallery. GitHub does not
+        /// render `.html` from a repository, so this is what scrolls on github.com.
+        #[arg(
+            long,
+            value_name = "PATH",
+            default_value = "docs/effects/GALLERY.md"
+        )]
+        markdown: PathBuf,
+
         /// Repository URL linked in the page header.
         #[arg(
             long,
@@ -181,8 +190,9 @@ fn run(cli: Cli) -> Result<i32, String> {
             dir,
             summary,
             out,
+            markdown,
             repo,
-        }) => gallery_page(&dir, &summary, &out, &repo),
+        }) => gallery_page(&dir, &summary, &out, &markdown, &repo),
         None => gifs(
             &cli.out,
             cli.all,
@@ -489,7 +499,13 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 /// Builds `index.html` from an existing summary and verifies that every artifact
 /// the page links to is actually present, so a fresh clone never ships a gallery
 /// full of 404s.
-fn gallery_page(dir: &Path, summary_path: &Path, out: &Path, repo: &str) -> Result<i32, String> {
+fn gallery_page(
+    dir: &Path,
+    summary_path: &Path,
+    out: &Path,
+    markdown: &Path,
+    repo: &str,
+) -> Result<i32, String> {
     let raw = std::fs::read_to_string(summary_path)
         .map_err(|error| format!("cannot read {}: {error}", summary_path.display()))?;
     #[derive(serde::Deserialize)]
@@ -551,11 +567,25 @@ fn gallery_page(dir: &Path, summary_path: &Path, out: &Path, repo: &str) -> Resu
     }
     std::fs::write(out, html)
         .map_err(|error| format!("cannot write {}: {error}", out.display()))?;
+    let meta = gallery::GalleryMeta {
+        seconds: doc.seconds,
+        fps: doc.fps,
+        repo,
+    };
+    let md = gallery::render_markdown(&doc.effects, &meta);
+    if let Some(parent) = markdown.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    std::fs::write(markdown, md)
+        .map_err(|error| format!("cannot write {}: {error}", markdown.display()))?;
     println!(
-        "gallery: {} effects -> {} ({} bytes)",
+        "gallery: {} effects -> {} ({} bytes) + {} ({} bytes)",
         doc.effects.len(),
         out.display(),
-        std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0)
+        std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0),
+        markdown.display(),
+        std::fs::metadata(markdown).map(|meta| meta.len()).unwrap_or(0)
     );
     Ok(0)
 }
