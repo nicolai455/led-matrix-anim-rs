@@ -7,22 +7,67 @@ use std::sync::{Arc, Mutex};
 pub const MAX_API_BODY_BYTES: usize = 4096;
 
 #[cfg(target_os = "espidf")]
-fn trusted_request(
-    req: &mut embedded_svc::http::server::Request<
-        &mut esp_idf_svc::http::server::EspHttpConnection<'_>,
-    >,
-) -> bool {
+type PeerRequest<'a, 'b> = esp_idf_svc::http::server::Request<&'a mut esp_idf_svc::http::server::EspHttpConnection<'b>>;
+
+/// Everything the request guard needs, extracted once from the request.
+#[cfg(target_os = "espidf")]
+struct RequestFacts {
+    origin: Option<String>,
+    host: Option<String>,
+    marker: Option<String>,
+    token: Option<String>,
+    peer: Option<std::net::Ipv4Addr>,
+}
+
+#[cfg(target_os = "espidf")]
+fn request_facts(req: &mut PeerRequest<'_, '_>) -> (RequestFacts, Option<(std::net::Ipv4Addr, u8)>) {
     let (headers, _) = req.split();
     let origin = headers.header("Origin").map(str::to_owned);
     let host = headers.header("Host").map(str::to_owned);
     let marker = headers.header("X-Matrix-Control").map(str::to_owned);
+    let token = headers
+        .header(crate::setup_token::SETUP_TOKEN_HEADER)
+        .map(str::to_owned);
     let peer = req
         .connection()
         .raw_connection()
         .ok()
         .and_then(|raw| raw.source_ipv4().ok());
-    crate::request_guard::trusted_management_peer(peer)
-        && crate::request_guard::trusted_control(origin.as_deref(), host.as_deref(), marker.as_deref())
+    (
+        RequestFacts {
+            origin,
+            host,
+            marker,
+            token,
+            peer,
+        },
+        None,
+    )
+}
+
+/// Classify the caller. `station_subnet` comes from the Wi-Fi worker, so a home
+/// LAN client is recognised without touching the driver from the HTTP thread.
+#[cfg(target_os = "espidf")]
+fn control_scope(
+    facts: &RequestFacts,
+    station_subnet: Option<(std::net::Ipv4Addr, u8)>,
+) -> crate::request_guard::ControlScope {
+    crate::request_guard::classify_peer(facts.peer, station_subnet)
+}
+
+#[cfg(target_os = "espidf")]
+fn trusted_request(
+    req: &mut esp_idf_svc::http::server::Request<
+        &mut esp_idf_svc::http::server::EspHttpConnection<'_>,
+    >,
+) -> bool {
+    let (facts, _) = request_facts(req);
+    crate::request_guard::trusted_management_peer(facts.peer)
+        && crate::request_guard::trusted_control(
+            facts.origin.as_deref(),
+            facts.host.as_deref(),
+            facts.marker.as_deref(),
+        )
 }
 
 pub struct FirmwareHttpServer {
@@ -49,9 +94,20 @@ pub struct HttpHeapPressure {
 
 pub const DMA_PRESSURE_FLOOR_BYTES: usize = 1024;
 
+/// Internal-heap floor for one API request. A `/api/command` carrying a full
+/// playlist needs a bigger contiguous buffer than a scalar command, so the
+/// admission check must use the same per-route limit the reader enforces.
+pub fn body_floor_for(method: &str, path: &str) -> usize {
+    matrix_control::api::body_limit_for(method, path).max(MAX_API_BODY_BYTES)
+}
+
 pub fn shed_dynamic_api(heap: HttpHeapPressure) -> bool {
-    heap.internal_free < MAX_API_BODY_BYTES
-        || heap.internal_largest < MAX_API_BODY_BYTES
+    shed_dynamic_api_for(heap, MAX_API_BODY_BYTES)
+}
+
+pub fn shed_dynamic_api_for(heap: HttpHeapPressure, internal_floor: usize) -> bool {
+    heap.internal_free < internal_floor
+        || heap.internal_largest < internal_floor
         || heap.dma_free < DMA_PRESSURE_FLOOR_BYTES
         || heap.dma_largest < DMA_PRESSURE_FLOOR_BYTES
 }
@@ -78,27 +134,41 @@ pub fn api_admission(method: &str, path: &str, memory_low: bool) -> ApiAdmission
 }
 
 #[cfg(target_os = "espidf")]
-fn memory_is_low() -> bool {
-    use esp_idf_sys as idf;
-    let internal = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_8BIT;
-    let dma = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_DMA;
-    // Samples are advisory and can change immediately after the calls.
-    unsafe {
-        shed_dynamic_api(HttpHeapPressure {
-            internal_free: idf::heap_caps_get_free_size(internal),
-            internal_largest: idf::heap_caps_get_largest_free_block(internal),
-            dma_free: idf::heap_caps_get_free_size(dma),
-            dma_largest: idf::heap_caps_get_largest_free_block(dma),
-        })
+impl HttpHeapPressure {
+    /// Samples the two capability regions once. Advisory only: the values can
+    /// change immediately after the calls, so callers must not treat this as a
+    /// reservation.
+    pub fn from_current() -> Self {
+        use esp_idf_sys as idf;
+        let internal = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_8BIT;
+        let dma = idf::MALLOC_CAP_INTERNAL | idf::MALLOC_CAP_DMA;
+        unsafe {
+            Self {
+                internal_free: idf::heap_caps_get_free_size(internal),
+                internal_largest: idf::heap_caps_get_largest_free_block(internal),
+                dma_free: idf::heap_caps_get_free_size(dma),
+                dma_largest: idf::heap_caps_get_largest_free_block(dma),
+            }
+        }
     }
+}
+
+#[cfg(target_os = "espidf")]
+fn memory_is_low() -> bool {
+    // Samples are advisory and can change immediately after the calls.
+    shed_dynamic_api(HttpHeapPressure::from_current())
 }
 
 impl FirmwareHttpServer {
     #[cfg(target_os = "espidf")]
+    #[allow(clippy::too_many_arguments)]
     pub fn start(
         api_ctx: Arc<ApiContext>,
         ota_manager: Arc<Mutex<OtaManager>>,
         network_nvs: Arc<crate::nvs_store::FirmwareNvs>,
+        wifi_state: Arc<crate::net::status::WifiState>,
+        scan_cache: Arc<crate::net::scan::ScanCache>,
+        setup_token: Arc<String>,
     ) -> Result<Self, String> {
         use esp_idf_svc::http::server::{Configuration, EspHttpServer};
         use esp_idf_svc::http::Method;
@@ -107,7 +177,8 @@ impl FirmwareHttpServer {
             // API JSON parsing plus synchronous command acknowledgement share
             // this native task stack (independent of Rust pthread defaults).
             stack_size: 16384,
-            max_uri_handlers: 16,
+            // 16 previous handlers + /api/network/scan.
+            max_uri_handlers: 18,
             uri_match_wildcard: true,
             ..Default::default()
         };
@@ -123,6 +194,8 @@ impl FirmwareHttpServer {
         })?;
 
         let network_nvs_get = Arc::clone(&network_nvs);
+        let wifi_state_firmware = Arc::clone(&wifi_state);
+        let setup_token_firmware = Arc::clone(&setup_token);
         server
             .fn_handler("/api/network", Method::Get, move |req| {
                 let response = match crate::net::network_api::get_config(&network_nvs_get) {
@@ -133,12 +206,57 @@ impl FirmwareHttpServer {
             })
             .map_err(|error| error.to_string())?;
 
+        // GET /api/network/scan never scans: it asks the Wi-Fi worker and reads
+        // the cache. A cold cache returns an empty list with `stale: true`.
+        let scan_cache_get = Arc::clone(&scan_cache);
+        let wifi_state_scan = Arc::clone(&wifi_state);
+        server
+            .fn_handler("/api/network/scan", Method::Get, move |mut req| {
+                if api_admission("GET", "/api/network/scan", memory_is_low()) == ApiAdmission::Shed {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(503, "device low on memory, shedding load"),
+                    );
+                }
+                let station_subnet = wifi_state_scan.station_subnet();
+                let (facts, _) = request_facts(&mut req);
+                let scope = control_scope(&facts, station_subnet);
+                if scope == crate::request_guard::ControlScope::Untrusted {
+                    return send_response(req, HttpResponse::err_json(403, "Untrusted scan request"));
+                }
+                scan_cache_get.request();
+                let body = scan_cache_get.json(
+                    std::time::Instant::now(),
+                    wifi_state_scan.status().is_mixed(),
+                );
+                send_response(req, HttpResponse::ok_json(body))
+            })
+            .map_err(|error| error.to_string())?;
+
         let network_nvs_post = Arc::clone(&network_nvs);
         let ota_for_network = Arc::clone(&ota_manager);
+        let wifi_state_post = Arc::clone(&wifi_state);
+        let setup_token_post = Arc::clone(&setup_token);
         server
             .fn_handler("/api/network", Method::Post, move |mut req| {
-                if !trusted_request(&mut req) {
-                    return send_response(req, HttpResponse::err_json(403, "Untrusted control request"));
+                let (facts, _) = request_facts(&mut req);
+                let scope = control_scope(&facts, wifi_state_post.station_subnet());
+                let allowed = crate::request_guard::trusted_write(
+                    scope,
+                    facts.marker.as_deref(),
+                    facts.origin.as_deref(),
+                    facts.host.as_deref(),
+                    facts.token.as_deref(),
+                    setup_token_post.as_str(),
+                );
+                if !allowed {
+                    let message = match scope {
+                        crate::request_guard::ControlScope::LocalSubnet => {
+                            "Setup token required for Wi-Fi changes from this network"
+                        }
+                        _ => "Untrusted control request",
+                    };
+                    return send_response(req, HttpResponse::err_json(403, message));
                 }
                 if api_admission("POST", "/api/network", memory_is_low()) == ApiAdmission::Shed {
                     return send_response(
@@ -167,7 +285,8 @@ impl FirmwareHttpServer {
                     "ok": true,
                     "config": config,
                     "reconnectRequired": true,
-                    "address": "http://192.168.4.1/"
+                    "address": "http://192.168.4.1/",
+                    "addressNote": "After the restart the device is reachable in your home network at the IP your router assigned; the fallback AP only exists while the station link is down."
                 })));
                 if result.is_ok() && ota_for_network.lock().is_ok() {
                     OtaManager::schedule_restart();
@@ -183,9 +302,27 @@ impl FirmwareHttpServer {
             .map_err(|e| e.to_string())?;
 
         server
-            .fn_handler("/api/firmware", Method::Get, move |req| {
+            .fn_handler("/api/firmware", Method::Get, move |mut req| {
+                let (facts, _) = request_facts(&mut req);
+                let scope = control_scope(&facts, wifi_state_firmware.station_subnet());
                 let response = match crate::firmware_info::running() {
-                    Ok(info) => HttpResponse::ok_json(crate::firmware_info::firmware_info_json(&info)),
+                    Ok(info) => {
+                        let mut body = crate::firmware_info::firmware_info_json(&info);
+                        // The setup token is what allows writes from the home
+                        // network; it is disclosed only to that same scope.
+                        if let Some(token) =
+                            crate::net::network_api::setup_token_for(scope, setup_token_firmware.as_str())
+                        {
+                            if let Some(object) = body.as_object_mut() {
+                                object.insert("setupToken".into(), serde_json::json!(token));
+                                object.insert(
+                                    "setupTokenScope".into(),
+                                    serde_json::json!("station-subnet"),
+                                );
+                            }
+                        }
+                        HttpResponse::ok_json(body)
+                    }
                     Err(error) => HttpResponse::err_json(500, &error),
                 };
                 send_response(req, response)
@@ -235,6 +372,7 @@ impl FirmwareHttpServer {
 
         // 2. Wildcard GET /api/*
         let ctx = api_ctx.clone();
+        let wifi_state_get = Arc::clone(&wifi_state);
         server
             .fn_handler("/api/*", Method::Get, move |req| {
                 if api_admission("GET", req.uri(), memory_is_low()) == ApiAdmission::Shed {
@@ -251,6 +389,16 @@ impl FirmwareHttpServer {
                     } else {
                         ctx.hub.catalog_json()
                     };
+                    // `/api/state` carries the live Wi-Fi snapshot. It is stitched
+                    // in byte-wise: re-serializing the whole snapshot would need a
+                    // second buffer of the same size on a memory-tight device.
+                    let wifi = (uri == "/api/state")
+                        .then(|| crate::net::network_api::split_state_object(&catalog))
+                        .flatten()
+                        .and_then(|(body, empty)| {
+                            let wifi = serde_json::to_vec(&wifi_state_get.json()).ok()?;
+                            Some((body.len(), empty, wifi))
+                        });
                     let mut response = req.into_response(
                         200,
                         None,
@@ -259,8 +407,20 @@ impl FirmwareHttpServer {
                             ("Connection", "close"),
                         ],
                     )?;
-                    for chunk in catalog.chunks(1024) {
-                        response.write_all(chunk)?;
+                    if let Some((body_len, empty, wifi)) = wifi {
+                        for chunk in catalog[..body_len].chunks(1024) {
+                            response.write_all(chunk)?;
+                        }
+                        let separator: &[u8] = if empty { b"\"wifi\":" } else { b",\"wifi\":" };
+                        response.write_all(separator)?;
+                        for chunk in wifi.chunks(1024) {
+                            response.write_all(chunk)?;
+                        }
+                        response.write_all(b"}")?;
+                    } else {
+                        for chunk in catalog.chunks(1024) {
+                            response.write_all(chunk)?;
+                        }
                     }
                     crate::memory_diagnostics::log_current_stack("http");
                     return Ok::<(), anyhow::Error>(());
@@ -326,7 +486,18 @@ impl FirmwareHttpServer {
                         HttpResponse::err_json(503, "device low on memory, shedding load"),
                     );
                 }
+                let heap_now = HttpHeapPressure::from_current();
                 let uri = req.uri().to_string();
+                let body_limit = matrix_control::api::body_limit_for("POST", &uri);
+                if shed_dynamic_api_for(heap_now, body_floor_for("POST", &uri)) {
+                    return send_response(
+                        req,
+                        HttpResponse::err_json(
+                            503,
+                            "device low on contiguous internal memory for this payload; retry",
+                        ),
+                    );
+                }
                 let mut body = Vec::new();
                 let mut buf = [0u8; 512];
                 let mut total_read = 0;
@@ -346,7 +517,7 @@ impl FirmwareHttpServer {
                         break;
                     }
                     total_read += n;
-                    if total_read > MAX_API_BODY_BYTES {
+                    if total_read > body_limit {
                         payload_too_large = true;
                         break;
                     }
@@ -448,6 +619,9 @@ impl FirmwareHttpServer {
         _api_ctx: Arc<ApiContext>,
         _ota_manager: Arc<Mutex<OtaManager>>,
         _network_nvs: Arc<crate::nvs_store::FirmwareNvs>,
+        _wifi_state: Arc<crate::net::status::WifiState>,
+        _scan_cache: Arc<crate::net::scan::ScanCache>,
+        _setup_token: Arc<String>,
     ) -> Result<Self, String> {
         log::info!("Firmware HTTP server started (host simulator mode)");
         Ok(Self {})

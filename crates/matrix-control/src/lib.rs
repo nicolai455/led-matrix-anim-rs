@@ -7,6 +7,7 @@ pub mod hub;
 pub mod mic;
 #[cfg(feature = "host")]
 pub mod mqtt;
+pub mod network_host;
 pub mod persistence;
 pub mod web_ui;
 

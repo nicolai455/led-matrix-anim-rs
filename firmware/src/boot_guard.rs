@@ -17,7 +17,14 @@ pub struct BootGuard {
 pub fn start() -> Arc<Mutex<BootGuard>> {
     let health = Arc::new(Mutex::new(BootGuard::default()));
     let partition = unsafe { esp_idf_sys::esp_ota_get_running_partition() };
-    assert!(!partition.is_null(), "Cannot identify running partition");
+    // A panic here would abort the boot of an otherwise healthy image and,
+    // with panic = "abort", turn a query failure into a reboot loop. Trial
+    // validation is a safety net, not a prerequisite: degrade to "no
+    // validation" and let the image run.
+    if partition.is_null() {
+        log::error!("Cannot identify running partition; OTA trial validation skipped");
+        return health;
+    }
     let mut state = esp_idf_sys::esp_ota_img_states_t_ESP_OTA_IMG_UNDEFINED;
     let rc = unsafe { esp_idf_sys::esp_ota_get_state_partition(partition, &mut state) };
     if rc == esp_idf_sys::ESP_ERR_NOT_FOUND {
@@ -26,17 +33,22 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
         );
         return health;
     }
-    assert_eq!(rc, esp_idf_sys::ESP_OK, "Cannot query OTA image state");
+    if rc != esp_idf_sys::ESP_OK {
+        log::error!("Cannot query OTA image state ({rc}); OTA trial validation skipped");
+        return health;
+    }
     if state != esp_idf_sys::esp_ota_img_states_t_ESP_OTA_IMG_PENDING_VERIFY {
         return health;
     }
     let shared = health.clone();
-    let failed_latch = health
-        .lock()
-        .expect("boot health lock poisoned")
-        .failed
-        .clone();
-    std::thread::Builder::new()
+    let failed_latch = match health.lock() {
+        Ok(guard) => guard.failed.clone(),
+        Err(poisoned) => {
+            log::error!("Boot health lock poisoned; OTA trial validation skipped");
+            poisoned.into_inner().failed.clone()
+        }
+    };
+    if let Err(error) = std::thread::Builder::new()
         .name("boot-validation".into())
         // An 8192-byte stack had a 6340-byte minimum free watermark
         // (1852 bytes observed used). 6144 retains about 4292 bytes of
@@ -124,7 +136,9 @@ pub fn start() -> Arc<Mutex<BootGuard>> {
                     std::thread::sleep(Duration::from_secs(60));
                 }
             }
-        })
-        .expect("Cannot start OTA validation worker");
+        })?
+    {
+        log::error!("Cannot start OTA validation worker: {error}; validation skipped");
+    }
     health
 }

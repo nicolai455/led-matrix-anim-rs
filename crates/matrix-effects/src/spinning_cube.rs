@@ -157,7 +157,9 @@ impl Effect for SpinningCubeEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -346,7 +348,10 @@ impl Effect for SpinningCubeEffect {
             // Draw 8 vertices on top of edges sorted by depth
             let mut vertex_order: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
             vertex_order.sort_by(|&a, &b| {
-                proj[a].2.partial_cmp(&proj[b].2).unwrap_or(std::cmp::Ordering::Equal)
+                proj[a]
+                    .2
+                    .partial_cmp(&proj[b].2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
 
             for &v_idx in &vertex_order {
@@ -449,7 +454,11 @@ mod tests {
 
         let mut solid_frame = Frame::default();
         effect.render(&mut solid_frame, &ctx);
-        let solid_lit = solid_frame.pixels.iter().filter(|&&p| p != Rgb::BLACK).count();
+        let solid_lit = solid_frame
+            .pixels
+            .iter()
+            .filter(|&&p| p != Rgb::BLACK)
+            .count();
         assert!(solid_lit > 0, "Solid cube must light pixels");
 
         assert!(effect.set_parameter("wireframe", 1.0).is_ok());
@@ -457,11 +466,18 @@ mod tests {
 
         let mut wireframe_frame = Frame::default();
         effect.render(&mut wireframe_frame, &ctx);
-        let wireframe_lit = wireframe_frame.pixels.iter().filter(|&&p| p != Rgb::BLACK).count();
+        let wireframe_lit = wireframe_frame
+            .pixels
+            .iter()
+            .filter(|&&p| p != Rgb::BLACK)
+            .count();
         assert!(wireframe_lit > 0, "Wireframe cube must light pixels");
 
         // Wireframe should have unlit pixels inside faces (less dense than solid)
-        assert!(wireframe_lit < solid_lit, "Wireframe should be less dense than solid cube");
+        assert!(
+            wireframe_lit < solid_lit,
+            "Wireframe should be less dense than solid cube"
+        );
 
         // Verify invalid parameter values are rejected
         assert!(effect.set_parameter("wireframe", 2.0).is_err());

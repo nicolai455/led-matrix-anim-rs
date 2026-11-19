@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Chrome & Neon", "Red & Blue Police", "Gold Palace", "Rainbow Rave"];
+const PALETTES: &[&str] = &[
+    "Chrome & Neon",
+    "Red & Blue Police",
+    "Gold Palace",
+    "Rainbow Rave",
+];
 
 const PARAMETERS: [ParameterDescriptor; 4] = [
     ParameterDescriptor {
@@ -87,9 +92,17 @@ impl MirrorCavernEffect {
                 if spec > 0.75 {
                     Rgb::WHITE
                 } else if is_pink {
-                    Rgb::new(to_byte(255.0 * spec), to_byte(20.0 * spec), to_byte(180.0 * spec))
+                    Rgb::new(
+                        to_byte(255.0 * spec),
+                        to_byte(20.0 * spec),
+                        to_byte(180.0 * spec),
+                    )
                 } else {
-                    Rgb::new(to_byte(10.0 * spec), to_byte(220.0 * spec), to_byte(255.0 * spec))
+                    Rgb::new(
+                        to_byte(10.0 * spec),
+                        to_byte(220.0 * spec),
+                        to_byte(255.0 * spec),
+                    )
                 }
             }
             1 => {
@@ -98,9 +111,17 @@ impl MirrorCavernEffect {
                 if spec > 0.8 {
                     Rgb::WHITE
                 } else if is_red {
-                    Rgb::new(to_byte(255.0 * spec), to_byte(20.0 * spec), to_byte(30.0 * spec))
+                    Rgb::new(
+                        to_byte(255.0 * spec),
+                        to_byte(20.0 * spec),
+                        to_byte(30.0 * spec),
+                    )
                 } else {
-                    Rgb::new(to_byte(15.0 * spec), to_byte(90.0 * spec), to_byte(255.0 * spec))
+                    Rgb::new(
+                        to_byte(15.0 * spec),
+                        to_byte(90.0 * spec),
+                        to_byte(255.0 * spec),
+                    )
                 }
             }
             2 => {
@@ -108,14 +129,22 @@ impl MirrorCavernEffect {
                 if spec > 0.8 {
                     Rgb::WHITE
                 } else {
-                    Rgb::new(to_byte(255.0 * spec), to_byte(200.0 * spec), to_byte(30.0 * spec))
+                    Rgb::new(
+                        to_byte(255.0 * spec),
+                        to_byte(200.0 * spec),
+                        to_byte(30.0 * spec),
+                    )
                 }
             }
             _ => {
                 // Rainbow Rave
                 let h = (color_cycle + facet_hash) % 1.0;
                 let c = hsv_to_rgb(h, 0.9, spec);
-                if spec > 0.85 { Rgb::WHITE } else { c }
+                if spec > 0.85 {
+                    Rgb::WHITE
+                } else {
+                    c
+                }
             }
         }
     }
@@ -133,7 +162,9 @@ impl Effect for MirrorCavernEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -183,9 +214,21 @@ impl Effect for MirrorCavernEffect {
             0.0
         };
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -238,13 +281,16 @@ impl Effect for MirrorCavernEffect {
                 let frac_v = v - tile_v;
 
                 // Pseudo-random facet tilt & normal vector
-                let hash = ((tile_u * 37.13 + tile_v * 91.71).sin() * 43_758.547).fract().abs();
+                let hash = ((tile_u * 37.13 + tile_v * 91.71).sin() * 43_758.547)
+                    .fract()
+                    .abs();
                 let facet_tilt_x = (hash * 2.0 * PI).cos() * 0.4;
                 let facet_tilt_y = (hash * 2.0 * PI).sin() * 0.4;
 
                 // Specular reflection glint calculation
                 let dist_to_light = ((rx - light_x + facet_tilt_x * 8.0).powi(2)
-                    + (ry - light_y + facet_tilt_y * 8.0).powi(2)).sqrt();
+                    + (ry - light_y + facet_tilt_y * 8.0).powi(2))
+                .sqrt();
                 let specular_glint = (1.0 - dist_to_light / 10.0).max(0.0).powi(3);
 
                 // Tile border / bevel seam (dark grout line between mirrors)
@@ -276,7 +322,6 @@ impl Effect for MirrorCavernEffect {
     }
 }
 
-
 #[cfg(test)]
 mod timing_regression {
     use super::*;
@@ -289,7 +334,17 @@ mod timing_regression {
         let audio = AudioSnapshot::default();
         let mut frame = Frame::default();
         let render = |effect: &mut MirrorCavernEffect, frame: &mut Frame, dt| {
-            effect.render(frame, &RenderContext { now_ms: 0, delta_seconds: dt, audio: &audio, color: Rgb::WHITE, text: "", scroll_speed: 1.0 });
+            effect.render(
+                frame,
+                &RenderContext {
+                    now_ms: 0,
+                    delta_seconds: dt,
+                    audio: &audio,
+                    color: Rgb::WHITE,
+                    text: "",
+                    scroll_speed: 1.0,
+                },
+            );
         };
         render(&mut effect, &mut frame, 0.2);
         assert!((effect.cam_z - 1.38).abs() < 1e-5);

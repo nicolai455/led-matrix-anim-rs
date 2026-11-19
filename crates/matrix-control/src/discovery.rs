@@ -28,13 +28,27 @@ pub fn discovery_for_each<E>(
 }
 
 /// Process the catalog one effect at a time instead of materializing the full tree.
-pub fn discovery_json_for_each<E>(device_id: &str, catalog: &[u8], mut emit: impl FnMut((String, String)) -> Result<(), E>) -> Result<(), E> {
-    let Ok(effects) = serde_json::from_slice::<Vec<&serde_json::value::RawValue>>(catalog) else { return Ok(()); };
+pub fn discovery_json_for_each<E>(
+    device_id: &str,
+    catalog: &[u8],
+    mut emit: impl FnMut((String, String)) -> Result<(), E>,
+) -> Result<(), E> {
+    let Ok(effects) = serde_json::from_slice::<Vec<&serde_json::value::RawValue>>(catalog) else {
+        return Ok(());
+    };
     {
-        let names: Vec<Value> = effects.iter().filter_map(|e| {
-            #[derive(serde::Deserialize)] struct Name { name: String }
-            serde_json::from_str::<Name>(e.get()).ok().map(|n| json!({"name": n.name}))
-        }).collect();
+        let names: Vec<Value> = effects
+            .iter()
+            .filter_map(|e| {
+                #[derive(serde::Deserialize)]
+                struct Name {
+                    name: String,
+                }
+                serde_json::from_str::<Name>(e.get())
+                    .ok()
+                    .map(|n| json!({"name": n.name}))
+            })
+            .collect();
         discovery_inner(device_id, &Value::Array(names), true, &mut emit)?;
     }
     for effect in effects {
@@ -45,7 +59,12 @@ pub fn discovery_json_for_each<E>(device_id: &str, catalog: &[u8], mut emit: imp
     Ok(())
 }
 
-fn discovery_inner<E>(device_id: &str, catalog: &Value, base_entities: bool, emit: &mut impl FnMut((String, String)) -> Result<(), E>) -> Result<(), E> {
+fn discovery_inner<E>(
+    device_id: &str,
+    catalog: &Value,
+    base_entities: bool,
+    emit: &mut impl FnMut((String, String)) -> Result<(), E>,
+) -> Result<(), E> {
     let base = format!("ledmatrix/{device_id}");
     let availability_topic = format!("{base}/availability");
     let state_topic = format!("{base}/state");
@@ -65,127 +84,126 @@ fn discovery_inner<E>(device_id: &str, catalog: &Value, base_entities: bool, emi
     };
 
     if base_entities {
-    // 1. Light
-    let light_config = json!({
-        "name": "Matrix",
-        "unique_id": format!("{device_id}_light"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "command_topic": format!("{base}/light/set"),
-        "schema": "json",
-        "brightness": true,
-        "supported_color_modes": ["rgb"],
-        "effect": true,
-        "effect_list": effect_list,
-    });
-    emit((
-        format!("homeassistant/light/{device_id}/light/config"),
-        light_config.to_string(),
-    ))?;
+        // 1. Light
+        let light_config = json!({
+            "name": "Matrix",
+            "unique_id": format!("{device_id}_light"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "command_topic": format!("{base}/light/set"),
+            "schema": "json",
+            "brightness": true,
+            "supported_color_modes": ["rgb"],
+            "effect": true,
+            "effect_list": effect_list,
+        });
+        emit((
+            format!("homeassistant/light/{device_id}/light/config"),
+            light_config.to_string(),
+        ))?;
 
-    // 2. Text
-    let text_config = json!({
-        "name": "Message",
-        "unique_id": format!("{device_id}_text"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "command_topic": format!("{base}/text/set"),
-        "value_template": "{{ value_json.text }}",
-        "max": 128,
-    });
-    emit((
-        format!("homeassistant/text/{device_id}/text/config"),
-        text_config.to_string(),
-    ))?;
+        // 2. Text
+        let text_config = json!({
+            "name": "Message",
+            "unique_id": format!("{device_id}_text"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "command_topic": format!("{base}/text/set"),
+            "value_template": "{{ value_json.text }}",
+            "max": 128,
+        });
+        emit((
+            format!("homeassistant/text/{device_id}/text/config"),
+            text_config.to_string(),
+        ))?;
 
-    // 3. Speed
-    let speed_config = json!({
-        "name": "Scroll speed",
-        "unique_id": format!("{device_id}_speed"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "command_topic": format!("{base}/speed/set"),
-        "value_template": "{{ value_json.speed }}",
-        "min": 0,
-        "max": 120,
-        "step": 1,
-        "unit_of_measurement": "px/s",
-    });
-    emit((
-        format!("homeassistant/number/{device_id}/speed/config"),
-        speed_config.to_string(),
-    ))?;
+        // 3. Speed
+        let speed_config = json!({
+            "name": "Scroll speed",
+            "unique_id": format!("{device_id}_speed"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "command_topic": format!("{base}/speed/set"),
+            "value_template": "{{ value_json.speed }}",
+            "min": 0,
+            "max": 120,
+            "step": 1,
+            "unit_of_measurement": "px/s",
+        });
+        emit((
+            format!("homeassistant/number/{device_id}/speed/config"),
+            speed_config.to_string(),
+        ))?;
 
-    // 4. Cycle
-    let cycle_config = json!({
-        "name": "Auto cycle",
-        "unique_id": format!("{device_id}_cycle"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "command_topic": format!("{base}/cycle/set"),
-        "value_template": "{{ value_json.cycle }}",
-        "payload_on": "ON",
-        "payload_off": "OFF",
-        "state_on": "ON",
-        "state_off": "OFF",
-    });
-    emit((
-        format!("homeassistant/switch/{device_id}/cycle/config"),
-        cycle_config.to_string(),
-    ))?;
+        // 4. Cycle
+        let cycle_config = json!({
+            "name": "Auto cycle",
+            "unique_id": format!("{device_id}_cycle"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "command_topic": format!("{base}/cycle/set"),
+            "value_template": "{{ value_json.cycle }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "state_on": "ON",
+            "state_off": "OFF",
+        });
+        emit((
+            format!("homeassistant/switch/{device_id}/cycle/config"),
+            cycle_config.to_string(),
+        ))?;
 
-    // 5. RSSI
-    let rssi_config = json!({
-        "name": "Wi-Fi signal",
-        "unique_id": format!("{device_id}_rssi"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "value_template": "{{ value_json.rssi }}",
-        "device_class": "signal_strength",
-        "unit_of_measurement": "dBm",
-        "entity_category": "diagnostic",
-    });
-    emit((
-        format!("homeassistant/sensor/{device_id}/rssi/config"),
-        rssi_config.to_string(),
-    ))?;
+        // 5. RSSI
+        let rssi_config = json!({
+            "name": "Wi-Fi signal",
+            "unique_id": format!("{device_id}_rssi"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.rssi }}",
+            "device_class": "signal_strength",
+            "unit_of_measurement": "dBm",
+            "entity_category": "diagnostic",
+        });
+        emit((
+            format!("homeassistant/sensor/{device_id}/rssi/config"),
+            rssi_config.to_string(),
+        ))?;
 
-    // 6. Audio Source
-    let audio_source_config = json!({
-        "name": "Audio source",
-        "unique_id": format!("{device_id}_audio_source"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "command_topic": format!("{base}/audio_source/set"),
-        "value_template": "{{ value_json.audio_source }}",
-        "options": ["Off", "Synthetic", "Mic"],
-    });
-    emit((
-        format!("homeassistant/select/{device_id}/audio_source/config"),
-        audio_source_config.to_string(),
-    ))?;
+        // 6. Audio Source
+        let audio_source_config = json!({
+            "name": "Audio source",
+            "unique_id": format!("{device_id}_audio_source"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "command_topic": format!("{base}/audio_source/set"),
+            "value_template": "{{ value_json.audio_source }}",
+            "options": ["Off", "Synthetic", "Mic"],
+        });
+        emit((
+            format!("homeassistant/select/{device_id}/audio_source/config"),
+            audio_source_config.to_string(),
+        ))?;
 
-    // 7. Audio Status
-    let audio_status_config = json!({
-        "name": "Audio input status",
-        "unique_id": format!("{device_id}_audio_status"),
-        "device": device_obj.clone(),
-        "availability_topic": availability_topic,
-        "state_topic": state_topic,
-        "value_template": "{{ value_json.audio_status }}",
-        "entity_category": "diagnostic",
-    });
-    emit((
-        format!("homeassistant/sensor/{device_id}/audio_status/config"),
-        audio_status_config.to_string(),
-    ))?;
-
+        // 7. Audio Status
+        let audio_status_config = json!({
+            "name": "Audio input status",
+            "unique_id": format!("{device_id}_audio_status"),
+            "device": device_obj.clone(),
+            "availability_topic": availability_topic,
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.audio_status }}",
+            "entity_category": "diagnostic",
+        });
+        emit((
+            format!("homeassistant/sensor/{device_id}/audio_status/config"),
+            audio_status_config.to_string(),
+        ))?;
     }
 
     // Effect parameter entities

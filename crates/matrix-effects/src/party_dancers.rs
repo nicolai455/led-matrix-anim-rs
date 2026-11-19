@@ -84,25 +84,49 @@ impl PartyDancersEffect {
             0 => {
                 // Cyber Duo
                 if dancer_idx == 0 {
-                    (Rgb::new(255, 0, 180), Rgb::new(0, 240, 255), Rgb::new(20, 20, 40))
+                    (
+                        Rgb::new(255, 0, 180),
+                        Rgb::new(0, 240, 255),
+                        Rgb::new(20, 20, 40),
+                    )
                 } else {
-                    (Rgb::new(0, 255, 140), Rgb::new(255, 30, 100), Rgb::new(30, 20, 50))
+                    (
+                        Rgb::new(0, 255, 140),
+                        Rgb::new(255, 30, 100),
+                        Rgb::new(30, 20, 50),
+                    )
                 }
             }
             1 => {
                 // Retro 80s
                 if dancer_idx == 0 {
-                    (Rgb::new(240, 220, 40), Rgb::new(255, 80, 20), Rgb::new(20, 120, 240))
+                    (
+                        Rgb::new(240, 220, 40),
+                        Rgb::new(255, 80, 20),
+                        Rgb::new(20, 120, 240),
+                    )
                 } else {
-                    (Rgb::new(180, 40, 20), Rgb::new(240, 240, 240), Rgb::new(255, 20, 140))
+                    (
+                        Rgb::new(180, 40, 20),
+                        Rgb::new(240, 240, 240),
+                        Rgb::new(255, 20, 140),
+                    )
                 }
             }
             2 => {
                 // Gold & Silver
                 if dancer_idx == 0 {
-                    (Rgb::new(40, 40, 40), Rgb::new(255, 215, 0), Rgb::new(30, 30, 30))
+                    (
+                        Rgb::new(40, 40, 40),
+                        Rgb::new(255, 215, 0),
+                        Rgb::new(30, 30, 30),
+                    )
                 } else {
-                    (Rgb::new(220, 220, 240), Rgb::new(192, 192, 210), Rgb::new(20, 20, 30))
+                    (
+                        Rgb::new(220, 220, 240),
+                        Rgb::new(192, 192, 210),
+                        Rgb::new(20, 20, 30),
+                    )
                 }
             }
             _ => {
@@ -110,7 +134,11 @@ impl PartyDancersEffect {
                 let h1 = (color_cycle + dancer_idx as f32 * 0.4) % 1.0;
                 let h2 = (h1 + 0.33) % 1.0;
                 let h3 = (h1 + 0.66) % 1.0;
-                (hsv_to_rgb(h1, 0.9, 1.0), hsv_to_rgb(h2, 0.9, 1.0), hsv_to_rgb(h3, 0.8, 0.9))
+                (
+                    hsv_to_rgb(h1, 0.9, 1.0),
+                    hsv_to_rgb(h2, 0.9, 1.0),
+                    hsv_to_rgb(h3, 0.8, 0.9),
+                )
             }
         }
     }
@@ -251,7 +279,9 @@ impl Effect for PartyDancersEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -296,9 +326,21 @@ impl Effect for PartyDancersEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let _treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let _treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -327,7 +369,11 @@ impl Effect for PartyDancersEffect {
 
                 if in_cone1 || in_cone2 {
                     let spot_bright = to_byte((yf / 32.0) * (40.0 + mid * 40.0));
-                    frame.set(x, y, Rgb::new(spot_bright / 2, spot_bright / 3, spot_bright));
+                    frame.set(
+                        x,
+                        y,
+                        Rgb::new(spot_bright / 2, spot_bright / 3, spot_bright),
+                    );
                 }
             }
         }
@@ -337,13 +383,23 @@ impl Effect for PartyDancersEffect {
             for x in 0..WIDTH {
                 let is_front = y == 27;
                 let col = if is_front {
-                    let r = to_byte(255.0 * (0.5 + 0.5 * (x as f32 * 0.5 + self.spin_angle * 3.0).sin()));
-                    let g = to_byte(255.0 * (0.5 + 0.5 * (x as f32 * 0.5 + self.spin_angle * 3.0 + 2.0).sin()));
-                    let b = to_byte(255.0 * (0.5 + 0.5 * (x as f32 * 0.5 + self.spin_angle * 3.0 + 4.0).sin()));
+                    let r = to_byte(
+                        255.0 * (0.5 + 0.5 * (x as f32 * 0.5 + self.spin_angle * 3.0).sin()),
+                    );
+                    let g = to_byte(
+                        255.0 * (0.5 + 0.5 * (x as f32 * 0.5 + self.spin_angle * 3.0 + 2.0).sin()),
+                    );
+                    let b = to_byte(
+                        255.0 * (0.5 + 0.5 * (x as f32 * 0.5 + self.spin_angle * 3.0 + 4.0).sin()),
+                    );
                     Rgb::new(r, g, b)
                 } else {
                     let tile_even = ((x / 4) + (y / 2)) % 2 == 0;
-                    if tile_even { Rgb::new(20, 20, 30) } else { Rgb::new(10, 10, 15) }
+                    if tile_even {
+                        Rgb::new(20, 20, 30)
+                    } else {
+                        Rgb::new(10, 10, 15)
+                    }
                 };
                 frame.set(x, y, col);
             }

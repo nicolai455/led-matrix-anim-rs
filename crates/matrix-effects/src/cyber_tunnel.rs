@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Neon Tron", "Cyberpunk Violet", "Emerald Conduit", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Neon Tron",
+    "Cyberpunk Violet",
+    "Emerald Conduit",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -87,7 +92,13 @@ impl CyberTunnelEffect {
         Self::default()
     }
 
-    fn tunnel_color(pal: usize, color_cycle: f32, brightness: f32, depth_norm: f32, is_rib: bool) -> Rgb {
+    fn tunnel_color(
+        pal: usize,
+        color_cycle: f32,
+        brightness: f32,
+        depth_norm: f32,
+        is_rib: bool,
+    ) -> Rgb {
         let b = clamp01(brightness);
         match pal {
             0 => {
@@ -135,7 +146,9 @@ impl Effect for CyberTunnelEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -181,9 +194,21 @@ impl Effect for CyberTunnelEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -239,11 +264,20 @@ impl Effect for CyberTunnelEffect {
                 if in_ring || is_rib {
                     // Ring brightness modulated by depth & frequency bands
                     let band_idx = ((1.0 - depth_norm) * 15.0).round() as usize % 16;
-                    let band_boost = if audio_active { context.audio.bands[band_idx] * 0.6 } else { 0.0 };
+                    let band_boost = if audio_active {
+                        context.audio.bands[band_idx] * 0.6
+                    } else {
+                        0.0
+                    };
 
-                    let brightness = (depth_norm.powf(0.8) * 0.8 + band_boost + self.warp_boost * 0.35 + mid * 0.15).min(1.0);
+                    let brightness = (depth_norm.powf(0.8) * 0.8
+                        + band_boost
+                        + self.warp_boost * 0.35
+                        + mid * 0.15)
+                        .min(1.0);
 
-                    let col = Self::tunnel_color(pal, self.color_cycle, brightness, depth_norm, is_rib);
+                    let col =
+                        Self::tunnel_color(pal, self.color_cycle, brightness, depth_norm, is_rib);
                     frame.set(x, y, col);
                 }
             }

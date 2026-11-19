@@ -1,4 +1,6 @@
-use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{
+    alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -90,7 +92,13 @@ impl LaserShowEffect {
         Self::default()
     }
 
-    fn laser_color(pal: usize, color_cycle: f32, intensity: f32, beam_idx: usize, total_beams: usize) -> Rgb {
+    fn laser_color(
+        pal: usize,
+        color_cycle: f32,
+        intensity: f32,
+        beam_idx: usize,
+        total_beams: usize,
+    ) -> Rgb {
         let b = clamp01(intensity);
         let b_norm = beam_idx as f32 / total_beams.max(1) as f32;
 
@@ -138,7 +146,7 @@ impl LaserShowEffect {
     fn draw_laser_line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: Rgb) {
         let dx = x1 - x0;
         let dy = y1 - y0;
-        let steps = (dx.abs().max(dy.abs()) * 1.5).ceil() as usize;
+        let steps = raster_steps(dx.abs().max(dy.abs()), 1.5);
         if steps == 0 {
             return;
         }
@@ -177,7 +185,9 @@ impl Effect for LaserShowEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -222,9 +232,21 @@ impl Effect for LaserShowEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -299,8 +321,15 @@ impl Effect for LaserShowEffect {
                     let col1 = Self::laser_color(pal, self.color_cycle, intensity, b, half_beams);
                     self.draw_laser_line(p1_x, p1_y, swing, 31.0, col1);
 
-                    let swing2 = ((self.scan_phase * 1.5 + b as f32 * 0.4 + PI).sin() * 0.5 + 0.5) * 31.0;
-                    let col2 = Self::laser_color(pal, self.color_cycle, intensity, b + half_beams, half_beams);
+                    let swing2 =
+                        ((self.scan_phase * 1.5 + b as f32 * 0.4 + PI).sin() * 0.5 + 0.5) * 31.0;
+                    let col2 = Self::laser_color(
+                        pal,
+                        self.color_cycle,
+                        intensity,
+                        b + half_beams,
+                        half_beams,
+                    );
                     self.draw_laser_line(p2_x, p2_y, swing2, 31.0, col2);
                 }
             }
@@ -311,7 +340,8 @@ impl Effect for LaserShowEffect {
 
                 for x in 0..WIDTH {
                     let x_norm = x as f32 / WIDTH as f32;
-                    let wave_y = sheet_y + (x_norm * 4.0 * PI + self.scan_phase * 3.0).sin() * waviness;
+                    let wave_y =
+                        sheet_y + (x_norm * 4.0 * PI + self.scan_phase * 3.0).sin() * waviness;
                     let yi = wave_y.round() as i32;
                     if yi >= 0 && yi < HEIGHT as i32 {
                         let col = Self::laser_color(pal, self.color_cycle, intensity, x / 4, 8);

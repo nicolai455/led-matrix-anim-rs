@@ -212,7 +212,9 @@ impl Effect for FreqBarsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -288,15 +290,34 @@ mod audio_behavior_tests {
     #[test]
     fn frequency_bars_uses_audio_bands_when_mic_mode_and_no_demo_wave() {
         let mut effect = FreqBarsEffect::new();
-        effect.set_parameter("input_mode",0.0).unwrap();
+        effect.set_parameter("input_mode", 0.0).unwrap();
         let silence = AudioSnapshot::default();
-        let active = AudioSnapshot {available:true,bands:[0.95;16],..AudioSnapshot::default()};
-        let mut no_signal=Frame::default(); let mut signal=Frame::default();
-        let silent_context = RenderContext {now_ms:100,delta_seconds:0.033,audio:&silence,color:Rgb::WHITE,text:"",scroll_speed:1.0};
-        effect.render(&mut no_signal,&silent_context);
+        let active = AudioSnapshot {
+            available: true,
+            bands: [0.95; 16],
+            ..AudioSnapshot::default()
+        };
+        let mut no_signal = Frame::default();
+        let mut signal = Frame::default();
+        let silent_context = RenderContext {
+            now_ms: 100,
+            delta_seconds: 0.033,
+            audio: &silence,
+            color: Rgb::WHITE,
+            text: "",
+            scroll_speed: 1.0,
+        };
+        effect.render(&mut no_signal, &silent_context);
         effect.reset();
-        let active_context = RenderContext {now_ms:100,delta_seconds:0.033,audio:&active,color:Rgb::WHITE,text:"",scroll_speed:1.0};
-        effect.render(&mut signal,&active_context);
-        assert_ne!(no_signal.pixels,signal.pixels);
+        let active_context = RenderContext {
+            now_ms: 100,
+            delta_seconds: 0.033,
+            audio: &active,
+            color: Rgb::WHITE,
+            text: "",
+            scroll_speed: 1.0,
+        };
+        effect.render(&mut signal, &active_context);
+        assert_ne!(no_signal.pixels, signal.pixels);
     }
 }

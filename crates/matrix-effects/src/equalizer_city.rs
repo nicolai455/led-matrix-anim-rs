@@ -144,7 +144,9 @@ impl Effect for EqualizerCityEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -192,9 +194,21 @@ impl Effect for EqualizerCityEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -233,7 +247,11 @@ impl Effect for EqualizerCityEffect {
                     let sun_c = if pal == 1 {
                         Rgb::new(to_byte(20.0 * t), to_byte(255.0 * t), to_byte(180.0 * t))
                     } else {
-                        Rgb::new(255, to_byte((120.0 + 130.0 * t) * glow_scale), to_byte(30.0 * t))
+                        Rgb::new(
+                            255,
+                            to_byte((120.0 + 130.0 * t) * glow_scale),
+                            to_byte(30.0 * t),
+                        )
                     };
                     frame.set(x, y, sun_c);
                 } else if y > 15 {
@@ -253,7 +271,8 @@ impl Effect for EqualizerCityEffect {
             let band_val = if audio_active {
                 context.audio.bands[col]
             } else {
-                let synthetic_pulse = ((self.time_phase * 2.0 + col as f32 * 0.5).sin() * 0.5 + 0.5).powf(1.5);
+                let synthetic_pulse =
+                    ((self.time_phase * 2.0 + col as f32 * 0.5).sin() * 0.5 + 0.5).powf(1.5);
                 synthetic_pulse * 0.8
             };
 
@@ -308,7 +327,11 @@ impl Effect for EqualizerCityEffect {
             #[allow(clippy::manual_is_multiple_of)]
             let is_lane = (x + (self.time_phase * 10.0) as usize) % 4 == 0;
             let street_pulse = if is_lane {
-                Rgb::new(to_byte(180.0 + mid * 70.0), to_byte(40.0 + bass * 180.0), 255)
+                Rgb::new(
+                    to_byte(180.0 + mid * 70.0),
+                    to_byte(40.0 + bass * 180.0),
+                    255,
+                )
             } else {
                 Rgb::new(20, 10, 40)
             };

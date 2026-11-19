@@ -66,4 +66,3 @@ fn disco_zero_delta_does_not_advance_silent_animation() {
         assert!(first.pixels == next.pixels, "{id} advances at zero delta");
     }
 }
-

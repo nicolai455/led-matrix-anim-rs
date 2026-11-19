@@ -1,4 +1,6 @@
-use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{
+    alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -134,7 +136,9 @@ impl Effect for DiscoBallEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -179,9 +183,21 @@ impl Effect for DiscoBallEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -214,7 +230,13 @@ impl Effect for DiscoBallEffect {
 
         for i in 0..spot_count {
             let offset_ang = (i as f32 / spot_count as f32) * 2.0 * PI;
-            let spot_yaw = self.yaw * (if i % 2 == 0 { 1.5 + mid * 0.4 } else { -1.2 - mid * 0.4 }) + offset_ang;
+            let spot_yaw = self.yaw
+                * (if i % 2 == 0 {
+                    1.5 + mid * 0.4
+                } else {
+                    -1.2 - mid * 0.4
+                })
+                + offset_ang;
             let pitch = (i as f32 * 1.3 + self.yaw * 0.5).sin() * 0.7;
 
             let spot_dist = 11.0 + 8.0 * (spot_yaw * 2.0).cos();
@@ -226,7 +248,12 @@ impl Effect for DiscoBallEffect {
 
             if xi >= 0 && xi < WIDTH as i32 && yi >= 0 && yi < HEIGHT as i32 {
                 let glint = 0.7 + 0.3 * (spot_yaw * 4.0).sin();
-                let col = Self::facet_color(pal, self.color_cycle, glint + self.flare * 0.5, i as f32 / spot_count as f32);
+                let col = Self::facet_color(
+                    pal,
+                    self.color_cycle,
+                    glint + self.flare * 0.5,
+                    i as f32 / spot_count as f32,
+                );
                 let current = &mut self.decay_buffer[yi as usize][xi as usize];
                 current.r = current.r.saturating_add(col.r);
                 current.g = current.g.saturating_add(col.g);
@@ -278,11 +305,19 @@ impl Effect for DiscoBallEffect {
                     // Specular glint calculation
                     let diffuse = (nx * lx + ny * ly + nz * lz).max(0.0);
                     let specular = diffuse.powi(6);
-                    let facet_glint = (specular * 1.5 + (facet_seed + treble * 0.5).sin() * 0.4 + self.flare * 0.7).clamp(0.0, 1.0);
+                    let facet_glint = (specular * 1.5
+                        + (facet_seed + treble * 0.5).sin() * 0.4
+                        + self.flare * 0.7)
+                        .clamp(0.0, 1.0);
 
                     // Ball edge shading (darker near silhouette)
                     let rim = nz.powf(0.6);
-                    let mut col = Self::facet_color(pal, self.color_cycle, facet_glint, (facet_lat * 0.1).abs() % 1.0);
+                    let mut col = Self::facet_color(
+                        pal,
+                        self.color_cycle,
+                        facet_glint,
+                        (facet_lat * 0.1).abs() % 1.0,
+                    );
                     col.r = (col.r as f32 * rim) as u8;
                     col.g = (col.g as f32 * rim) as u8;
                     col.b = (col.b as f32 * rim) as u8;

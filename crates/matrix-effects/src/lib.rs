@@ -170,20 +170,79 @@ pub use yin_yang::YinYangEffect;
 use matrix_core::Effect;
 
 const AUDIO_EFFECT_INVENTORY: &[&str] = &[
-    "arcade_invaders", "audio_mesh", "audio_pulse", "audio_tunnel", "audio_waveform",
-    "black_hole", "bongo_cat", "bouncing_speakers", "chaser_cannons", "cyber_rain",
-    "cyber_tunnel", "dancing_banana", "dancing_skeleton", "derby_flower", "disco_ball",
-    "disco_floor", "disco_pinwheel", "dna_spiral", "doge_wow", "domain_warp",
-    "equalizer_city", "fire", "fire_tornado", "fireworks", "freq_bars", "flappy_bird",
-    "galaxy_spiral", "game_of_life", "hamster_dance", "hazard_pulsar", "hypno_spirals",
-    "julia_orbit", "kaleidoscope", "laser_harp", "laser_scanner", "laser_show",
-    "lava_lamp", "liquid_oil", "lissajous", "mario_stomp", "matrix_rain", "metaballs",
-    "mirror_cavern", "moving_heads", "neon_heart", "nyan_cat", "octopus_scanner",
-    "outrun_drive", "pacman_chase", "party_dancers", "party_duck", "party_minion",
-    "plasma", "polar_lights", "police_strobe", "popcat", "pulse_ball", "radial_spectrum",
-    "retro_breakout", "ripple", "rotating_fish", "rotozoom", "spectrogram", "spectrum_orb",
-    "spinning_vinyl", "starfield", "strobe_blinder", "stroboscope", "supernova",
-    "text_effects", "ufo_abduction", "water_caustics", "yin_yang",
+    "arcade_invaders",
+    "audio_mesh",
+    "audio_pulse",
+    "audio_tunnel",
+    "audio_waveform",
+    "black_hole",
+    "bongo_cat",
+    "bouncing_speakers",
+    "chaser_cannons",
+    "cyber_rain",
+    "cyber_tunnel",
+    "dancing_banana",
+    "dancing_skeleton",
+    "derby_flower",
+    "disco_ball",
+    "disco_floor",
+    "disco_pinwheel",
+    "dna_spiral",
+    "doge_wow",
+    "domain_warp",
+    "equalizer_city",
+    "fire",
+    "fire_tornado",
+    "fireworks",
+    "freq_bars",
+    "flappy_bird",
+    "galaxy_spiral",
+    "game_of_life",
+    "hamster_dance",
+    "hazard_pulsar",
+    "hypno_spirals",
+    "julia_orbit",
+    "kaleidoscope",
+    "laser_harp",
+    "laser_scanner",
+    "laser_show",
+    "lava_lamp",
+    "liquid_oil",
+    "lissajous",
+    "mario_stomp",
+    "matrix_rain",
+    "metaballs",
+    "mirror_cavern",
+    "moving_heads",
+    "neon_heart",
+    "nyan_cat",
+    "octopus_scanner",
+    "outrun_drive",
+    "pacman_chase",
+    "party_dancers",
+    "party_duck",
+    "party_minion",
+    "plasma",
+    "polar_lights",
+    "police_strobe",
+    "popcat",
+    "pulse_ball",
+    "radial_spectrum",
+    "retro_breakout",
+    "ripple",
+    "rotating_fish",
+    "rotozoom",
+    "spectrogram",
+    "spectrum_orb",
+    "spinning_vinyl",
+    "starfield",
+    "strobe_blinder",
+    "stroboscope",
+    "supernova",
+    "text_effects",
+    "ufo_abduction",
+    "water_caustics",
+    "yin_yang",
 ];
 
 /// Build the default looping playlist from all 73 effects in AUDIO_EFFECT_REVIEW.md.
@@ -192,10 +251,19 @@ const AUDIO_EFFECT_INVENTORY: &[&str] = &[
 /// imply that every effect has a targeted signal-quality test.
 pub fn default_sound_playlist() -> matrix_core::StoredPlaylist {
     let catalog = builtin_effects();
-    let entries = AUDIO_EFFECT_INVENTORY.iter().map(|id| {
-        assert!(catalog.iter().any(|effect| effect.id() == *id), "audio inventory effect '{id}' missing from catalog");
-        matrix_core::StoredPlaylistEntry { effect_id: (*id).to_string(), duration_ms: 10_000 }
-    }).collect();
+    let entries = AUDIO_EFFECT_INVENTORY
+        .iter()
+        .map(|id| {
+            assert!(
+                catalog.iter().any(|effect| effect.id() == *id),
+                "audio inventory effect '{id}' missing from catalog"
+            );
+            matrix_core::StoredPlaylistEntry {
+                effect_id: (*id).to_string(),
+                duration_ms: 10_000,
+            }
+        })
+        .collect();
     matrix_core::StoredPlaylist {
         id: "sound-default".into(),
         name: "Sound reactive".into(),
@@ -316,9 +384,7 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DiscoFloorEffect::new())
     })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(NyanCatEffect::new())
-    })));
+    effects.push(Box::new(LazyEffect::new(|| Box::new(NyanCatEffect::new()))));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(PartyDancersEffect::new())
     })));
@@ -340,9 +406,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(NeonHeartEffect::new())
     })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(LavaLampEffect::new())
-    })));
+    effects.push(Box::new(LazyEffect::new(
+        || Box::new(LavaLampEffect::new()),
+    )));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(ArcadeInvadersEffect::new())
     })));
@@ -367,9 +433,9 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(JuliaOrbitEffect::new())
     })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(RotozoomEffect::new())
-    })));
+    effects.push(Box::new(LazyEffect::new(
+        || Box::new(RotozoomEffect::new()),
+    )));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(HazardPulsarEffect::new())
     })));
@@ -385,27 +451,21 @@ pub fn builtin_effects() -> Vec<Box<dyn Effect>> {
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(CyberTunnelEffect::new())
     })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(YinYangEffect::new())
-    })));
+    effects.push(Box::new(LazyEffect::new(|| Box::new(YinYangEffect::new()))));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(UfoAbductionEffect::new())
     })));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DancingBananaEffect::new())
     })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(BongoCatEffect::new())
-    })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(PopcatEffect::new())
-    })));
+    effects.push(Box::new(LazyEffect::new(
+        || Box::new(BongoCatEffect::new()),
+    )));
+    effects.push(Box::new(LazyEffect::new(|| Box::new(PopcatEffect::new()))));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(DancingSkeletonEffect::new())
     })));
-    effects.push(Box::new(LazyEffect::new(|| {
-        Box::new(DogeWowEffect::new())
-    })));
+    effects.push(Box::new(LazyEffect::new(|| Box::new(DogeWowEffect::new()))));
     effects.push(Box::new(LazyEffect::new(|| {
         Box::new(FlappyBirdEffect::new())
     })));

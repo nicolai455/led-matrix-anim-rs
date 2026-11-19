@@ -1,4 +1,6 @@
-use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{
+    audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -86,7 +88,11 @@ pub struct SpectrumOrbEffect {
 impl Default for SpectrumOrbEffect {
     fn default() -> Self {
         // Uniformly distribute 16 spikes on a sphere surface (Fibonacci sphere)
-        let mut dirs = [Vec3 { x: 0.0, y: 0.0, z: 1.0 }; NUM_SPIKES];
+        let mut dirs = [Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        }; NUM_SPIKES];
         let phi = PI * (3.0 - (5.0f32).sqrt()); // golden angle
 
         for (i, dir) in dirs.iter_mut().enumerate() {
@@ -157,10 +163,18 @@ impl SpectrumOrbEffect {
         }
     }
 
-    fn draw_spike_line(frame: &mut Frame, x0: f32, y0: f32, x1: f32, y1: f32, col0: Rgb, col1: Rgb) {
+    fn draw_spike_line(
+        frame: &mut Frame,
+        x0: f32,
+        y0: f32,
+        x1: f32,
+        y1: f32,
+        col0: Rgb,
+        col1: Rgb,
+    ) {
         let dx = x1 - x0;
         let dy = y1 - y0;
-        let steps = (dx.abs().max(dy.abs()) * 1.5).ceil() as usize;
+        let steps = raster_steps(dx.abs().max(dy.abs()), 1.5);
         if steps == 0 {
             return;
         }
@@ -210,7 +224,9 @@ impl Effect for SpectrumOrbEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -258,9 +274,21 @@ impl Effect for SpectrumOrbEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let _mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let _mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -288,9 +316,13 @@ impl Effect for SpectrumOrbEffect {
 
         // 1. Render glowing solid core sphere at center
         let core_r_sq = core_r * core_r;
-        for y in (center_y - core_r).floor().max(0.0) as usize..=(center_y + core_r).ceil().min(HEIGHT as f32 - 1.0) as usize {
+        for y in (center_y - core_r).floor().max(0.0) as usize
+            ..=(center_y + core_r).ceil().min(HEIGHT as f32 - 1.0) as usize
+        {
             let dy = y as f32 - center_y;
-            for x in (center_x - core_r).floor().max(0.0) as usize..=(center_x + core_r).ceil().min(WIDTH as f32 - 1.0) as usize {
+            for x in (center_x - core_r).floor().max(0.0) as usize
+                ..=(center_x + core_r).ceil().min(WIDTH as f32 - 1.0) as usize
+            {
                 let dx = x as f32 - center_x;
                 let d2 = dx * dx + dy * dy;
                 if d2 <= core_r_sq {

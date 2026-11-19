@@ -12,6 +12,25 @@ use std::time::Duration;
 // A const byte slice can be materialized twice across the crate boundary.
 pub static PREVIEW_WASM: &[u8] = include_bytes!("../assets/preview.wasm.gz");
 
+/// Body limits differ per route because the payloads differ in size by an order
+/// of magnitude: a scalar command is < 200 bytes, while a full 73-entry queue
+/// wrapped in `/api/command` is ~4.2 KB and a two-playlist library ~8.5 KB.
+/// A single flat 4 KB limit silently rejected valid queues (HTTP 413) while the
+/// web UI happily offered them — the "Playlist startet nicht" class of bug.
+pub const MAX_API_BODY_BYTES: usize = 4096;
+/// `/api/command` carries whole playlists; the engine accepts up to 8 named
+/// playlists of 73 entries, which the runtime-state limit caps at 16 KB anyway.
+pub const MAX_COMMAND_BODY_BYTES: usize = 16 * 1024;
+
+/// Upper bound for a request body on `path`, given the HTTP method.
+pub fn body_limit_for(method: &str, path: &str) -> usize {
+    let path = path.split('?').next().unwrap_or(path);
+    match (method, path) {
+        ("POST", "/api/command") => MAX_COMMAND_BODY_BYTES,
+        _ => MAX_API_BODY_BYTES,
+    }
+}
+
 // Keep persistence and live command submission ordered across concurrent requests.
 static CONFIG_REQUEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -103,10 +122,24 @@ fn handle_api_request_inner(
         ("GET", "/preview.wasm.gz") => {
             HttpResponse::ok_binary("application/gzip", PREVIEW_WASM.to_vec())
         }
-        ("GET", "/api/network") | ("POST", "/api/network") => HttpResponse::err_json(
-            503,
-            "Wi-Fi configuration is unavailable in host simulator mode; no radio is present",
-        ),
+        // The host has no radio, but the Wi-Fi card must still be exercisable:
+        // this in-memory store answers with the firmware's exact response shape
+        // and validation rules, and always reports `networkAvailable: false`.
+        ("GET", "/api/network") => HttpResponse::ok_json(crate::network_host::config_json()),
+        ("POST", "/api/network") => {
+            let (status, value) = crate::network_host::apply(body);
+            if status == 200 {
+                HttpResponse::ok_json(value)
+            } else {
+                HttpResponse::err_json(status, value["error"].as_str().unwrap_or("invalid request"))
+            }
+        }
+        ("GET", "/api/network/scan") => HttpResponse::ok_json(json!({
+            "networks": [],
+            "stale": false,
+            "networkAvailable": false,
+            "notice": "the host simulator has no radio, so there is nothing to scan",
+        })),
         ("GET", "/api/audio") => {
             let snapshot = ctx.hub.snapshot_scalar();
             let mut audio = serde_json::Map::new();
@@ -126,7 +159,11 @@ fn handle_api_request_inner(
             HttpResponse::ok_json(Value::Object(audio))
         }
 
-        ("GET", "/api/state") => HttpResponse { status: 200, content_type: "application/json", body: ctx.hub.snapshot_json().as_ref().clone() },
+        ("GET", "/api/state") => HttpResponse {
+            status: 200,
+            content_type: "application/json",
+            body: ctx.hub.snapshot_json().as_ref().clone(),
+        },
 
         ("GET", "/api/effects") | ("GET", "/api/catalog") => HttpResponse {
             status: 200,
@@ -240,12 +277,10 @@ fn handle_api_request_inner(
             )
         }
 
-        ("POST", "/api/state/save") => {
-            match ctx.hub.save_runtime_state(&ctx.state_store) {
-                Ok(()) => HttpResponse::ok_json(json!({ "ok": true })),
-                Err(e) => HttpResponse::err_json(500, &e),
-            }
-        }
+        ("POST", "/api/state/save") => match ctx.hub.save_runtime_state(&ctx.state_store) {
+            Ok(()) => HttpResponse::ok_json(json!({ "ok": true })),
+            Err(e) => HttpResponse::err_json(500, &e),
+        },
 
         ("POST", "/api/state/clear") => match ctx.state_store.clear() {
             Ok(_) => HttpResponse::ok_json(json!({ "ok": true })),

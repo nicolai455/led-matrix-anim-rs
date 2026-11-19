@@ -108,10 +108,9 @@ impl AudioTunnelEffect {
             // Hyperdrive: Cosmic blue / cyan warp with blinding white hyperdrive peaks
             0 => {
                 let hue = (0.54 + 0.10 * depth_t + 0.03 * rib_val).rem_euclid(1.0);
-                let whiteness = (self.warp_boost * 0.7
-                    + total_intensity.powi(3) * 0.5
-                    + band_energy * 0.3)
-                    .clamp(0.0, 0.95);
+                let whiteness =
+                    (self.warp_boost * 0.7 + total_intensity.powi(3) * 0.5 + band_energy * 0.3)
+                        .clamp(0.0, 0.95);
                 let sat = (0.95 - whiteness).clamp(0.05, 1.0);
                 let val = total_intensity;
                 hsv_to_rgb(hue, sat, val)
@@ -137,7 +136,8 @@ impl AudioTunnelEffect {
                     + band_energy * 0.25)
                     .clamp(0.0, 1.0);
                 let r = to_byte((total_intensity * 255.0).min(255.0));
-                let g = to_byte((total_intensity * (heat * 210.0 + self.warp_boost * 45.0)).min(255.0));
+                let g =
+                    to_byte((total_intensity * (heat * 210.0 + self.warp_boost * 45.0)).min(255.0));
                 let b = to_byte(
                     (total_intensity * (heat.powi(3) * 160.0 + self.warp_boost * 80.0)).min(255.0),
                 );
@@ -164,7 +164,9 @@ impl Effect for AudioTunnelEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {

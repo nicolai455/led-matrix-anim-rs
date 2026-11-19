@@ -1,4 +1,6 @@
-use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, clamp01, hsv_to_rgb, to_byte, XorShift32};
+use crate::util::{
+    alloc_boxed_2d, audio_bass, audio_mid, clamp01, hsv_to_rgb, to_byte, XorShift32,
+};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -160,7 +162,11 @@ impl FireworksEffect {
             2 => {
                 // Neon Dream
                 // Keep both constants opaque to avoid Xtensa LLVM constant-pool failures.
-                let h = if life > 0.5 { core::hint::black_box(0.85f32) } else { core::hint::black_box(0.5f32) };
+                let h = if life > 0.5 {
+                    core::hint::black_box(0.85f32)
+                } else {
+                    core::hint::black_box(0.5f32)
+                };
                 hsv_to_rgb(h, 0.95, v)
             }
             _ => {
@@ -181,7 +187,8 @@ impl FireworksEffect {
                 let speed_scale = self.values[0] / 50.0;
                 rocket.vy = -(18.0 + self.rng.next_f32() * 10.0) * speed_scale;
                 rocket.target_y = 4.0 + self.rng.next_f32() * 14.0;
-                rocket.hue = (self.color_cycle + audio_hue_offset + self.rng.next_f32() * 0.2) % 1.0;
+                rocket.hue =
+                    (self.color_cycle + audio_hue_offset + self.rng.next_f32() * 0.2) % 1.0;
                 break;
             }
         }
@@ -225,7 +232,9 @@ impl Effect for FireworksEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -276,8 +285,16 @@ impl Effect for FireworksEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         self.color_cycle = (self.color_cycle + dt * 0.15) % 1.0;
@@ -344,7 +361,12 @@ impl Effect for FireworksEffect {
             spark.vy = spark.vy * drag + gravity * dt;
             spark.life -= spark.decay * dt;
 
-            if spark.life <= 0.0 || spark.x < 0.0 || spark.x >= WIDTH as f32 || spark.y < 0.0 || spark.y >= HEIGHT as f32 {
+            if spark.life <= 0.0
+                || spark.x < 0.0
+                || spark.x >= WIDTH as f32
+                || spark.y < 0.0
+                || spark.y >= HEIGHT as f32
+            {
                 spark.active = false;
                 continue;
             }

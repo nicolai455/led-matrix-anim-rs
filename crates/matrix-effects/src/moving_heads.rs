@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Festival RGB", "Cyan & Gold", "Neon Violet & Lime", "Rainbow Prism"];
+const PALETTES: &[&str] = &[
+    "Festival RGB",
+    "Cyan & Gold",
+    "Neon Violet & Lime",
+    "Rainbow Prism",
+];
 const GOBOS: &[&str] = &["Solid Beam", "Split Beams", "Strobe Gobo", "Pulsing Iris"];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
@@ -138,7 +143,9 @@ impl Effect for MovingHeadsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -189,9 +196,21 @@ impl Effect for MovingHeadsEffect {
             0.0
         };
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -265,7 +284,9 @@ impl Effect for MovingHeadsEffect {
                             // Beam haze intensity with distance and core highlight
                             let depth_factor = 0.25 + 0.75 * (1.0 - dy / 45.0);
                             let core_boost = if rel_dist < 0.25 { 0.4 } else { 0.0 };
-                            let intensity = (falloff * depth_factor * gobo_mult * h_int + core_boost + self.strobe_pulse * 0.35)
+                            let intensity = (falloff * depth_factor * gobo_mult * h_int
+                                + core_boost
+                                + self.strobe_pulse * 0.35)
                                 .clamp(0.0, 1.0);
 
                             let r_add = to_byte(col.r as f32 * intensity);
@@ -285,7 +306,8 @@ impl Effect for MovingHeadsEffect {
                 let px = floor_center_x + dx;
                 if px >= 0 && px < WIDTH as i32 {
                     let d = (dx as f32).abs() / pool_rad.max(1) as f32;
-                    let bright = clamp01((1.0 - d * d) * (0.8 + bass * 0.6 + self.strobe_pulse * 0.6));
+                    let bright =
+                        clamp01((1.0 - d * d) * (0.8 + bass * 0.6 + self.strobe_pulse * 0.6));
                     frame.add_rgb(
                         px as usize,
                         31,
@@ -300,16 +322,22 @@ impl Effect for MovingHeadsEffect {
             let fix_x = hx.round() as usize;
             if fix_x < WIDTH {
                 frame.set(fix_x, 1, Rgb::WHITE);
-                if fix_x > 0 { frame.set(fix_x - 1, 1, col); }
-                if fix_x + 1 < WIDTH { frame.set(fix_x + 1, 1, col); }
+                if fix_x > 0 {
+                    frame.set(fix_x - 1, 1, col);
+                }
+                if fix_x + 1 < WIDTH {
+                    frame.set(fix_x + 1, 1, col);
+                }
             }
         }
 
         // Haze sparkle dust motes on treble / mid
         if audio_active && treble > 0.35 {
             for s in 0..4 {
-                let sx = ((s * 9 + 4) as f32 + (self.timer * 5.0).sin() * 3.0).round() as usize % WIDTH;
-                let sy = ((s * 7 + 10) as f32 + (self.timer * 4.0).cos() * 2.0).round() as usize % HEIGHT;
+                let sx =
+                    ((s * 9 + 4) as f32 + (self.timer * 5.0).sin() * 3.0).round() as usize % WIDTH;
+                let sy = ((s * 7 + 10) as f32 + (self.timer * 4.0).cos() * 2.0).round() as usize
+                    % HEIGHT;
                 let cur = frame.get(sx, sy);
                 frame.set(
                     sx,
@@ -324,7 +352,15 @@ impl Effect for MovingHeadsEffect {
         }
         if audio_active && mid > 0.4 {
             let cur = frame.get(15, 15);
-            frame.set(15, 15, Rgb::new(cur.r.saturating_add(90), cur.g.saturating_add(90), cur.b.saturating_add(90)));
+            frame.set(
+                15,
+                15,
+                Rgb::new(
+                    cur.r.saturating_add(90),
+                    cur.g.saturating_add(90),
+                    cur.b.saturating_add(90),
+                ),
+            );
         }
     }
 }

@@ -186,15 +186,20 @@ fn run_firmware() {
     if !engine.switch_to_effect(&panel_config.default_animation) {
         log::warn!("Unknown configured default effect; retaining initial effect");
     }
-    engine
-        .apply(
-            "light",
-            &serde_json::json!({"brightness":panel_config.led_brightness}).to_string(),
-        )
-        .expect("validated brightness");
+    // Validation already ran in PanelConfig::validate, but the engine is the
+    // authority here and a rejected command must not abort the boot: a panic
+    // in this path is a reboot loop on the device (panic = "abort").
+    if let Err(error) = engine.apply(
+        "light",
+        &serde_json::json!({"brightness":panel_config.led_brightness}).to_string(),
+    ) {
+        log::warn!("Configured boot brightness rejected: {error}");
+    }
     engine.set_auto_cycle_interval_ms(panel_config.auto_cycle_ms);
     if panel_config.auto_cycle_ms != 0 {
-        engine.apply("cycle", "ON").expect("valid cycle command");
+        if let Err(error) = engine.apply("cycle", "ON") {
+            log::warn!("Configured auto-cycle rejected: {error}");
+        }
     }
 
     let mut saved_state = nvs.get_saved_state().unwrap_or_else(|error| {
@@ -223,6 +228,23 @@ fn run_firmware() {
         }
     } else if let Err(error) = engine.install_default_sound_playlist(matrix_effects::default_sound_playlist()) {
         log::warn!("Default sound playlist not installed: {error}");
+    }
+
+    // The default playlist must be the active queue as well, otherwise the UI
+    // shows 73 saved entries next to an empty queue and Start stays disabled.
+    // Loading a queue stops playback, so the boot output remains dark.
+    let cycle_was_on = engine.snapshot_scalar()["cycle"] == "ON";
+    let active_queue_empty = engine
+        .playlist_config()
+        .get("entries")
+        .and_then(serde_json::Value::as_array)
+        .is_none_or(|entries| entries.is_empty());
+    if active_queue_empty {
+        if let Err(error) = engine.apply("playlist_select", &serde_json::json!({"id":"sound-default"}).to_string()) {
+            log::warn!("Default sound playlist not selected: {error}");
+        } else if cycle_was_on {
+            engine.set_auto_cycle_restored(true);
+        }
     }
 
     // CRITICAL HARDWARE & SAFETY INVARIANT: Boots OFF including restore!
@@ -384,12 +406,25 @@ fn run_firmware() {
     });
     #[cfg(target_os = "espidf")]
     matrix_firmware::memory_diagnostics::log_heap("before-wifi-start");
+    let wifi_state = Arc::new(matrix_firmware::net::WifiState::new());
+    let scan_cache = Arc::new(matrix_firmware::net::ScanCache::new());
+    let setup_token = match matrix_firmware::setup_token::load_or_create(&nvs) {
+        Ok(token) => token,
+        Err(error) => {
+            // Without a token the home network stays read-only; the fallback AP
+            // still works, so this is an error log, not a fatal failure.
+            log::error!("Setup token provisioning failed: {error}");
+            String::new()
+        }
+    };
     #[cfg(target_os = "espidf")]
     let _wifi = match WifiManager::start(
         modem,
         sysloop,
         default_nvs,
         wifi_config,
+        Arc::clone(&scan_cache),
+        Arc::clone(&wifi_state),
     ) {
         Ok(w) => {
             log::info!("Wi-Fi service initialized");
@@ -408,6 +443,9 @@ fn run_firmware() {
         api_ctx,
         Arc::clone(&ota_manager),
         Arc::clone(&nvs),
+        Arc::clone(&wifi_state),
+        Arc::clone(&scan_cache),
+        Arc::new(setup_token),
     ) {
         Ok(s) => {
             log::warn!("HTTP server operational on port 80");

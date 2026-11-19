@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LED matrix effect gallery · 82 effects</title>
+<meta name="description" content="Animated previews of every built-in LED matrix effect, rendered by the real engine.">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0f14;
+    --card: #141b24;
+    --border: #24303d;
+    --text: #e6edf3;
+    --muted: #8b9cb0;
+    --accent: #38bdf8;
+    --audio: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 24px 64px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header { max-width: 1280px; margin: 0 auto 24px; }
+  h1 { margin: 0 0 8px; font-size: 1.9rem; letter-spacing: -0.02em; }
+  .lead { margin: 0 0 20px; color: var(--muted); max-width: 70ch; }
+  .lead a { color: var(--accent); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .controls input {
+    flex: 1 1 240px; min-width: 200px; padding: 9px 12px;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; font: inherit;
+  }
+  .controls input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit;
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+  }
+  button:hover { border-color: var(--accent); }
+  button[aria-pressed="true"] { background: var(--accent); color: #04121c; border-color: var(--accent); font-weight: 600; }
+  .count { color: var(--muted); font-size: 0.9rem; margin: 4px 0 20px; }
+  .grid {
+    display: grid; gap: 16px; max-width: 1280px; margin: 0 auto;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .card {
+    margin: 0; background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card[hidden] { display: none; }
+  .shot { display: block; background: #000; aspect-ratio: 1; }
+  .shot img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  figcaption { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; }
+  h2 { margin: 0; font-size: 1rem; }
+  code { color: var(--muted); font-size: 0.78rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip {
+    font-size: 0.7rem; padding: 2px 7px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted); text-decoration: none;
+  }
+  .chip-audio { color: var(--audio); border-color: var(--audio); }
+  .chip-link:hover { color: var(--accent); border-color: var(--accent); }
+  .note { margin: 6px 0 0; font-size: 0.75rem; color: var(--muted); }
+  .empty { max-width: 1280px; margin: 32px auto; color: var(--muted); }
+  footer { max-width: 1280px; margin: 40px auto 0; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 16px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>LED matrix effect gallery</h1>
+  <p class="lead">
+    All 82 built-in effects, rendered frame by frame by the real
+    <code>matrix_core::Engine</code> — not screenshots, not hardware footage.
+    4 s at 25 fps, one synthetic audio track, identical on every run.
+    Repository: <a href="https://github.com/nicolai455/led-matrix-anim-rs">https://github.com/nicolai455/led-matrix-anim-rs</a>.
+  </p>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search effects by name or id…" aria-label="Search effects">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" data-filter="audio" aria-pressed="false">Audio reactive</button>
+    <button type="button" data-filter="parameters" aria-pressed="false">With parameters</button>
+    <button type="button" data-filter="still" aria-pressed="false">Static / no params</button>
+  </div>
+  <p class="count"><span id="shown">82</span> of 82 shown · 65 audio reactive · 32179 KB of GIFs</p>
+</header>
+<main class="grid" id="grid">
+      <figure class="card" data-id="TestPattern" data-audio="false" data-params="false">
+        <a class="shot" href="gifs/001-TestPattern.gif" title="Open the full animation">
+          <img src="gifs/001-TestPattern.gif" alt="Animated preview of the TestPattern effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>TestPattern</h2>
+          <code>TestPattern</code>
+          <div class="chips"><a class="chip chip-link" href="contact-sheets/001-TestPattern.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="Rainbow" data-audio="false" data-params="false">
+        <a class="shot" href="gifs/002-Rainbow.gif" title="Open the full animation">
+          <img src="gifs/002-Rainbow.gif" alt="Animated preview of the Rainbow effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Rainbow</h2>
+          <code>Rainbow</code>
+          <div class="chips"><a class="chip chip-link" href="contact-sheets/002-Rainbow.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="Solid" data-audio="false" data-params="false">
+        <a class="shot" href="gifs/003-Solid.gif" title="Open the full animation">
+          <img src="gifs/003-Solid.gif" alt="Animated preview of the Solid effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Solid</h2>
+          <code>Solid</code>
+          <div class="chips"><a class="chip chip-link" href="contact-sheets/003-Solid.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="TextStatic" data-audio="false" data-params="false">
+        <a class="shot" href="gifs/004-TextStatic.gif" title="Open the full animation">
+          <img src="gifs/004-TextStatic.gif" alt="Animated preview of the TextStatic effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>TextStatic</h2>
+          <code>TextStatic</code>
+          <div class="chips"><a class="chip chip-link" href="contact-sheets/004-TextStatic.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="TextScroll" data-audio="false" data-params="false">
+        <a class="shot" href="gifs/005-TextScroll.gif" title="Open the full animation">
+          <img src="gifs/005-TextScroll.gif" alt="Animated preview of the TextScroll effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>TextScroll</h2>
+          <code>TextScroll</code>
+          <div class="chips"><a class="chip chip-link" href="contact-sheets/005-TextScroll.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="black_hole" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/006-black_hole.gif" title="Open the full animation">
+          <img src="gifs/006-black_hole.gif" alt="Animated preview of the black_hole effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Black Hole</h2>
+          <code>black_hole</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/006-black_hole.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="fire" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/007-fire.gif" title="Open the full animation">
+          <img src="gifs/007-fire.gif" alt="Animated preview of the fire effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Fire</h2>
+          <code>fire</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/007-fire.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="plasma" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/008-plasma.gif" title="Open the full animation">
+          <img src="gifs/008-plasma.gif" alt="Animated preview of the plasma effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Plasma</h2>
+          <code>plasma</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/008-plasma.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="starfield" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/009-starfield.gif" title="Open the full animation">
+          <img src="gifs/009-starfield.gif" alt="Animated preview of the starfield effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Starfield</h2>
+          <code>starfield</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/009-starfield.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="matrix_rain" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/010-matrix_rain.gif" title="Open the full animation">
+          <img src="gifs/010-matrix_rain.gif" alt="Animated preview of the matrix_rain effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Matrix Rain</h2>
+          <code>matrix_rain</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/010-matrix_rain.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="ripple" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/011-ripple.gif" title="Open the full animation">
+          <img src="gifs/011-ripple.gif" alt="Animated preview of the ripple effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Ripple</h2>
+          <code>ripple</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/011-ripple.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="freq_bars" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/012-freq_bars.gif" title="Open the full animation">
+          <img src="gifs/012-freq_bars.gif" alt="Animated preview of the freq_bars effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Frequency Bars</h2>
+          <code>freq_bars</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/012-freq_bars.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="spectrogram" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/013-spectrogram.gif" title="Open the full animation">
+          <img src="gifs/013-spectrogram.gif" alt="Animated preview of the spectrogram effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Spectrogram</h2>
+          <code>spectrogram</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/013-spectrogram.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="audio_pulse" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/014-audio_pulse.gif" title="Open the full animation">
+          <img src="gifs/014-audio_pulse.gif" alt="Animated preview of the audio_pulse effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Audio Pulse</h2>
+          <code>audio_pulse</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/014-audio_pulse.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="pulse_ball" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/015-pulse_ball.gif" title="Open the full animation">
+          <img src="gifs/015-pulse_ball.gif" alt="Animated preview of the pulse_ball effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Pulse Ball</h2>
+          <code>pulse_ball</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/015-pulse_ball.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="rotating_fish" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/016-rotating_fish.gif" title="Open the full animation">
+          <img src="gifs/016-rotating_fish.gif" alt="Animated preview of the rotating_fish effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Rotating Fish</h2>
+          <code>rotating_fish</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/016-rotating_fish.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="spinning_donut" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/017-spinning_donut.gif" title="Open the full animation">
+          <img src="gifs/017-spinning_donut.gif" alt="Animated preview of the spinning_donut effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Spinning Donut</h2>
+          <code>spinning_donut</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/017-spinning_donut.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="spinning_cube" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/018-spinning_cube.gif" title="Open the full animation">
+          <img src="gifs/018-spinning_cube.gif" alt="Animated preview of the spinning_cube effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Spinning Cube</h2>
+          <code>spinning_cube</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/018-spinning_cube.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="audio_waveform" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/019-audio_waveform.gif" title="Open the full animation">
+          <img src="gifs/019-audio_waveform.gif" alt="Animated preview of the audio_waveform effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Waveform</h2>
+          <code>audio_waveform</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/019-audio_waveform.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="radial_spectrum" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/020-radial_spectrum.gif" title="Open the full animation">
+          <img src="gifs/020-radial_spectrum.gif" alt="Animated preview of the radial_spectrum effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Radial Spectrum</h2>
+          <code>radial_spectrum</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/020-radial_spectrum.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="stroboscope" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/021-stroboscope.gif" title="Open the full animation">
+          <img src="gifs/021-stroboscope.gif" alt="Animated preview of the stroboscope effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Stroboscope</h2>
+          <code>stroboscope</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/021-stroboscope.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="Frames" data-audio="false" data-params="false">
+        <a class="shot" href="gifs/022-Frames.gif" title="Open the full animation">
+          <img src="gifs/022-Frames.gif" alt="Animated preview of the Frames effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Frames</h2>
+          <code>Frames</code>
+          <div class="chips"><a class="chip chip-link" href="contact-sheets/022-Frames.png">contact sheet</a></div>
+          <p class="note">Renders black without an external audio/LFX source — documented default, not a render fault.</p>
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="metaballs" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/023-metaballs.gif" title="Open the full animation">
+          <img src="gifs/023-metaballs.gif" alt="Animated preview of the metaballs effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Metaballs</h2>
+          <code>metaballs</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/023-metaballs.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="kaleidoscope" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/024-kaleidoscope.gif" title="Open the full animation">
+          <img src="gifs/024-kaleidoscope.gif" alt="Animated preview of the kaleidoscope effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Kaleidoscope</h2>
+          <code>kaleidoscope</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/024-kaleidoscope.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="audio_tunnel" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/025-audio_tunnel.gif" title="Open the full animation">
+          <img src="gifs/025-audio_tunnel.gif" alt="Animated preview of the audio_tunnel effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Audio Tunnel</h2>
+          <code>audio_tunnel</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/025-audio_tunnel.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="fireworks" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/026-fireworks.gif" title="Open the full animation">
+          <img src="gifs/026-fireworks.gif" alt="Animated preview of the fireworks effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Particle Fireworks</h2>
+          <code>fireworks</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/026-fireworks.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="dna_spiral" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/027-dna_spiral.gif" title="Open the full animation">
+          <img src="gifs/027-dna_spiral.gif" alt="Animated preview of the dna_spiral effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>DNA Spiral</h2>
+          <code>dna_spiral</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/027-dna_spiral.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="lissajous" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/028-lissajous.gif" title="Open the full animation">
+          <img src="gifs/028-lissajous.gif" alt="Animated preview of the lissajous effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Lissajous</h2>
+          <code>lissajous</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/028-lissajous.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="game_of_life" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/029-game_of_life.gif" title="Open the full animation">
+          <img src="gifs/029-game_of_life.gif" alt="Animated preview of the game_of_life effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Game of Life</h2>
+          <code>game_of_life</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/029-game_of_life.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="polar_lights" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/030-polar_lights.gif" title="Open the full animation">
+          <img src="gifs/030-polar_lights.gif" alt="Animated preview of the polar_lights effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Polar Lights</h2>
+          <code>polar_lights</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/030-polar_lights.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="domain_warp" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/031-domain_warp.gif" title="Open the full animation">
+          <img src="gifs/031-domain_warp.gif" alt="Animated preview of the domain_warp effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Domain Warp</h2>
+          <code>domain_warp</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/031-domain_warp.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="galaxy_spiral" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/032-galaxy_spiral.gif" title="Open the full animation">
+          <img src="gifs/032-galaxy_spiral.gif" alt="Animated preview of the galaxy_spiral effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Galaxy Spiral</h2>
+          <code>galaxy_spiral</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/032-galaxy_spiral.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="text_effects" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/033-text_effects.gif" title="Open the full animation">
+          <img src="gifs/033-text_effects.gif" alt="Animated preview of the text_effects effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Text Effects</h2>
+          <code>text_effects</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/033-text_effects.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="scene_sequencer" data-audio="false" data-params="true">
+        <a class="shot" href="gifs/034-scene_sequencer.gif" title="Open the full animation">
+          <img src="gifs/034-scene_sequencer.gif" alt="Animated preview of the scene_sequencer effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Scene Sequencer</h2>
+          <code>scene_sequencer</code>
+          <div class="chips"><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/034-scene_sequencer.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="disco_ball" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/035-disco_ball.gif" title="Open the full animation">
+          <img src="gifs/035-disco_ball.gif" alt="Animated preview of the disco_ball effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Disco Mirror Ball</h2>
+          <code>disco_ball</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/035-disco_ball.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="laser_show" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/036-laser_show.gif" title="Open the full animation">
+          <img src="gifs/036-laser_show.gif" alt="Animated preview of the laser_show effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Club Laser Show</h2>
+          <code>laser_show</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/036-laser_show.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="disco_floor" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/037-disco_floor.gif" title="Open the full animation">
+          <img src="gifs/037-disco_floor.gif" alt="Animated preview of the disco_floor effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>80s Disco Floor</h2>
+          <code>disco_floor</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/037-disco_floor.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="nyan_cat" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/038-nyan_cat.gif" title="Open the full animation">
+          <img src="gifs/038-nyan_cat.gif" alt="Animated preview of the nyan_cat effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Nyan Cat Space Loop</h2>
+          <code>nyan_cat</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/038-nyan_cat.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="party_dancers" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/039-party_dancers.gif" title="Open the full animation">
+          <img src="gifs/039-party_dancers.gif" alt="Animated preview of the party_dancers effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Party Pixel Dancers</h2>
+          <code>party_dancers</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/039-party_dancers.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="pacman_chase" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/040-pacman_chase.gif" title="Open the full animation">
+          <img src="gifs/040-pacman_chase.gif" alt="Animated preview of the pacman_chase effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Pacman Retro Chase</h2>
+          <code>pacman_chase</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/040-pacman_chase.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="equalizer_city" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/041-equalizer_city.gif" title="Open the full animation">
+          <img src="gifs/041-equalizer_city.gif" alt="Animated preview of the equalizer_city effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Equalizer Cyber City</h2>
+          <code>equalizer_city</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/041-equalizer_city.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="strobe_blinder" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/042-strobe_blinder.gif" title="Open the full animation">
+          <img src="gifs/042-strobe_blinder.gif" alt="Animated preview of the strobe_blinder effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Club Strobe Blinders</h2>
+          <code>strobe_blinder</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/042-strobe_blinder.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="spinning_vinyl" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/043-spinning_vinyl.gif" title="Open the full animation">
+          <img src="gifs/043-spinning_vinyl.gif" alt="Animated preview of the spinning_vinyl effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Spinning DJ Vinyl</h2>
+          <code>spinning_vinyl</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/043-spinning_vinyl.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="bouncing_speakers" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/044-bouncing_speakers.gif" title="Open the full animation">
+          <img src="gifs/044-bouncing_speakers.gif" alt="Animated preview of the bouncing_speakers effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Bouncing Woofers</h2>
+          <code>bouncing_speakers</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/044-bouncing_speakers.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="neon_heart" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/045-neon_heart.gif" title="Open the full animation">
+          <img src="gifs/045-neon_heart.gif" alt="Animated preview of the neon_heart effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Pulsing Neon Heart</h2>
+          <code>neon_heart</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/045-neon_heart.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="lava_lamp" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/046-lava_lamp.gif" title="Open the full animation">
+          <img src="gifs/046-lava_lamp.gif" alt="Animated preview of the lava_lamp effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Liquid Lava Lamp</h2>
+          <code>lava_lamp</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/046-lava_lamp.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="arcade_invaders" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/047-arcade_invaders.gif" title="Open the full animation">
+          <img src="gifs/047-arcade_invaders.gif" alt="Animated preview of the arcade_invaders effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Space Invaders Galaxy</h2>
+          <code>arcade_invaders</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/047-arcade_invaders.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="audio_mesh" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/048-audio_mesh.gif" title="Open the full animation">
+          <img src="gifs/048-audio_mesh.gif" alt="Animated preview of the audio_mesh effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>3D Ripple Mesh</h2>
+          <code>audio_mesh</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/048-audio_mesh.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="fire_tornado" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/049-fire_tornado.gif" title="Open the full animation">
+          <img src="gifs/049-fire_tornado.gif" alt="Animated preview of the fire_tornado effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Fire Tornado</h2>
+          <code>fire_tornado</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/049-fire_tornado.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="hypno_spirals" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/050-hypno_spirals.gif" title="Open the full animation">
+          <img src="gifs/050-hypno_spirals.gif" alt="Animated preview of the hypno_spirals effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Hypnotic Moire Spirals</h2>
+          <code>hypno_spirals</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/050-hypno_spirals.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="outrun_drive" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/051-outrun_drive.gif" title="Open the full animation">
+          <img src="gifs/051-outrun_drive.gif" alt="Animated preview of the outrun_drive effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Outrun Sunset Drive</h2>
+          <code>outrun_drive</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/051-outrun_drive.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="spectrum_orb" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/052-spectrum_orb.gif" title="Open the full animation">
+          <img src="gifs/052-spectrum_orb.gif" alt="Animated preview of the spectrum_orb effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Spectrum Orb</h2>
+          <code>spectrum_orb</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/052-spectrum_orb.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="cyber_rain" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/053-cyber_rain.gif" title="Open the full animation">
+          <img src="gifs/053-cyber_rain.gif" alt="Animated preview of the cyber_rain effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Cyber Matrix Rain</h2>
+          <code>cyber_rain</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/053-cyber_rain.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="julia_orbit" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/054-julia_orbit.gif" title="Open the full animation">
+          <img src="gifs/054-julia_orbit.gif" alt="Animated preview of the julia_orbit effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Fractal Julia Orbit</h2>
+          <code>julia_orbit</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/054-julia_orbit.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="rotozoom" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/055-rotozoom.gif" title="Open the full animation">
+          <img src="gifs/055-rotozoom.gif" alt="Animated preview of the rotozoom effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Plasma Rotozoom</h2>
+          <code>rotozoom</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/055-rotozoom.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="hazard_pulsar" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/056-hazard_pulsar.gif" title="Open the full animation">
+          <img src="gifs/056-hazard_pulsar.gif" alt="Animated preview of the hazard_pulsar effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Hazard Pulsar</h2>
+          <code>hazard_pulsar</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/056-hazard_pulsar.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="supernova" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/057-supernova.gif" title="Open the full animation">
+          <img src="gifs/057-supernova.gif" alt="Animated preview of the supernova effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Supernova Shockwave</h2>
+          <code>supernova</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/057-supernova.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="water_caustics" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/058-water_caustics.gif" title="Open the full animation">
+          <img src="gifs/058-water_caustics.gif" alt="Animated preview of the water_caustics effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Liquid Water Caustics</h2>
+          <code>water_caustics</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/058-water_caustics.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="retro_breakout" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/059-retro_breakout.gif" title="Open the full animation">
+          <img src="gifs/059-retro_breakout.gif" alt="Animated preview of the retro_breakout effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Retro Breakout</h2>
+          <code>retro_breakout</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/059-retro_breakout.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="cyber_tunnel" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/060-cyber_tunnel.gif" title="Open the full animation">
+          <img src="gifs/060-cyber_tunnel.gif" alt="Animated preview of the cyber_tunnel effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Hex Cyber Tunnel</h2>
+          <code>cyber_tunnel</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/060-cyber_tunnel.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="yin_yang" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/061-yin_yang.gif" title="Open the full animation">
+          <img src="gifs/061-yin_yang.gif" alt="Animated preview of the yin_yang effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Fire &amp; Ice Yin-Yang</h2>
+          <code>yin_yang</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/061-yin_yang.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="ufo_abduction" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/062-ufo_abduction.gif" title="Open the full animation">
+          <img src="gifs/062-ufo_abduction.gif" alt="Animated preview of the ufo_abduction effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Retro UFO Abduction</h2>
+          <code>ufo_abduction</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/062-ufo_abduction.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="dancing_banana" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/063-dancing_banana.gif" title="Open the full animation">
+          <img src="gifs/063-dancing_banana.gif" alt="Animated preview of the dancing_banana effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Dancing Banana</h2>
+          <code>dancing_banana</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/063-dancing_banana.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="bongo_cat" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/064-bongo_cat.gif" title="Open the full animation">
+          <img src="gifs/064-bongo_cat.gif" alt="Animated preview of the bongo_cat effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Bongo Cat</h2>
+          <code>bongo_cat</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/064-bongo_cat.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="popcat" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/065-popcat.gif" title="Open the full animation">
+          <img src="gifs/065-popcat.gif" alt="Animated preview of the popcat effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Popcat</h2>
+          <code>popcat</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/065-popcat.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="dancing_skeleton" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/066-dancing_skeleton.gif" title="Open the full animation">
+          <img src="gifs/066-dancing_skeleton.gif" alt="Animated preview of the dancing_skeleton effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Dancing Skeleton</h2>
+          <code>dancing_skeleton</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/066-dancing_skeleton.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="doge_wow" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/067-doge_wow.gif" title="Open the full animation">
+          <img src="gifs/067-doge_wow.gif" alt="Animated preview of the doge_wow effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Doge Much Wow</h2>
+          <code>doge_wow</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/067-doge_wow.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="flappy_bird" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/068-flappy_bird.gif" title="Open the full animation">
+          <img src="gifs/068-flappy_bird.gif" alt="Animated preview of the flappy_bird effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Flappy Bird Loop</h2>
+          <code>flappy_bird</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/068-flappy_bird.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="mario_stomp" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/069-mario_stomp.gif" title="Open the full animation">
+          <img src="gifs/069-mario_stomp.gif" alt="Animated preview of the mario_stomp effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Mario Goomba Stomp</h2>
+          <code>mario_stomp</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/069-mario_stomp.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="hamster_dance" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/070-hamster_dance.gif" title="Open the full animation">
+          <img src="gifs/070-hamster_dance.gif" alt="Animated preview of the hamster_dance effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Hamster Dance</h2>
+          <code>hamster_dance</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/070-hamster_dance.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="party_duck" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/071-party_duck.gif" title="Open the full animation">
+          <img src="gifs/071-party_duck.gif" alt="Animated preview of the party_duck effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Party Duck</h2>
+          <code>party_duck</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/071-party_duck.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="party_minion" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/072-party_minion.gif" title="Open the full animation">
+          <img src="gifs/072-party_minion.gif" alt="Animated preview of the party_minion effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Party Minion</h2>
+          <code>party_minion</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/072-party_minion.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="police_strobe" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/073-police_strobe.gif" title="Open the full animation">
+          <img src="gifs/073-police_strobe.gif" alt="Animated preview of the police_strobe effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Police Strobe Beacon</h2>
+          <code>police_strobe</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/073-police_strobe.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="moving_heads" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/074-moving_heads.gif" title="Open the full animation">
+          <img src="gifs/074-moving_heads.gif" alt="Animated preview of the moving_heads effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Moving Head Spotlights</h2>
+          <code>moving_heads</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/074-moving_heads.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="laser_scanner" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/075-laser_scanner.gif" title="Open the full animation">
+          <img src="gifs/075-laser_scanner.gif" alt="Animated preview of the laser_scanner effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Laser Tunnel Scanner</h2>
+          <code>laser_scanner</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/075-laser_scanner.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="disco_pinwheel" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/076-disco_pinwheel.gif" title="Open the full animation">
+          <img src="gifs/076-disco_pinwheel.gif" alt="Animated preview of the disco_pinwheel effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Disco Pinwheel</h2>
+          <code>disco_pinwheel</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/076-disco_pinwheel.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="octopus_scanner" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/077-octopus_scanner.gif" title="Open the full animation">
+          <img src="gifs/077-octopus_scanner.gif" alt="Animated preview of the octopus_scanner effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Octopus Scanner</h2>
+          <code>octopus_scanner</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/077-octopus_scanner.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="chaser_cannons" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/078-chaser_cannons.gif" title="Open the full animation">
+          <img src="gifs/078-chaser_cannons.gif" alt="Animated preview of the chaser_cannons effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Chaser Cannons</h2>
+          <code>chaser_cannons</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/078-chaser_cannons.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="mirror_cavern" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/079-mirror_cavern.gif" title="Open the full animation">
+          <img src="gifs/079-mirror_cavern.gif" alt="Animated preview of the mirror_cavern effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Mirror Cavern</h2>
+          <code>mirror_cavern</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/079-mirror_cavern.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="laser_harp" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/080-laser_harp.gif" title="Open the full animation">
+          <img src="gifs/080-laser_harp.gif" alt="Animated preview of the laser_harp effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Laser Harp</h2>
+          <code>laser_harp</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/080-laser_harp.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="derby_flower" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/081-derby_flower.gif" title="Open the full animation">
+          <img src="gifs/081-derby_flower.gif" alt="Animated preview of the derby_flower effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Derby Gobo Flower</h2>
+          <code>derby_flower</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/081-derby_flower.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+      <figure class="card" data-id="liquid_oil" data-audio="true" data-params="true">
+        <a class="shot" href="gifs/082-liquid_oil.gif" title="Open the full animation">
+          <img src="gifs/082-liquid_oil.gif" alt="Animated preview of the liquid_oil effect" loading="lazy" width="160" height="160">
+        </a>
+        <figcaption>
+          <h2>Liquid Disco Oil</h2>
+          <code>liquid_oil</code>
+          <div class="chips"><span class="chip chip-audio">audio</span><span class="chip">parameters</span><a class="chip chip-link" href="contact-sheets/082-liquid_oil.png">contact sheet</a></div>
+          
+        </figcaption>
+      </figure>
+</main>
+<p class="empty" id="empty" hidden>No effect matches that search.</p>
+<footer>
+  <p>
+    Frames come from <code>cargo run -p matrix-gif -- --all</code>; contact sheets add a
+    2×3 grid sampled at 10/30/50/70/85/95 % of the clip. Deterministic by
+    construction: frame <em>i</em> is rendered at <em>t = i·1000/fps</em> ms after
+    60 warm-up frames, so a re-render is byte-identical.
+  </p>
+  <p>
+    A GIF shows what the panel would show. It is not a claim about brightness,
+    power draw or colour calibration on real hardware.
+  </p>
+</footer>
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var search = document.getElementById('search');
+  var shown = document.getElementById('shown');
+  var empty = document.getElementById('empty');
+  var filter = 'all';
+
+  function matches(card, needle) {
+    if (!needle) return true;
+    return card.getAttribute('data-id').toLowerCase().indexOf(needle) !== -1 ||
+           card.querySelector('h2').textContent.toLowerCase().indexOf(needle) !== -1;
+  }
+
+  function passes(card) {
+    var audio = card.getAttribute('data-audio') === 'true';
+    var params = card.getAttribute('data-params') === 'true';
+    if (filter === 'audio') return audio;
+    if (filter === 'parameters') return params;
+    if (filter === 'still') return !params && !audio;
+    return true;
+  }
+
+  function apply() {
+    var needle = search.value.trim().toLowerCase();
+    var visible = 0;
+    cards.forEach(function (card) {
+      var show = passes(card) && matches(card, needle);
+      card.hidden = !show;
+      if (show) visible++;
+    });
+    shown.textContent = String(visible);
+    empty.hidden = visible !== 0;
+  }
+
+  search.addEventListener('input', apply);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (button) {
+    button.addEventListener('click', function () {
+      filter = button.getAttribute('data-filter');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (other) {
+        other.setAttribute('aria-pressed', String(other === button));
+      });
+      apply();
+    });
+  });
+  apply();
+})();
+</script>
+</body>
+</html>

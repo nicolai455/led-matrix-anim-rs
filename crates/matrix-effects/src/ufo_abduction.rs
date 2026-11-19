@@ -144,7 +144,11 @@ impl UfoAbductionEffect {
             if lx >= 0 && lx < WIDTH as i32 && (cy + 1) >= 0 && (cy + 1) < HEIGHT as i32 {
                 #[allow(clippy::manual_is_multiple_of)]
                 let is_on = (i + light_phase) % 2 == 0;
-                let c = if is_on { Rgb::new(255, 230, 0) } else { Rgb::new(255, 40, 20) };
+                let c = if is_on {
+                    Rgb::new(255, 230, 0)
+                } else {
+                    Rgb::new(255, 40, 20)
+                };
                 frame.set(lx as usize, (cy + 1) as usize, c);
             }
         }
@@ -168,7 +172,11 @@ impl UfoAbductionEffect {
             if px >= 0 && px < WIDTH as i32 {
                 if cy >= 0 && cy < HEIGHT as i32 {
                     let is_spot = dx == 0;
-                    frame.set(px as usize, cy as usize, if is_spot { c_black } else { c_white });
+                    frame.set(
+                        px as usize,
+                        cy as usize,
+                        if is_spot { c_black } else { c_white },
+                    );
                 }
                 if (cy + 1) >= 0 && (cy + 1) < HEIGHT as i32 {
                     frame.set(px as usize, (cy + 1) as usize, c_white);
@@ -200,7 +208,9 @@ impl Effect for UfoAbductionEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -245,9 +255,21 @@ impl Effect for UfoAbductionEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -304,9 +326,12 @@ impl Effect for UfoAbductionEffect {
                 if px >= 0 && px < WIDTH as i32 {
                     let d_norm = (dx as f32).abs() / current_half_w.max(1.0);
                     let edge_falloff = (1.0 - d_norm.powi(2)).max(0.0);
-                    let pulse_wave = ((progress * 10.0 - self.ufo_time * 8.0).sin() * 0.5 + 0.5) * 0.35;
+                    let pulse_wave =
+                        ((progress * 10.0 - self.ufo_time * 8.0).sin() * 0.5 + 0.5) * 0.35;
 
-                    let brightness = (edge_falloff * (0.45 + pulse_wave) + self.beam_pulse * 0.45 + mid * 0.15).min(1.0);
+                    let brightness =
+                        (edge_falloff * (0.45 + pulse_wave) + self.beam_pulse * 0.45 + mid * 0.15)
+                            .min(1.0);
                     if brightness > 0.05 {
                         let col = Self::beam_color(pal, brightness, self.color_cycle);
                         let cur = frame.get(px as usize, y as usize);

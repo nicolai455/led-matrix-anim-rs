@@ -3,7 +3,12 @@ use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
 
-const PALETTES: &[&str] = &["NES Overworld", "Underground 1-2", "Bowser Castle", "Star Invincible"];
+const PALETTES: &[&str] = &[
+    "NES Overworld",
+    "Underground 1-2",
+    "Bowser Castle",
+    "Star Invincible",
+];
 
 const PARAMETERS: [ParameterDescriptor; 4] = [
     ParameterDescriptor {
@@ -97,14 +102,14 @@ impl MarioStompEffect {
                 Rgb::new(230, 20, 20),   // Red Shirt / Cap
             ),
             1 => (
-                Rgb::new(10, 10, 15),    // Black Underground
-                Rgb::new(0, 130, 140),   // Blue Bricks
+                Rgb::new(10, 10, 15),  // Black Underground
+                Rgb::new(0, 130, 140), // Blue Bricks
                 Rgb::new(0, 160, 200),
                 Rgb::new(230, 150, 40),
             ),
             2 => (
-                Rgb::new(30, 10, 10),    // Castle Charcoal
-                Rgb::new(120, 40, 20),   // Dark Red Blocks
+                Rgb::new(30, 10, 10),  // Castle Charcoal
+                Rgb::new(120, 40, 20), // Dark Red Blocks
                 Rgb::new(40, 40, 40),
                 Rgb::new(255, 60, 20),
             ),
@@ -130,7 +135,9 @@ impl Effect for MarioStompEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -178,9 +185,21 @@ impl Effect for MarioStompEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let pal = self.values[2] as usize;
@@ -258,7 +277,8 @@ impl Effect for MarioStompEffect {
                 let py = block_y + dy;
                 if px < WIDTH as i32 && py >= 0 && py < HEIGHT as i32 {
                     let is_border = dx == 0 || dx == 4 || dy == 0 || dy == 4;
-                    let is_question = (dx == 2 && dy == 2) || (dx == 2 && dy == 1) || (dx == 2 && dy == 3);
+                    let is_question =
+                        (dx == 2 && dy == 2) || (dx == 2 && dy == 1) || (dx == 2 && dy == 3);
                     let c = if is_border {
                         q_block_border
                     } else if is_question {
@@ -323,8 +343,12 @@ impl Effect for MarioStompEffect {
                 }
             }
             // Angry Eyebrows & Eyes
-            if gx > 0 && gx - 1 < WIDTH as i32 { frame.set((gx - 1) as usize, 23, Rgb::BLACK); }
-            if gx + 1 < WIDTH as i32 { frame.set((gx + 1) as usize, 23, Rgb::BLACK); }
+            if gx > 0 && gx - 1 < WIDTH as i32 {
+                frame.set((gx - 1) as usize, 23, Rgb::BLACK);
+            }
+            if gx + 1 < WIDTH as i32 {
+                frame.set((gx + 1) as usize, 23, Rgb::BLACK);
+            }
 
             // Feet waddle
             #[allow(clippy::manual_is_multiple_of)]
@@ -351,19 +375,29 @@ impl Effect for MarioStompEffect {
         // Face & Mustache (y: my + 1)
         if my + 1 < HEIGHT as i32 {
             frame.set(mx as usize, (my + 1) as usize, skin_c);
-            if mx + 1 < WIDTH as i32 { frame.set((mx + 1) as usize, (my + 1) as usize, skin_c); }
-            if mx + 2 < WIDTH as i32 { frame.set((mx + 2) as usize, (my + 1) as usize, Rgb::BLACK); } // Mustache/nose
+            if mx + 1 < WIDTH as i32 {
+                frame.set((mx + 1) as usize, (my + 1) as usize, skin_c);
+            }
+            if mx + 2 < WIDTH as i32 {
+                frame.set((mx + 2) as usize, (my + 1) as usize, Rgb::BLACK);
+            } // Mustache/nose
         }
 
         // Shirt & Overalls Body (y: my + 2..my + 3)
         if my + 2 < HEIGHT as i32 {
-            if mx > 0 { frame.set((mx - 1) as usize, (my + 2) as usize, cap_c); } // Arm/shirt
+            if mx > 0 {
+                frame.set((mx - 1) as usize, (my + 2) as usize, cap_c);
+            } // Arm/shirt
             frame.set(mx as usize, (my + 2) as usize, overalls_c);
-            if mx + 1 < WIDTH as i32 { frame.set((mx + 1) as usize, (my + 2) as usize, overalls_c); }
+            if mx + 1 < WIDTH as i32 {
+                frame.set((mx + 1) as usize, (my + 2) as usize, overalls_c);
+            }
         }
         if my + 3 < HEIGHT as i32 {
             frame.set(mx as usize, (my + 3) as usize, overalls_c);
-            if mx + 1 < WIDTH as i32 { frame.set((mx + 1) as usize, (my + 3) as usize, overalls_c); }
+            if mx + 1 < WIDTH as i32 {
+                frame.set((mx + 1) as usize, (my + 3) as usize, overalls_c);
+            }
         }
 
         // Legs / Boots (y: my + 4)
@@ -371,16 +405,24 @@ impl Effect for MarioStompEffect {
             let boot_c = Rgb::new(120, 50, 15);
             if self.is_jumping {
                 // Jump pose: legs tucked up or split
-                if mx > 0 { frame.set((mx - 1) as usize, (my + 4) as usize, boot_c); }
-                if mx + 2 < WIDTH as i32 { frame.set((mx + 2) as usize, (my + 3) as usize, boot_c); }
+                if mx > 0 {
+                    frame.set((mx - 1) as usize, (my + 4) as usize, boot_c);
+                }
+                if mx + 2 < WIDTH as i32 {
+                    frame.set((mx + 2) as usize, (my + 3) as usize, boot_c);
+                }
             } else {
                 // Running stride
                 #[allow(clippy::manual_is_multiple_of)]
                 let stride = ((self.run_phase).floor() as usize) % 2 == 0;
                 let l_leg = if stride { mx - 1 } else { mx };
                 let r_leg = if stride { mx + 1 } else { mx + 2 };
-                if l_leg >= 0 && l_leg < WIDTH as i32 { frame.set(l_leg as usize, (my + 4) as usize, boot_c); }
-                if r_leg < WIDTH as i32 { frame.set(r_leg as usize, (my + 4) as usize, boot_c); }
+                if l_leg >= 0 && l_leg < WIDTH as i32 {
+                    frame.set(l_leg as usize, (my + 4) as usize, boot_c);
+                }
+                if r_leg < WIDTH as i32 {
+                    frame.set(r_leg as usize, (my + 4) as usize, boot_c);
+                }
             }
         }
 

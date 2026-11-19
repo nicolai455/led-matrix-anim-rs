@@ -174,7 +174,9 @@ impl Effect for GameOfLifeEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -219,7 +221,11 @@ impl Effect for GameOfLifeEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         self.color_cycle = (self.color_cycle + dt * 0.15) % 1.0;
@@ -236,8 +242,14 @@ impl Effect for GameOfLifeEffect {
         let step_time = 1.0 / gen_rate.max(1.0);
         self.accumulator += dt;
 
-        while self.accumulator >= step_time {
+        // A huge delta (host sleep/resume, a stalled render thread) must not turn
+        // into an unbounded catch-up loop: every generation is a full 32x32 pass,
+        // so `delta_seconds = 1e9` would spin for minutes on the render thread.
+        // Cap the number of generations per frame and drop the leftover time.
+        let mut steps = 0;
+        while self.accumulator >= step_time && steps < 8 {
             self.accumulator -= step_time;
+            steps += 1;
 
             // Compute next generation
             let mut live_count = 0usize;
@@ -285,6 +297,10 @@ impl Effect for GameOfLifeEffect {
             if live_count < 15 {
                 self.randomize();
             }
+        }
+        if self.accumulator >= step_time {
+            // Backlog from a long stall is discarded, not replayed next frame.
+            self.accumulator = 0.0;
         }
 
         // Phosphor decay for dead cells

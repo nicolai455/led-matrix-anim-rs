@@ -94,15 +94,27 @@ impl OutrunDriveEffect {
         match pal {
             0 => {
                 // Miami 1986 (Sunset Orange/Yellow, Hot Magenta curbs, Brilliant Red sports car)
-                (Rgb::new(255, 170, 20), Rgb::new(255, 20, 160), Rgb::new(230, 25, 30))
+                (
+                    Rgb::new(255, 170, 20),
+                    Rgb::new(255, 20, 160),
+                    Rgb::new(230, 25, 30),
+                )
             }
             1 => {
                 // Cyber Neon (Cyan/White sun, Electric Violet curbs, Neon Cyan car)
-                (Rgb::new(0, 240, 255), Rgb::new(190, 30, 255), Rgb::new(20, 200, 240))
+                (
+                    Rgb::new(0, 240, 255),
+                    Rgb::new(190, 30, 255),
+                    Rgb::new(20, 200, 240),
+                )
             }
             2 => {
                 // Golden Hour (Deep Gold sun, Amber curbs, Onyx Black car)
-                (Rgb::new(255, 210, 40), Rgb::new(240, 120, 10), Rgb::new(30, 30, 35))
+                (
+                    Rgb::new(255, 210, 40),
+                    Rgb::new(240, 120, 10),
+                    Rgb::new(30, 30, 35),
+                )
             }
             _ => {
                 // Rainbow Fade
@@ -127,7 +139,9 @@ impl Effect for OutrunDriveEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -174,9 +188,21 @@ impl Effect for OutrunDriveEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let _treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let _treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -258,7 +284,11 @@ impl Effect for OutrunDriveEffect {
                 } else {
                     // Dark asphalt
                     let d_c = to_byte(12.0 + y_norm * 18.0);
-                    frame.set(x as usize, y as usize, Rgb::new(d_c, d_c, to_byte(d_c as f32 * 1.3)));
+                    frame.set(
+                        x as usize,
+                        y as usize,
+                        Rgb::new(d_c, d_c, to_byte(d_c as f32 * 1.3)),
+                    );
                 }
             }
         }

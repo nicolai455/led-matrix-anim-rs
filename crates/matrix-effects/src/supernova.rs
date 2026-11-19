@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Stellar Fire", "Hypernova Blue", "Antimatter Violet", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Stellar Fire",
+    "Hypernova Blue",
+    "Antimatter Violet",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -150,7 +155,9 @@ impl Effect for SupernovaEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -197,9 +204,21 @@ impl Effect for SupernovaEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let expansion_speed = (self.values[0] / 30.0) * (20.0 + bass * 18.0);

@@ -85,8 +85,16 @@ impl BongoCatEffect {
         // (Fur, InnerEar/Nose, Outline)
         match pal {
             0 => (Rgb::WHITE, Rgb::new(255, 170, 190), Rgb::new(40, 40, 50)),
-            1 => (Rgb::new(245, 170, 70), Rgb::new(255, 150, 170), Rgb::new(60, 30, 10)),
-            2 => (Rgb::new(45, 45, 55), Rgb::new(120, 80, 140), Rgb::new(15, 15, 20)),
+            1 => (
+                Rgb::new(245, 170, 70),
+                Rgb::new(255, 150, 170),
+                Rgb::new(60, 30, 10),
+            ),
+            2 => (
+                Rgb::new(45, 45, 55),
+                Rgb::new(120, 80, 140),
+                Rgb::new(15, 15, 20),
+            ),
             _ => (
                 hsv_to_rgb(color_cycle, 0.75, 1.0),
                 Rgb::new(255, 255, 255),
@@ -120,7 +128,9 @@ impl Effect for BongoCatEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -167,9 +177,21 @@ impl Effect for BongoCatEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         let speed = (self.values[0] / 30.0) * (1.0 + bass * 0.9);
@@ -289,12 +311,32 @@ impl Effect for BongoCatEffect {
 
         // Pointy Cat Ears
         // Left Ear: tip at (8, 4), base at (6..11, 8)
-        let l_ear_pts = [(8, 4), (7, 5), (8, 5), (9, 5), (6, 6), (7, 6), (8, 6), (9, 6), (10, 6)];
+        let l_ear_pts = [
+            (8, 4),
+            (7, 5),
+            (8, 5),
+            (9, 5),
+            (6, 6),
+            (7, 6),
+            (8, 6),
+            (9, 6),
+            (10, 6),
+        ];
         for &(ex, ey) in &l_ear_pts {
             frame.set(ex, ey, if ex == 8 && ey == 5 { ear_c } else { fur_c });
         }
         // Right Ear: tip at (23, 4), base at (20..25, 8)
-        let r_ear_pts = [(23, 4), (22, 5), (23, 5), (24, 5), (21, 6), (22, 6), (23, 6), (24, 6), (25, 6)];
+        let r_ear_pts = [
+            (23, 4),
+            (22, 5),
+            (23, 5),
+            (24, 5),
+            (21, 6),
+            (22, 6),
+            (23, 6),
+            (24, 6),
+            (25, 6),
+        ];
         for &(ex, ey) in &r_ear_pts {
             frame.set(ex, ey, if ex == 23 && ey == 5 { ear_c } else { fur_c });
         }
@@ -327,7 +369,11 @@ impl Effect for BongoCatEffect {
                 let py = l_paw_y + dy;
                 if px >= 0 && px < WIDTH as i32 && py >= 0 && py < HEIGHT as i32 {
                     let is_paw_edge = dx == 0 || dx == 3 || dy == 2;
-                    frame.set(px as usize, py as usize, if is_paw_edge { out_c } else { fur_c });
+                    frame.set(
+                        px as usize,
+                        py as usize,
+                        if is_paw_edge { out_c } else { fur_c },
+                    );
                 }
             }
         }
@@ -342,7 +388,11 @@ impl Effect for BongoCatEffect {
                 let py = r_paw_y + dy;
                 if px >= 0 && px < WIDTH as i32 && py >= 0 && py < HEIGHT as i32 {
                     let is_paw_edge = dx == 0 || dx == 3 || dy == 2;
-                    frame.set(px as usize, py as usize, if is_paw_edge { out_c } else { fur_c });
+                    frame.set(
+                        px as usize,
+                        py as usize,
+                        if is_paw_edge { out_c } else { fur_c },
+                    );
                 }
             }
         }
@@ -364,7 +414,11 @@ impl Effect for BongoCatEffect {
                 let bh = ((context.audio.bands[bar * 2] * 7.0).round() as usize).min(6);
                 for by in 0..bh {
                     if (8 - by) < HEIGHT {
-                        let c = if treble > 0.5 { Rgb::new(80, 200, 255) } else { Rgb::new(40, 120, 200) };
+                        let c = if treble > 0.5 {
+                            Rgb::new(80, 200, 255)
+                        } else {
+                            Rgb::new(40, 120, 200)
+                        };
                         frame.set(bx, 8 - by, c);
                     }
                 }

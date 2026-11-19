@@ -136,7 +136,9 @@ impl Effect for JuliaOrbitEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -180,9 +182,21 @@ impl Effect for JuliaOrbitEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -201,7 +215,8 @@ impl Effect for JuliaOrbitEffect {
 
         // Constant c orbits through the boundary of the Mandelbrot set
         // c = -0.7 + 0.27 * cos(t), 0.27 * sin(t)
-        let cx = -0.7 + 0.26 * (self.orbit_phase).cos() + if audio_active { mid * 0.08 } else { 0.0 };
+        let cx =
+            -0.7 + 0.26 * (self.orbit_phase).cos() + if audio_active { mid * 0.08 } else { 0.0 };
         let cy = 0.27 * (self.orbit_phase).sin() + if audio_active { treble * 0.08 } else { 0.0 };
 
         let scale = 2.4 / (base_zoom * 16.0);

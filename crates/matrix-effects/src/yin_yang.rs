@@ -112,7 +112,11 @@ impl YinYangEffect {
                     Rgb::new(255, to_byte(210.0 * b), to_byte(20.0 * b))
                 } else {
                     let silver = to_byte(230.0 * b);
-                    Rgb::new(to_byte(silver as f32 * 0.85), silver, to_byte(silver as f32 * 1.1))
+                    Rgb::new(
+                        to_byte(silver as f32 * 0.85),
+                        silver,
+                        to_byte(silver as f32 * 1.1),
+                    )
                 }
             }
             2 => {
@@ -144,7 +148,9 @@ impl Effect for YinYangEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -190,9 +196,21 @@ impl Effect for YinYangEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -235,7 +253,11 @@ impl Effect for YinYangEffect {
 
                     // Wave turbulent displacement
                     let turb = if audio_active {
-                        (u * 0.5 + self.rotation * 2.0).sin() * (v * 0.5).cos() * turb_scale * (bass + treble) * 0.5
+                        (u * 0.5 + self.rotation * 2.0).sin()
+                            * (v * 0.5).cos()
+                            * turb_scale
+                            * (bass + treble)
+                            * 0.5
                     } else {
                         0.0
                     };
@@ -274,21 +296,35 @@ impl Effect for YinYangEffect {
                     let element_shimmer = if final_yang {
                         // Fire half: boosted by bass & upward flame noise
                         let flame_noise = (u * 1.5 + v * 2.0 - self.rotation * 4.0).sin() * 0.2;
-                        (0.8 + 0.2 * flame_noise + bass * 0.4 + self.element_pulse * 0.3).clamp(0.0, 1.0)
+                        (0.8 + 0.2 * flame_noise + bass * 0.4 + self.element_pulse * 0.3)
+                            .clamp(0.0, 1.0)
                     } else {
                         // Ice half: crystalline fracture lines boosted by treble
                         let ice_crystal = (u * 3.0 - v * 3.0).abs() % 1.5 < 0.3;
-                        let crys_boost = if ice_crystal { 0.35 + treble * 0.4 } else { 0.0 };
+                        let crys_boost = if ice_crystal {
+                            0.35 + treble * 0.4
+                        } else {
+                            0.0
+                        };
                         (0.65 + crys_boost + mid * 0.2).clamp(0.0, 1.0)
                     };
 
-                    let col = Self::element_color(pal, final_yang, element_shimmer, self.color_cycle);
+                    let col =
+                        Self::element_color(pal, final_yang, element_shimmer, self.color_cycle);
                     frame.set(x, y, col);
                 } else if (corona_min_sq..=corona_max_sq).contains(&d2) {
                     // Elemental corona rim
                     let rim_t = (d2.sqrt() - main_r).abs() / 1.4;
                     let rim_c = to_byte((1.0 - rim_t) * (180.0 + self.element_pulse * 75.0));
-                    frame.set(x, y, Rgb::new(rim_c, to_byte(rim_c as f32 * 0.8), to_byte(rim_c as f32 * 0.5)));
+                    frame.set(
+                        x,
+                        y,
+                        Rgb::new(
+                            rim_c,
+                            to_byte(rim_c as f32 * 0.8),
+                            to_byte(rim_c as f32 * 0.5),
+                        ),
+                    );
                 }
             }
         }

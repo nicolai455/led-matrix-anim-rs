@@ -329,13 +329,18 @@ select option, .param-select option { background:var(--card); color:var(--text);
 <details class="card config-card" id="networkCard">
   <summary><span><span class="config-title">Wi-Fi and fallback access point</span><span class="config-subtitle">Configure prioritized station profiles and local setup access</span></span></summary>
   <div class="config-body">
-    <p class="config-notice">The AP WPA2 passphrase protects local configuration; the UI has no separate login. Stored passphrases are never returned by the API. Blank fields keep existing secrets; use the explicit clear action to remove one. Changes trigger a controlled restart after save; reconnect at <code>http://192.168.4.1/</code>.</p>
+    <p class="config-notice">Stored passphrases are never returned by the API; blank fields keep existing secrets, and the explicit clear action removes one. Saving restarts the device: it then joins the home network you configured and is reachable at the IP your router assigns — <strong>not</strong> only at <code>http://192.168.4.1/</code>. The fallback AP exists for setup and recovery while the station link is down.</p>
+    <div class="config-notice" id="networkTokenNotice" style="display:none">Changes from this network need the device setup token. <label class="config-field" style="margin-top:6px">Setup token<input id="networkSetupToken" maxlength="8" autocomplete="off" spellcheck="false" placeholder="8 characters"></label><span class="config-help">Shown only inside the home network. Enter it before saving; it is kept in this tab only.</span></div>
+    <div class="config-notice" id="networkApWarning" style="display:none; border-color:var(--yellow)"><strong>No fallback AP password set.</strong> Without one there is no recovery access point: if the new profile is wrong, the only way back is a USB flash. Set an AP passphrase before you move the device into your home network.</div>
+    <div class="btn-row" style="margin-bottom:8px"><button class="btn" id="networkScanBtn" type="button">Scan for networks</button><span class="config-help" id="networkScanStatus" role="status" aria-live="polite"></span></div>
+    <div class="playlist-list" id="networkScanResults" aria-live="polite"></div>
     <div class="config-grid"><label class="config-field">New profile SSID<input id="networkSsid" maxlength="32" autocomplete="off"></label><label class="config-field">Priority<input id="networkPriority" type="number" min="0" max="255" value="0"></label><label class="config-check"><input id="networkHidden" type="checkbox"> Hidden SSID</label></div>
-    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="networkPassword">New profile password</label><input id="networkPassword" type="password" autocomplete="new-password" aria-label="New profile password"></div></form>
+    <label class="config-check"><input id="networkOpenNetwork" type="checkbox"> Open network (no password)</label>
+    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="networkPassword">New profile password</label><input id="networkPassword" type="password" autocomplete="new-password" aria-label="New profile password" placeholder="8–64 bytes, or tick “Open network”"></div></form>
     <div class="btn-row"><button class="btn" id="networkAddProfileBtn" type="button">Add Wi-Fi profile</button></div>
     <div class="playlist-list" id="networkProfiles" aria-live="polite"></div>
     <div class="config-grid"><label class="config-field">Fallback AP SSID<input id="fallbackApSsid" maxlength="32"></label></div>
-    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="fallbackApPassword">New AP password</label><input id="fallbackApPassword" type="password" autocomplete="new-password" aria-label="New AP password"></div></form>
+    <form class="password-field" onsubmit="return false"><div class="config-field"><label for="fallbackApPassword">New AP password</label><input id="fallbackApPassword" type="password" autocomplete="new-password" aria-label="New AP password" placeholder="at least 8 bytes"></div></form>
     <label class="config-check"><input id="fallbackApPasswordClear" type="checkbox"> Clear saved AP password and disable fallback AP</label>
     <div class="btn-row"><button class="btn btn-primary" id="networkSaveBtn" type="button">Save Wi-Fi settings</button><span id="networkStatus" role="status" aria-live="polite"></span></div>
   </div>
@@ -400,8 +405,8 @@ select option, .param-select option { background:var(--card); color:var(--text);
     <summary class="section-summary"><span><strong>Runtime state &amp; device</strong><small>Save settings to device storage or restart.</small></span></summary>
     <p class="config-help" style="margin-bottom:10px">Save or clear the current runtime state separately from hardware configuration.</p>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="saveState()">Save runtime state</button>
-      <button class="btn btn-danger" onclick="clearState()">Clear runtime state</button>
+      <button class="btn btn-primary" id="saveStateBtn" onclick="saveState()">Save runtime state</button>
+      <button class="btn btn-danger" id="clearStateBtn" onclick="clearState()">Clear runtime state</button>
       <button class="btn" id="restartBtn" onclick="restartDevice()">Restart Device</button>
     </div>
   </details>
@@ -416,6 +421,10 @@ select option, .param-select option { background:var(--card); color:var(--text);
 <script>
 let state = {};
 let catalog = [];
+// The Wi-Fi configuration is served by /api/network, not by /api/state. `state`
+// is replaced wholesale on every snapshot poll, so keeping it there lost the
+// profile list roughly a second after loading — the "can't save a Wi-Fi" bug.
+let networkConfig = null;
 let effectSearchQuery = '';
 let playlistEntries = [];
 let playlistCollection = { playlists: [], selectedId: null };
@@ -428,6 +437,9 @@ let playlistStatePersisting = false;
 let playlistSaveVersion = 0;
 let playlistPendingPersistence = null;
 let playlistPersistenceNotice = '';
+// Server-side playlist failures must survive the 500 ms snapshot poll: they are
+// cleared only by the next successful playlist action, never by updatePlaylistUI().
+let playlistCommandError = '';
 let lastRenderedPlaylistView = '';
 const MAX_PLAYLIST_ENTRIES = 73;
 const MIN_PLAYLIST_ENTRY_MS = 1000;
@@ -448,6 +460,17 @@ let previewReady = false;
 let previewConnected = false;
 
 function previewMode() { return document.getElementById('previewMode').value; }
+// The host/device snapshot is camelCase (effectId, audioSource, ...) while legacy
+// payloads use snake_case. Normalize once on ingest so every consumer works.
+function normalizeSnapshot(source) {
+  if (!source || typeof source !== 'object') return source;
+  const s = source;
+  if (s.effect_id === undefined && typeof s.effectId === 'string') s.effect_id = s.effectId;
+  if (s.audio_source === undefined && typeof s.audioSource === 'string') s.audio_source = s.audioSource;
+  if (s.audio_status === undefined && typeof s.audioStatus === 'string') s.audio_status = s.audioStatus;
+  if (s.color_mode === undefined && typeof s.colorMode === 'string') s.color_mode = s.colorMode;
+  return s;
+}
 function previewStatus(text) { document.getElementById('previewStatus').textContent = text; }
 
 function syncPreviewState() {
@@ -723,7 +746,9 @@ async function postCommand(kind, payload) {
   } catch (e) {
     showToast('Network error submitting command', 'var(--red)');
     setTimeout(clearToast, 3000);
-    throw e;
+    // Never leave an unhandled rejection behind: the caller inspects `error`,
+    // and the UI must stay usable while the device is unreachable.
+    return { error: 'Network error: ' + String(e && e.message ? e.message : e) };
   }
 }
 
@@ -773,9 +798,10 @@ async function loadNetworkConfig() {
     const value = await response.json();
     if (!response.ok) throw new Error(value.error || response.statusText);
     const profiles = Array.isArray(value.wifiProfiles) ? value.wifiProfiles : [];
-    state.networkConfig = value;
+    networkConfig = value;
     document.getElementById('fallbackApSsid').value = value.fallbackApSsid || 'JDJLIGHT';
     document.getElementById('fallbackApPasswordClear').checked = false;
+    document.getElementById('networkApWarning').style.display = value.fallbackApPasswordConfigured === false ? 'block' : 'none';
     renderNetworkProfiles();
     status.textContent = value.networkAvailable === false
       ? 'Wi-Fi configuration loaded; hardware networking unavailable in this host adapter.'
@@ -787,37 +813,87 @@ async function loadNetworkConfig() {
   } catch (error) {
     status.textContent = 'Wi-Fi configuration unavailable: ' + String(error.message || error);
   }
+  await loadNetworkSetupToken();
+}
+
+// The setup token is only served to clients inside the device's station subnet.
+// When it is absent the card stays usable through the fallback AP.
+async function loadNetworkSetupToken() {
+  const notice = document.getElementById('networkTokenNotice');
+  try {
+    const info = await fetchJSON('/api/firmware');
+    if (typeof info.setupToken === 'string' && info.setupToken) {
+      notice.style.display = 'block';
+      const field = document.getElementById('networkSetupToken');
+      if (!field.value) field.placeholder = info.setupToken;
+      return;
+    }
+  } catch (error) { /* no firmware endpoint in this adapter */ }
+  notice.style.display = 'none';
+}
+
+function setupTokenValue() {
+  const notice = document.getElementById('networkTokenNotice');
+  if (notice.style.display === 'none') return '';
+  const field = document.getElementById('networkSetupToken');
+  const typed = (field.value || '').trim();
+  return typed || (field.placeholder || '').trim();
+}
+
+function networkStatusText(snapshot) {
+  const wifi = snapshot && snapshot.wifi;
+  if (!wifi || !Array.isArray(wifi.profiles) || !wifi.profiles.length) return {};
+  const bySsid = {};
+  wifi.profiles.forEach(profile => { bySsid[profile.ssid] = profile.state; });
+  return bySsid;
+}
+
+// Re-render the profile list only when the live Wi-Fi state actually changed, so
+// the fast /api/state poll does not thrash the DOM.
+let lastNetworkLiveView = '';
+function updateNetworkLiveState() {
+  const wifi = state && state.wifi;
+  const view = JSON.stringify(wifi || null);
+  if (view === lastNetworkLiveView) return;
+  lastNetworkLiveView = view;
+  renderNetworkProfiles();
 }
 
 function renderNetworkProfiles() {
   const container = document.getElementById('networkProfiles');
-  const config = state.networkConfig || {};
+  const config = networkConfig || {};
   const profiles = Array.isArray(config.wifiProfiles) ? config.wifiProfiles : [];
+  const liveStates = networkStatusText(state);
   while (container.firstChild) container.removeChild(container.firstChild);
   profiles.forEach((profile, index) => {
     const row = document.createElement('div');
     row.className = 'playlist-entry';
     const label = document.createElement('span');
     label.className = 'playlist-entry-title';
-    label.textContent = profile.ssid + ' · priority ' + profile.priority + (profile.hidden ? ' · hidden' : '') + (profile.passwordConfigured ? ' · password saved' : ' · open network');
+    const liveState = liveStates[profile.ssid];
+    label.textContent = profile.ssid + ' · priority ' + profile.priority + (profile.hidden ? ' · hidden' : '') + (profile.passwordConfigured ? ' · password saved' : ' · open network') + (liveState ? ' · ' + liveState : '');
     row.appendChild(label);
     const actions = document.createElement('div');
     actions.className = 'playlist-entry-actions';
-    const button = (text, title, action) => {
+    const button = (text, title, action, actionName) => {
       const item = document.createElement('button');
       item.type = 'button'; item.className = 'btn'; item.textContent = text; item.title = title; item.setAttribute('aria-label', title); item.onclick = action;
+      // Stable hooks for the GUI E2E suite; set at creation so no querySelectorAll is needed.
+      item.dataset.networkIndex = String(index);
+      item.dataset.networkAction = actionName;
       return item;
     };
-    actions.appendChild(button('↑', 'Move Wi-Fi profile up', () => moveNetworkProfile(index, -1)));
-    actions.appendChild(button('↓', 'Move Wi-Fi profile down', () => moveNetworkProfile(index, 1)));
-    actions.appendChild(button('Edit', 'Edit Wi-Fi profile', () => editNetworkProfile(index)));
-    actions.appendChild(button('Remove', 'Remove Wi-Fi profile', () => { profiles.splice(index, 1); renderNetworkProfiles(); }));
+    actions.appendChild(button('↑', 'Move Wi-Fi profile up', () => moveNetworkProfile(index, -1), 'move-up'));
+    actions.appendChild(button('↓', 'Move Wi-Fi profile down', () => moveNetworkProfile(index, 1), 'move-down'));
+    actions.appendChild(button('Edit', 'Edit Wi-Fi profile', () => editNetworkProfile(index), 'edit'));
+    actions.appendChild(button('Remove', 'Remove Wi-Fi profile', () => { profiles.splice(index, 1); renderNetworkProfiles(); }, 'remove'));
+    row.dataset.networkIndex = String(index);
     row.appendChild(actions); container.appendChild(row);
   });
 }
 
 function moveNetworkProfile(index, direction) {
-  const profiles = state.networkConfig && state.networkConfig.wifiProfiles;
+  const profiles = networkConfig && networkConfig.wifiProfiles;
   const target = index + direction;
   if (!Array.isArray(profiles) || target < 0 || target >= profiles.length) return;
   [profiles[index], profiles[target]] = [profiles[target], profiles[index]];
@@ -826,7 +902,7 @@ function moveNetworkProfile(index, direction) {
 }
 
 function editNetworkProfile(index) {
-  const profile = state.networkConfig.wifiProfiles[index];
+  const profile = networkConfig.wifiProfiles[index];
   if (!profile) return;
   document.getElementById('networkSsid').value = profile.ssid;
   document.getElementById('networkPassword').value = '';
@@ -837,7 +913,7 @@ function editNetworkProfile(index) {
 
 async function saveNetworkConfig() {
   const status = document.getElementById('networkStatus');
-  const config = state.networkConfig || { wifiProfiles: [] };
+  const config = networkConfig || { wifiProfiles: [] };
   const password = document.getElementById('fallbackApPassword').value;
   const networkPassword = document.getElementById('networkPassword').value;
   const payload = {
@@ -852,6 +928,11 @@ async function saveNetworkConfig() {
   };
   const ssidEl = document.getElementById('networkSsid');
   const editIndex = Number(ssidEl.dataset.editIndex);
+  const openNetwork = document.getElementById('networkOpenNetwork').checked;
+  if (openNetwork && networkPassword) {
+    status.textContent = 'An open network has no password; clear the password field or untick “Open network”.';
+    return;
+  }
   if (ssidEl.value || networkPassword || ssidEl.dataset.editIndex !== undefined) {
     const ssid = ssidEl.value;
     const priority = Number(document.getElementById('networkPriority').value);
@@ -859,7 +940,7 @@ async function saveNetworkConfig() {
     const existing = Number.isInteger(editIndex) && editIndex >= 0 ? payload.wifiProfiles[editIndex] : null;
     const profile = existing || {};
     if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || !Number.isInteger(priority) || priority < 0 || priority > 255 || (networkPassword && new TextEncoder().encode(networkPassword).length < 8)) {
-      status.textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes.';
+      status.textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes. Tick “Open network” for a network without a password.';
       return;
     }
     if (!existing && payload.wifiProfiles.length >= 5) {
@@ -871,9 +952,16 @@ async function saveNetworkConfig() {
       return;
     }
     Object.assign(profile, { ssid, priority, hidden });
-    if (networkPassword) {
+    if (openNetwork) {
+      // Explicitly open: the firmware stores no password, the UI previously
+      // demanded eight bytes and made open networks impossible to save.
+      profile.clearPassword = true;
+      delete profile.password;
+      delete profile.keepPassword;
+    } else if (networkPassword) {
       profile.password = networkPassword;
       delete profile.keepPassword;
+      delete profile.clearPassword;
     } else if (existing && existing.passwordConfigured) {
       profile.keepPassword = true;
     }
@@ -881,19 +969,83 @@ async function saveNetworkConfig() {
   }
   if (password) payload.fallbackApPassword = password;
   if (document.getElementById('fallbackApPasswordClear').checked) payload.clearFallbackApPassword = true;
+  const token = setupTokenValue();
   try {
-    const response = await fetch('/api/network', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' }, body: JSON.stringify(payload) });
+    const headers = { 'Content-Type': 'application/json', 'X-Matrix-Control': '1' };
+    if (token) headers['X-Matrix-Setup-Token'] = token;
+    const response = await fetch('/api/network', { method: 'POST', headers, body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || response.statusText);
-    state.networkConfig = result.config;
+    networkConfig = result.config;
     document.getElementById('fallbackApPassword').value = '';
     document.getElementById('networkPassword').value = '';
     document.getElementById('networkSsid').value = '';
+    document.getElementById('networkOpenNetwork').checked = false;
     delete document.getElementById('networkSsid').dataset.editIndex;
     document.getElementById('fallbackApPasswordClear').checked = false;
-    status.textContent = 'Saved. The device will restart; reconnect at ' + (result.address || 'http://192.168.4.1/');
+    status.textContent = 'Saved. The device will restart and join the configured home network; find it there at the IP your router assigns. The fallback AP at http://192.168.4.1/ only stays up while the station link is down.';
     renderNetworkProfiles();
   } catch (error) { status.textContent = 'Save failed: ' + String(error.message || error); }
+}
+
+async function scanNetwork() {
+  const status = document.getElementById('networkScanStatus');
+  status.textContent = 'Scanning…';
+  try {
+    const response = await fetch('/api/network/scan', { cache: 'no-store' });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || response.statusText);
+    const networks = Array.isArray(value.networks) ? value.networks : [];
+    if (value.stale && !networks.length) {
+      // The radio may still be scanning; poll a few times before giving up.
+      if (!scanNetwork.attempts) scanNetwork.attempts = 0;
+      if (scanNetwork.attempts < 6) {
+        scanNetwork.attempts += 1;
+        status.textContent = 'Scan in progress…';
+        setTimeout(scanNetwork, 1500);
+        return;
+      }
+    }
+    scanNetwork.attempts = 0;
+    renderScanResults(networks);
+    status.textContent = networks.length
+      ? networks.length + ' network(s)' + (value.connectionMayDrop ? ' — the scan briefly interrupts the station link.' : '')
+      : 'No networks found. Move closer to the router and scan again.';
+  } catch (error) {
+    scanNetwork.attempts = 0;
+    status.textContent = 'Scan failed: ' + String(error.message || error);
+  }
+}
+
+function renderScanResults(networks) {
+  const container = document.getElementById('networkScanResults');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  networks.forEach(network => {
+    const row = document.createElement('div');
+    row.className = 'playlist-entry';
+    const label = document.createElement('span');
+    label.className = 'playlist-entry-title';
+    const bars = network.rssi >= -55 ? '▂▄▆█' : network.rssi >= -67 ? '▂▄▆' : network.rssi >= -78 ? '▂▄' : '▂';
+    const lock = network.auth && network.auth !== 'open' ? ' 🔒' : ' (open)';
+    label.textContent = network.ssid + ' · ch ' + network.channel + ' · ' + network.rssi + ' dBm ' + bars + lock;
+    row.appendChild(label);
+    const actions = document.createElement('div');
+    actions.className = 'playlist-entry-actions';
+    const use = document.createElement('button');
+    use.type = 'button'; use.className = 'btn'; use.textContent = 'Use';
+    use.title = 'Use this SSID for a new profile';
+    use.onclick = () => {
+      document.getElementById('networkSsid').value = network.ssid;
+      document.getElementById('networkOpenNetwork').checked = !network.auth || network.auth === 'open';
+      document.getElementById('networkPassword').value = '';
+      document.getElementById('networkHidden').checked = false;
+      delete document.getElementById('networkSsid').dataset.editIndex;
+      document.getElementById('networkScanStatus').textContent = 'SSID filled in' + (network.auth && network.auth !== 'open' ? '; enter the ' + network.auth + ' password below.' : '; open network selected.');
+    };
+    actions.appendChild(use);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
 }
 
 function addNetworkProfile() {
@@ -902,11 +1054,16 @@ function addNetworkProfile() {
   const priority = Number(document.getElementById('networkPriority').value);
   const password = document.getElementById('networkPassword').value;
   const hidden = document.getElementById('networkHidden').checked;
-  if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || !Number.isInteger(priority) || priority < 0 || priority > 255 || (password && new TextEncoder().encode(password).length < 8)) {
-    document.getElementById('networkStatus').textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes.';
+  const openNetwork = document.getElementById('networkOpenNetwork').checked;
+  if (openNetwork && password) {
+    document.getElementById('networkStatus').textContent = 'An open network has no password; clear the password field or untick “Open network”.';
     return;
   }
-  const config = state.networkConfig || (state.networkConfig = { wifiProfiles: [] });
+  if (!ssid.trim() || new TextEncoder().encode(ssid).length > 32 || !Number.isInteger(priority) || priority < 0 || priority > 255 || (password && new TextEncoder().encode(password).length < 8)) {
+    document.getElementById('networkStatus').textContent = 'SSID must be 1–32 UTF-8 bytes, priority 0–255, password empty or at least 8 bytes. Tick “Open network” for a network without a password.';
+    return;
+  }
+  const config = networkConfig || (networkConfig = { wifiProfiles: [] });
   if (!Array.isArray(config.wifiProfiles)) config.wifiProfiles = [];
   const editIndex = Number(ssidEl.dataset.editIndex);
   if ((!Number.isInteger(editIndex) || editIndex < 0) && (config.wifiProfiles.length >= 5 || config.wifiProfiles.some(profile => profile.ssid === ssid))) {
@@ -914,13 +1071,15 @@ function addNetworkProfile() {
     return;
   }
   const profile = { ssid, priority, hidden };
-  if (password) profile.password = password;
+  if (openNetwork) profile.clearPassword = true;
+  else if (password) profile.password = password;
   if (Number.isInteger(editIndex) && editIndex >= 0 && editIndex < config.wifiProfiles.length) {
-    if (!password && config.wifiProfiles[editIndex].passwordConfigured) profile.keepPassword = true;
+    if (!password && !openNetwork && config.wifiProfiles[editIndex].passwordConfigured) profile.keepPassword = true;
     config.wifiProfiles[editIndex] = profile;
     delete ssidEl.dataset.editIndex;
   } else config.wifiProfiles.push(profile);
   ssidEl.value = ''; document.getElementById('networkPassword').value = '';
+  document.getElementById('networkOpenNetwork').checked = false;
   renderNetworkProfiles();
 }
 
@@ -956,7 +1115,7 @@ function renderPlaylistEntries(snapshot) {
 
     const actions = document.createElement('div');
     actions.className = 'playlist-entry-actions';
-    const button = (text, title, action) => {
+    const button = (text, title, action, actionName) => {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'btn';
@@ -964,11 +1123,15 @@ function renderPlaylistEntries(snapshot) {
       item.title = title;
       item.setAttribute('aria-label', title);
       item.onclick = action;
+      // Stable hooks for the GUI E2E suite; set at creation so no querySelectorAll is needed.
+      item.dataset.playlistIndex = String(index);
+      item.dataset.playlistAction = actionName;
       return item;
     };
-    actions.appendChild(button('↑', 'Move entry up', () => movePlaylistEntry(index, -1)));
-    actions.appendChild(button('↓', 'Move entry down', () => movePlaylistEntry(index, 1)));
-    actions.appendChild(button('−', 'Remove entry', () => removePlaylistEntry(index)));
+    actions.appendChild(button('↑', 'Move entry up', () => movePlaylistEntry(index, -1), 'move-up'));
+    actions.appendChild(button('↓', 'Move entry down', () => movePlaylistEntry(index, 1), 'move-down'));
+    actions.appendChild(button('−', 'Remove entry', () => removePlaylistEntry(index), 'remove'));
+    row.dataset.playlistIndex = String(index);
     row.appendChild(actions);
     container.appendChild(row);
   });
@@ -1046,11 +1209,11 @@ async function setPlaylistDuration(index, value, input) {
 }
 
 async function applyPlaylistConfig() {
-  const notice = document.getElementById('playlistNotice');
   playlistLoopDraft = document.getElementById('playlistLoop').checked;
   if (playlistEntries.length > MAX_PLAYLIST_ENTRIES || playlistEntries.some(entry =>
     !playlistEffect(entry.effectId) || !Number.isSafeInteger(entry.durationMs) || entry.durationMs < MIN_PLAYLIST_ENTRY_MS || entry.durationMs > MAX_PLAYLIST_ENTRY_MS)) {
-    notice.textContent = 'Queue contains an invalid effect or duration. Correct the queue before saving.';
+    playlistCommandError = 'Queue contains an invalid effect or duration. Correct the queue before saving.';
+    updatePlaylistUI();
     return;
   }
   const submittedEntries = playlistEntries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
@@ -1073,68 +1236,76 @@ async function applyPlaylistConfig() {
     notice.textContent = 'Queue command accepted' + (result && result.pending ? ' (queued)' : '') + '; waiting for device snapshot.';
     updatePlaylistUI();
   } catch (error) {
-    notice.textContent = 'Queue save failed.';
+    playlistPersistenceNotice = '';
+    playlistCommandError = 'Queue save failed: ' + String(error.message || error);
+    updatePlaylistUI();
+  }
+}
+
+// Resolve a startable active queue without the old three-path special casing.
+// Priority: unsaved draft > saved playlist selection > already active queue.
+async function ensureStartableQueue() {
+  const collection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
+    ? state.playlistCollection : {playlists:[], selectedId:null};
+  const selectEl = document.getElementById('playlistSavedSelect');
+  const selectedId = selectEl.value || playlistSelectionDraftId || collection.selectedId;
+  const selected = collection.playlists.find(item => item.id === selectedId);
+  const activeMatches = snapshot => !!selected && playlistSnapshotMatchesDraft(snapshot.playlist, selected.entries, selected.loop);
+
+  if (playlistDraftDirty && playlistEntries.length) {
+    // A draft that is byte-identical to a saved playlist only needs selecting;
+    // never resend an oversized queue the device already stores.
+    const savedMatch = collection.playlists.find(item => playlistSnapshotMatchesDraft(
+      {entries:item.entries,loop:item.loop}, playlistEntries, playlistLoopDraft));
+    if (savedMatch) {
+      const selection = await postCommand('playlist_select', {id: savedMatch.id});
+      if (selection && selection.error) throw new Error(selection.error);
+      await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+        snapshot.playlistCollection.selectedId === savedMatch.id &&
+        playlistSnapshotMatchesDraft(snapshot.playlist, savedMatch.entries, savedMatch.loop));
+      playlistDraftDirty = false;
+      playlistAwaitingSnapshot = false;
+      playlistDraftId = savedMatch.id;
+      playlistSelectionDraftId = savedMatch.id;
+      return;
+    }
+    const entries = playlistEntries.map(entry => ({effectId: entry.effectId, durationMs: entry.durationMs}));
+    const loop = document.getElementById('playlistLoop').checked;
+    const config = await postCommand('playlist_config', {entries, loop});
+    if (config && config.error) throw new Error(config.error);
+    await waitForPlaylistSnapshot(snapshot => playlistSnapshotMatchesDraft(snapshot.playlist, entries, loop));
+    playlistDraftDirty = false;
+    playlistAwaitingSnapshot = false;
+    playlistLoopDraft = loop;
+    return;
+  }
+  if (selected && !(collection.selectedId === selected.id && activeMatches(state))) {
+    const selection = await postCommand('playlist_select', {id: selected.id});
+    if (selection && selection.error) throw new Error(selection.error);
+    await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+      snapshot.playlistCollection.selectedId === selected.id && activeMatches(snapshot));
+    return;
+  }
+  if (!state.playlist || !Array.isArray(state.playlist.entries) || !state.playlist.entries.length) {
+    throw new Error('No queue is loaded. Select a saved playlist or load a preset first.');
   }
 }
 
 async function controlPlaylist(action) {
   if (!['start', 'pause', 'resume', 'stop', 'next', 'previous'].includes(action)) return;
-  const notice = document.getElementById('playlistNotice');
   try {
-    if (action === 'start') {
-      const collection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
-        ? state.playlistCollection : {playlists:[], selectedId:null};
-      let selectedId = document.getElementById('playlistSavedSelect').value || playlistSelectionDraftId || collection.selectedId;
-      if (selectedId && !collection.playlists.some(item => item.id === selectedId)) selectedId = collection.selectedId;
-      let selected = collection.playlists.find(item => item.id === selectedId);
-      const selectionDirty = !!selected && selectedId !== collection.selectedId;
-      if (playlistDraftDirty && playlistEntries.length) {
-        const entries = playlistEntries.map(entry => ({ effectId: entry.effectId, durationMs: entry.durationMs }));
-        const loop = document.getElementById('playlistLoop').checked;
-        const builtInPreset = playlistDraftId === 'sound-default' && collection.playlists.some(item => item.id === 'sound-default');
-        if (builtInPreset) {
-          playlistDraftDirty = false;
-          playlistAwaitingSnapshot = false;
-          playlistLoopDraft = loop;
-          selectedId = 'sound-default';
-          selected = collection.playlists.find(item => item.id === selectedId);
-        } else if (selectionDirty) {
-          if (!selected || !playlistSnapshotMatchesDraft({entries:selected.entries,loop:selected.loop}, entries, loop)) {
-            throw new Error('Selected playlist has unsaved edits; save it before starting.');
-          }
-          playlistDraftDirty = false;
-          playlistAwaitingSnapshot = false;
-        } else {
-          const config = await postCommand('playlist_config', { entries, loop });
-          if (config && config.error) throw new Error(config.error);
-          await waitForPlaylistSnapshot(snapshot => playlistSnapshotMatchesDraft(snapshot.playlist, entries, loop));
-          playlistDraftDirty = false;
-          playlistAwaitingSnapshot = false;
-          playlistLoopDraft = loop;
-          selectedId = null;
-          selected = null;
-        }
-      }
-      const active = state.playlist && Array.isArray(state.playlist.entries) ? state.playlist : {entries:[]};
-      const selectedIsActive = selected && collection.selectedId === selected.id &&
-        playlistSnapshotMatchesDraft(active, selected.entries, selected.loop);
-      if (selected && !selectedIsActive) {
-        const selection = await postCommand('playlist_select', { id: selected.id });
-        if (selection && selection.error) throw new Error(selection.error);
-        await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
-          snapshot.playlistCollection.selectedId === selected.id &&
-          playlistSnapshotMatchesDraft(snapshot.playlist, selected.entries, selected.loop));
-      } else if (!active.entries.length) {
-        throw new Error('Select a saved playlist or load and save a queue before starting.');
-      }
-    }
+    if (action === 'start') await ensureStartableQueue();
     const result = await postCommand('playlist_control', { action });
     if (result && result.error) throw new Error(result.error);
+    // A successful playlist action clears any stale failure banner.
+    playlistCommandError = '';
     playlistPersistenceNotice = '';
-    notice.textContent = '';
+    document.getElementById('playlistNotice').textContent = '';
+    updatePlaylistUI();
   } catch (error) {
     playlistPersistenceNotice = '';
-    notice.textContent = 'Playlist ' + action + ' failed: ' + String(error.message || error);
+    playlistCommandError = 'Playlist ' + action + ' failed: ' + String(error.message || error);
+    updatePlaylistUI();
   }
 }
 
@@ -1251,22 +1422,51 @@ function loadDefaultSoundPlaylist() {
 async function saveNamedPlaylist() {
   const name = document.getElementById('playlistNameInput').value.trim();
   if (!name || new TextEncoder().encode(name).length > 64 || !playlistEntries.length || playlistEntries.length > MAX_PLAYLIST_ENTRIES) {
-    document.getElementById('playlistNotice').textContent = 'Give the playlist a 1–64 byte name and add 1–73 valid entries.';
+    playlistCommandError = 'Give the playlist a 1–64 byte name and add 1–73 valid entries.';
+    updatePlaylistUI();
     return;
   }
   if (playlistEntries.some(entry => !playlistEffect(entry.effectId) || !Number.isSafeInteger(entry.durationMs) || entry.durationMs < MIN_PLAYLIST_ENTRY_MS || entry.durationMs > MAX_PLAYLIST_ENTRY_MS)) {
-    document.getElementById('playlistNotice').textContent = 'Playlist contains an invalid effect or duration.';
+    playlistCommandError = 'Playlist contains an invalid effect or duration.';
+    updatePlaylistUI();
     return;
   }
   if (!playlistDraftId) await createNewPlaylistDraft();
+  // Nothing to write when the draft is byte-identical to the stored playlist:
+  // select the stored copy instead of resending a queue that may exceed the
+  // device body/size limits (e.g. the 73-entry sound-reactive default).
+  const stored = playlistCollection.playlists.find(item => item.id === playlistDraftId &&
+    item.name === name && !!item.loop === playlistLoopDraft &&
+    playlistSnapshotMatchesDraft({entries:item.entries,loop:item.loop}, playlistEntries, playlistLoopDraft));
+  if (stored) {
+    try {
+      const selection = await postCommand('playlist_select', {id: stored.id});
+      if (selection && selection.error) throw new Error(selection.error);
+      await waitForPlaylistSnapshot(snapshot => snapshot.playlistCollection &&
+        snapshot.playlistCollection.selectedId === stored.id &&
+        playlistSnapshotMatchesDraft(snapshot.playlist, stored.entries, stored.loop));
+      playlistDraftDirty = false;
+      playlistAwaitingSnapshot = false;
+      playlistSelectionDraftId = stored.id;
+      playlistCommandError = '';
+      await saveState();
+      document.getElementById('playlistNotice').textContent = 'Playlist “' + name + '” is already stored; selected it. Playback remains stopped.';
+    } catch (error) {
+      playlistCommandError = 'Playlist save failed: ' + String(error.message || error);
+    }
+    updatePlaylistUI();
+    return;
+  }
   const version = playlistSaveVersion;
   const payload = {id:playlistDraftId,name,entries:playlistEntries.map(entry => ({effectId:entry.effectId,durationMs:entry.durationMs})),loop:playlistLoopDraft};
   playlistDraftDirty = true;
   const response = await postCommand('playlist_save', payload);
   if (response && response.error) {
-    document.getElementById('playlistNotice').textContent = 'Playlist save failed: ' + response.error;
+    playlistCommandError = 'Playlist save failed: ' + response.error;
+    updatePlaylistUI();
     return;
   }
+  playlistCommandError = '';
   playlistAwaitingSnapshot = true;
   if (response && response.pending) {
     playlistPersistenceNotice = 'Playlist save queued; waiting for matching device snapshot.';
@@ -1295,7 +1495,7 @@ async function saveNamedPlaylist() {
     playlistDraftDirty = true;
     playlistAwaitingSnapshot = false;
     playlistPersistenceNotice = '';
-    document.getElementById('playlistNotice').textContent = 'Playlist active but persistent state save failed: ' + String(error.message || error);
+    playlistCommandError = 'Playlist active but persistent state save failed: ' + String(error.message || error);
   }
   updatePlaylistUI();
 }
@@ -1380,6 +1580,11 @@ function updatePlaylistUI() {
   playlistCollection = state.playlistCollection && Array.isArray(state.playlistCollection.playlists)
     ? state.playlistCollection : {playlists:[], selectedId:null};
   if (!playlistDraftDirty && !playlistSelectionDraftId) playlistDraftId = playlistCollection.selectedId;
+  // With exactly one stored playlist an unset dropdown is never a real choice:
+  // preselect it so Start is not silently disabled on a fresh boot.
+  if (!playlistSelectionDraftId && !playlistCollection.selectedId && playlistCollection.playlists.length === 1) {
+    playlistSelectionDraftId = playlistCollection.playlists[0].id;
+  }
   renderPlaylistSelector();
   const selected = playlistCollection.playlists.find(item => item.id === (playlistSelectionDraftId || playlistCollection.selectedId));
   const selectedPlaylist = playlistCollection.playlists.find(item => item.id === playlistDraftId);
@@ -1429,21 +1634,26 @@ function updatePlaylistUI() {
   else if (!playlistDraftDirty && status === 'stopped' && snapshot.entries.length && state.effect_id)
     messages.push('Playback stopped; manual effect selection is active and is not part of this queue.');
   if (status === 'running' && index < 0) messages.push('Playlist status is inconsistent: running without a current entry.');
+
+  const selectedId = document.getElementById('playlistSavedSelect').value;
+  const hasSelectedPlaylist = playlistCollection.playlists.some(item => item.id === selectedId);
+  const draftStartable = playlistDraftDirty && playlistEntries.length &&
+    (!playlistDraftId || playlistCollection.playlists.some(item => item.id === playlistDraftId));
+  // Explicit reason so the button is never disabled without an explanation.
+  const noQueueSelected = status !== 'running' && !draftStartable && !snapshot.entries.length && !hasSelectedPlaylist;
+  if (noQueueSelected) {
+    messages.push('No playlist selected. Pick a saved playlist above or press “Load sound-reactive default (10 s each)”, then “Save queue”.');
+  }
+  if (playlistCommandError) messages.unshift(playlistCommandError);
   if (playlistPersistenceNotice) messages.unshift(playlistPersistenceNotice);
   if (messages.length) notice.textContent = messages.join(' ');
   else if (playlistPersistenceNotice) notice.textContent = playlistPersistenceNotice;
+  else if (playlistCommandError) notice.textContent = playlistCommandError;
   else if (notice.textContent.startsWith('Queue save failed') || notice.textContent.startsWith('Playlist ') || notice.textContent.startsWith('Queue command accepted')) {
     // Preserve a transient command status until replaced by the next operation.
   } else notice.textContent = '';
-  if (playlistDraftDirty && playlistEntries.length &&
-      (!playlistDraftId || playlistCollection.playlists.some(item => item.id === playlistDraftId))) {
-    document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot;
-  } else {
-    const selectedId = document.getElementById('playlistSavedSelect').value;
-    const hasSelectedPlaylist = playlistCollection.playlists.some(item => item.id === selectedId);
-    document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot ||
-      (playlistDraftDirty && !!playlistEntries.length) || (!snapshot.entries.length && !hasSelectedPlaylist);
-  }
+  document.getElementById('playlistStartBtn').disabled = status === 'running' || playlistAwaitingSnapshot ||
+    (!draftStartable && ((playlistDraftDirty && !!playlistEntries.length) || noQueueSelected));
   document.getElementById('playlistPauseBtn').disabled = playlistDraftDirty || status !== 'running';
   document.getElementById('playlistResumeBtn').disabled = playlistDraftDirty || status !== 'paused';
   document.getElementById('playlistStopBtn').disabled = playlistDraftDirty || status === 'stopped';
@@ -1663,6 +1873,7 @@ function updateUI() {
   }
   document.getElementById('cycleToggle').checked = state.cycle === 'ON';
   updatePlaylistUI();
+  updateNetworkLiveState();
 
   // Audio buttons
   ['Off', 'Synthetic', 'Mic'].forEach(s => {
@@ -1877,7 +2088,7 @@ async function loop() {
   }
   try {
     const s = await fetchJSON('/api/state');
-    state = s;
+    state = normalizeSnapshot(s);
     queueMicHistory(s);
     previewConnected = true;
     syncPreviewState();
@@ -1928,6 +2139,7 @@ async function init() {
   document.getElementById('playlistApplyBtn').onclick = saveNamedPlaylist;
   document.getElementById('networkAddProfileBtn').onclick = addNetworkProfile;
   document.getElementById('networkSaveBtn').onclick = saveNetworkConfig;
+  document.getElementById('networkScanBtn').onclick = scanNetwork;
 
   try {
     let effects = await fetchJSON('/api/effects');

@@ -4,7 +4,12 @@ use matrix_core::{
 };
 use std::f32::consts::PI;
 
-const PALETTES: &[&str] = &["Caribbean Pool", "Bioluminescent", "Sunlit Laguna", "Rainbow"];
+const PALETTES: &[&str] = &[
+    "Caribbean Pool",
+    "Bioluminescent",
+    "Sunlit Laguna",
+    "Rainbow",
+];
 
 const PARAMETERS: [ParameterDescriptor; 5] = [
     ParameterDescriptor {
@@ -134,7 +139,9 @@ impl Effect for WaterCausticsEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -178,9 +185,21 @@ impl Effect for WaterCausticsEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         if beat {
@@ -215,7 +234,8 @@ impl Effect for WaterCausticsEffect {
                     let dx = x as f32 - 15.5;
                     let dy = y as f32 - 15.5;
                     let r = (dx * dx + dy * dy).sqrt();
-                    ((r * 2.0 - (1.0 - self.drop_ripple) * 16.0).sin() * 0.5).max(0.0) * self.drop_ripple
+                    ((r * 2.0 - (1.0 - self.drop_ripple) * 16.0).sin() * 0.5).max(0.0)
+                        * self.drop_ripple
                 } else {
                     0.0
                 };
@@ -228,7 +248,8 @@ impl Effect for WaterCausticsEffect {
 
                 // Approximate surface curvature / light focal focus (2nd derivative / product)
                 // Fast x^2.5 computation via x * x * sqrt(x) instead of slow transcendental powf(2.5)
-                let c_base = (((w1 * w2 + w3) + 1.2) * 0.45 + drop + surface_chop + mid * 0.15).max(0.0);
+                let c_base =
+                    (((w1 * w2 + w3) + 1.2) * 0.45 + drop + surface_chop + mid * 0.15).max(0.0);
                 let caustic_val = c_base * c_base * c_base.sqrt();
 
                 let col = Self::caustic_color(pal, self.color_cycle, caustic_val, clarity);

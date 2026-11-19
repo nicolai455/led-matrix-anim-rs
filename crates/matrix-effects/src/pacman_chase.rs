@@ -80,7 +80,13 @@ impl PacmanChaseEffect {
         Self::default()
     }
 
-    fn ghost_color(pal: usize, ghost_idx: usize, is_scared: bool, flash_white: bool, color_cycle: f32) -> Rgb {
+    fn ghost_color(
+        pal: usize,
+        ghost_idx: usize,
+        is_scared: bool,
+        flash_white: bool,
+        color_cycle: f32,
+    ) -> Rgb {
         if is_scared {
             if flash_white {
                 Rgb::WHITE
@@ -119,7 +125,15 @@ impl PacmanChaseEffect {
         }
     }
 
-    fn draw_pacman(frame: &mut Frame, cx: i32, cy: i32, open_amount: f32, facing_right: bool, pal: usize, color_cycle: f32) {
+    fn draw_pacman(
+        frame: &mut Frame,
+        cx: i32,
+        cy: i32,
+        open_amount: f32,
+        facing_right: bool,
+        pal: usize,
+        color_cycle: f32,
+    ) {
         let radius = 4i32;
         let r_sq = radius * radius;
 
@@ -151,7 +165,14 @@ impl PacmanChaseEffect {
         }
     }
 
-    fn draw_ghost(frame: &mut Frame, cx: i32, cy: i32, color: Rgb, leg_frame: usize, look_right: bool) {
+    fn draw_ghost(
+        frame: &mut Frame,
+        cx: i32,
+        cy: i32,
+        color: Rgb,
+        leg_frame: usize,
+        look_right: bool,
+    ) {
         // Ghost shape: 7x7 pixels (top rounded dome, wavy bottom tentacles)
         let top_y = cy - 3;
         let left_x = cx - 3;
@@ -182,8 +203,17 @@ impl PacmanChaseEffect {
                         // Eyes
                         let eye1_x = if look_right { 3 } else { 1 };
                         let eye2_x = if look_right { 5 } else { 3 };
-                        let is_white = dy == 2 && (dx == eye1_x || dx == eye1_x + 1 || dx == eye2_x || dx == eye2_x + 1);
-                        let is_pupil = dy == 2 && (if look_right { dx == eye1_x + 1 || dx == eye2_x + 1 } else { dx == eye1_x || dx == eye2_x });
+                        let is_white = dy == 2
+                            && (dx == eye1_x
+                                || dx == eye1_x + 1
+                                || dx == eye2_x
+                                || dx == eye2_x + 1);
+                        let is_pupil = dy == 2
+                            && (if look_right {
+                                dx == eye1_x + 1 || dx == eye2_x + 1
+                            } else {
+                                dx == eye1_x || dx == eye2_x
+                            });
 
                         let pixel_col = if is_pupil {
                             Rgb::new(0, 0, 180)
@@ -213,7 +243,9 @@ impl Effect for PacmanChaseEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -259,9 +291,21 @@ impl Effect for PacmanChaseEffect {
 
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[3] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
-        let treble = if audio_active { audio_treble(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
+        let treble = if audio_active {
+            audio_treble(context.audio)
+        } else {
+            0.0
+        };
         let beat = audio_active && context.audio.beat;
 
         // Beat triggers Power Pellet Mode (Ghosts turn scared blue and Pacman chases them!)
@@ -284,7 +328,9 @@ impl Effect for PacmanChaseEffect {
         let ghost_count = (self.values[1].round() as usize).clamp(1, 3);
         let is_scared = self.scared_timer > 0.0;
         #[allow(clippy::manual_is_multiple_of)]
-        let flash_white = is_scared && self.scared_timer < 1.2 && ((self.scared_timer * 8.0).floor() as usize % 2 == 0);
+        let flash_white = is_scared
+            && self.scared_timer < 1.2
+            && ((self.scared_timer * 8.0).floor() as usize % 2 == 0);
 
         // Maze corridor walls at top (y=6) and bottom (y=26)
         let wall_col = if pal == 1 {
@@ -303,7 +349,11 @@ impl Effect for PacmanChaseEffect {
         let corridor_y = 16i32;
 
         // Draw dots / pellets along the corridor
-        let pellet_color = Rgb::new(to_byte(250.0 + mid * 5.0), to_byte(185.0 + treble * 70.0), 160);
+        let pellet_color = Rgb::new(
+            to_byte(250.0 + mid * 5.0),
+            to_byte(185.0 + treble * 70.0),
+            160,
+        );
         for dot_x in (2..WIDTH).step_by(5) {
             let px = dot_x as i32;
             let dot_eaten = if !is_scared {
@@ -332,7 +382,15 @@ impl Effect for PacmanChaseEffect {
         if !is_scared {
             // Normal mode: Ghosts chase Pacman (Pacman ahead at travel_x - 10, ghosts follow behind)
             let pac_x = (self.travel_x - 10.0).round() as i32;
-            Self::draw_pacman(frame, pac_x, corridor_y, mouth_open, true, pal, self.color_cycle);
+            Self::draw_pacman(
+                frame,
+                pac_x,
+                corridor_y,
+                mouth_open,
+                true,
+                pal,
+                self.color_cycle,
+            );
 
             for g in 0..ghost_count {
                 let ghost_x = (self.travel_x - 22.0 - (g as f32 * 11.0)).round() as i32;
@@ -342,7 +400,15 @@ impl Effect for PacmanChaseEffect {
         } else {
             // Power Pellet mode: Pacman chases scared ghosts!
             let pac_x = (self.travel_x - 30.0).round() as i32;
-            Self::draw_pacman(frame, pac_x, corridor_y, mouth_open, true, pal, self.color_cycle);
+            Self::draw_pacman(
+                frame,
+                pac_x,
+                corridor_y,
+                mouth_open,
+                true,
+                pal,
+                self.color_cycle,
+            );
 
             for g in 0..ghost_count {
                 let ghost_x = (self.travel_x - 8.0 + (g as f32 * 10.0)).round() as i32;

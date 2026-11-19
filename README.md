@@ -8,11 +8,12 @@
 [![Framerate](https://img.shields.io/badge/Framerate-60%2B%20FPS%20(4--Ch%20Parallel%20RMT)-success.svg)]()
 [![Audio](https://img.shields.io/badge/Audio-I2S%20DMA%20(INMP441%2FICS--43434)-blueviolet.svg)]()
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-MQTT%20Auto--Discovery-41BDF5.svg)](https://www.home-assistant.io/)
+[![Effects](https://img.shields.io/badge/Effects-82%20animated%20GIFs-38bdf8.svg)](docs/effects/index.html)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg)](https://github.com/nicolai455/led-matrix-anim-rs/pulls)
 
 > **High-framerate (60+ FPS), sound-reactive 2D WS2812B / NeoPixel LED matrix display firmware and desktop simulator written in pure Rust with ESP-IDF std.**
 
-Featuring 80+ handcrafted 2D visual effects, real-time digital I2S microphone audio DSP, 4-channel parallel hardware RMT DMA driving, Home Assistant MQTT auto-discovery, fallback Wi-Fi Captive Portal, and an instant WebAssembly browser simulator.
+Featuring 82 handcrafted 2D visual effects, real-time digital I2S microphone audio DSP, 4-channel parallel hardware RMT DMA driving, Home Assistant MQTT auto-discovery, fallback Wi-Fi Captive Portal, and an instant WebAssembly browser simulator.
 
 ---
 
@@ -25,12 +26,48 @@ neopixel matrix visualizer, rust embedded esp-idf, parallel rmt led driver
 ## 🌟 Highlights
 
 - **Ultra-High Framerate (60–100+ FPS):** Uses 4 parallel hardware RMT DMA channels to drive 1024 LEDs simultaneously. Cutting transmission time from ~31 ms (single chain) down to **~7.7 ms** eliminates RMT buffer bottlenecks and guarantees smooth 60+ FPS animations.
-- **80+ Native 2D Effects:** Demoscene raymarching, fluid caustics, domain warping, metaballs, cellular automata, club/concert strobe fixtures, moving head beams, retro arcade games (Space Invaders, Pac-Man, Mario, Breakout), and pixel-art meme loops.
+- **82 Native 2D Effects:** Demoscene raymarching, fluid caustics, domain warping, metaballs, cellular automata, club/concert strobe fixtures, moving head beams, retro arcade games (Space Invaders, Pac-Man, Mario, Breakout), and pixel-art meme loops.
 - **Sound-Reactive DSP Engine:** Direct digital I2S DMA streaming (INMP441 / ICS-43434) with multi-band FFT frequency decomposition, transient beat detection, dynamic AGC, and zero CPU blocking.
 - **Zero-Allocation Rust Safety:** Memory-safe Rust with ESP-IDF std. Zero heap churn during render loops, no memory fragmentation, saturating color blending, and panic-resilient error boundaries.
 - **WASM Browser Preview & Desktop Simulator:** Develop and test effects without physical hardware using the WebAssembly browser simulator or host CLI tool (`cargo run -p matrix-control --bin matrix-simulator`).
 - **Home Assistant & Web Control:** Retained MQTT auto-discovery for all effects and live parameters, a responsive embedded Web UI, and a fallback Access Point (`JDJLIGHT` / `192.168.4.1`).
 - **Hardware Power Limiter:** Quiescent dark current compensation (accounts for ~1024 mA idle draw) and configurable 5V power budget throttling (default 12A limit). Always boots dark to protect USB ports.
+
+---
+
+## 🎬 Effect Gallery — all 82 effects as animated GIFs
+
+Every built-in effect, rendered frame by frame by the real engine — not screenshots
+and not hardware footage — and browsable in one scrollable page:
+
+### ▶️ **[Browse all 82 effects on GitHub](docs/effects/GALLERY.md)** · **[Interactive gallery](docs/effects/index.html)** (open locally or host statically)
+
+| | |
+|---|---|
+| ![Fire](docs/effects/gifs/007-fire.gif) | ![Matrix Rain](docs/effects/gifs/010-matrix_rain.gif) |
+| `fire` | `matrix_rain` |
+| ![Kaleidoscope](docs/effects/gifs/024-kaleidoscope.gif) | ![Space Invaders](docs/effects/gifs/047-arcade_invaders.gif) |
+| `kaleidoscope` | `arcade_invaders` |
+
+Each card links its 4-second GIF (160×160, 25 fps) and a 2×3 contact sheet sampled
+at 10/30/50/70/85/95 % of the clip. `docs/effects/GALLERY.md` is plain markdown so
+GitHub renders every effect inline; `docs/effects/index.html` is a self-contained
+page with search and filters that works from `file://` or any static host.
+
+Reproduce every artifact locally:
+
+```bash
+cargo run --release -p matrix-gif -- --all \
+    --out docs/effects/gifs --summary docs/effects/summary.json
+cargo run --release -p matrix-gif -- contact-sheets --all \
+    --out docs/effects/contact-sheets --summary docs/effects/contact-sheets-summary.json
+cargo run -p matrix-gif -- gallery      # rebuild docs/effects/index.html
+```
+
+Rendering is deterministic: frame *i* is drawn at `t = i·1000/fps` ms after 60
+warm-up frames with one synthetic audio track, so a re-run is byte-identical. See
+[`docs/effects/README.md`](docs/effects/README.md) for the artifact contract and
+[`crates/matrix-gif`](crates/matrix-gif/README.md) for the CLI.
 
 ---
 
@@ -46,7 +83,7 @@ WLED is the gold standard for addressable LED strips. However, when driving larg
 | **Memory Safety & Language** | **Pure Rust (ESP-IDF std)**, zero heap churn, zero buffer overflows | C++ (Arduino / ESP-IDF), manual memory management |
 | **Sound Reactivity** | Real-time I2S DMA worker thread, multi-band FFT, transient beat hits | AudioReactive Usermod (I2S/analog), shared loop scheduling |
 | **Hardware Simulator** | **Native Host Simulator & WebAssembly Browser Preview** | Limited 2D simulation; requires live hardware or WLED-WLED emulators |
-| **Effect Catalog** | **80+ bespoke 2D matrix shaders**, arcade games, disco fixtures, fluid dynamics | Hundreds of 1D strip effects; smaller native 2D matrix shader selection |
+| **Effect Catalog** | **82 bespoke 2D matrix shaders**, arcade games, disco fixtures, fluid dynamics | Hundreds of 1D strip effects; smaller native 2D matrix shader selection |
 | **Quiescent Current Tracking** | Accounts for 1 mA idle current per WS2812B pixel (1024 mA base) | Software brightness limiter without idle pixel calibration |
 | **1D Strip Effects** | ❌ Minimal (focus is exclusively on 2D matrices) | ✅ Massive 1D strip animation ecosystem |
 | **Segment Partitioning UI** | ❌ Fixed 2D matrix layout | ✅ Advanced arbitrary strip segment editor |
@@ -269,7 +306,7 @@ cargo run -p matrix-control --bin matrix-simulator -- --listen 127.0.0.1:8080
 ```
 
 Open `http://127.0.0.1:8080` in any browser. The simulator boots **OFF** by default. Toggle power ON to explore:
-- All 80+ visual effects and real-time parameter sliders.
+- All 82 visual effects and real-time parameter sliders.
 - Color, brightness, speed, and text overlays.
 - Virtual microphone audio input with synthetic audio generator.
 - Panel layout configuration and live FPS telemetry.
@@ -375,7 +412,7 @@ impl Effect for MyAwesomeEffect {
 | Crate / Path | Responsibility |
 | :--- | :--- |
 | **`crates/matrix-core`** | Pixel formats (`Rgb`), frame buffer (`Frame`), effect contract (`Effect`), audio DSP & FFT analysis, current limiting, geometry mapping, serialization. |
-| **`crates/matrix-effects`** | Catalog of 80+ handcrafted visual effects, parameter schemas, demoscene math, and lazy factory loading. |
+| **`crates/matrix-effects`** | Catalog of 82 handcrafted visual effects, parameter schemas, demoscene math, and lazy factory loading. |
 | **`crates/matrix-control`** | Render engine actor, bounded command queues, Web UI & REST API dispatch, MQTT & Home Assistant discovery, state persistence. |
 | **`crates/matrix-preview`** | WebAssembly bindings compiled to `.wasm` for instant zero-latency browser rendering. |
 | **`firmware`** | Production ESP-IDF application; currently supported only on ESP32-S3 N16R8. Classic ESP32 OTA images exceed their configured slots; see [`VERIFICATION.md`](VERIFICATION.md). |
@@ -397,6 +434,35 @@ cargo clippy --workspace --all-targets -- -D warnings
 # Run geometry and catalog integration checks
 cargo test --manifest-path tests/Cargo.toml
 ```
+
+### Browser end-to-end suite
+
+Every interactive control of the web UI is exercised against the host simulator
+in a headless browser — no npm install, fully offline:
+
+```sh
+cargo build -p matrix-control --bin matrix-simulator
+node scripts/gui-e2e/run.cjs            # 43 cases
+node scripts/gui-e2e/run.cjs --filter playlist
+```
+
+It boots a throw-away simulator plus Chromium over the DevTools protocol and
+covers boot, power, brightness, colour, text, speed/cycle, the effect catalog and
+search, effect parameters, all playlist controls (start/pause/resume/stop/next/
+previous/loop/switch), audio sources and mic tuning, the Wi-Fi card (add, edit,
+reorder, remove, validation, scan), hardware config, diagnostics, persistence and
+robustness (rapid clicks, reload mid-session, offline fetches). Any console error,
+uncaught exception or unexpected HTTP status >= 400 fails the run; screenshots and
+`artifacts/report.json` are written on failure.
+
+### Effect artifact QA
+
+```sh
+python3 scripts/qa_effects.py            # measures every rendered GIF
+```
+
+Checks visibility, animation, colour variety and whether content is confined to a
+corner (a broken-coordinate signature) rather than trusting a visual impression.
 
 See [VERIFICATION.md](VERIFICATION.md) and [firmware/README.md](firmware/README.md) for low-level hardware verification details, oscilloscope timing benchmarks, and partition fit analysis.
 

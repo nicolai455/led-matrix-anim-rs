@@ -22,6 +22,33 @@ pub fn to_byte(v: f32) -> u8 {
     }
 }
 
+/// Bounded step count for a line/arc rasteriser.
+///
+/// `(delta * factor).ceil() as usize` looks harmless but a non-finite or huge
+/// delta saturates the cast to `usize::MAX`, and the caller's
+/// `for s in 0..=steps` then never finishes. That is a hang, not a panic: on
+/// the device it freezes the render thread with no reboot to recover from.
+/// Clamping to the number of addressable pixels keeps the visual result
+/// identical for all real geometry while making the loop provably finite.
+#[inline]
+pub fn raster_steps(delta: f32, factor: f32) -> usize {
+    let raw = delta.abs() * factor;
+    if !raw.is_finite() {
+        return 0;
+    }
+    // A diagonal across the panel cannot need more than two full passes.
+    (raw.ceil() as usize).min(2 * (WIDTH.max(HEIGHT)))
+}
+
+/// Clamped `usize` conversion for loop counts derived from parameters.
+#[inline]
+pub fn bounded_count(value: f32, max: usize) -> usize {
+    if !value.is_finite() || value <= 0.0 {
+        return 0;
+    }
+    (value as usize).min(max)
+}
+
 pub fn audio_bass(audio: &AudioSnapshot) -> f32 {
     if !audio.available {
         return 0.0;

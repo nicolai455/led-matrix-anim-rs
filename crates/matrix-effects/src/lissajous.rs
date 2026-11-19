@@ -174,7 +174,9 @@ impl Effect for LissajousEffect {
     fn parameters(&self) -> &[ParameterDescriptor] {
         &PARAMETERS
     }
-    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> { Some(&PARAMETERS) }
+    fn static_parameters(&self) -> Option<&'static [ParameterDescriptor]> {
+        Some(&PARAMETERS)
+    }
 
     fn parameter(&self, id: &str) -> Option<f32> {
         match id {
@@ -219,8 +221,16 @@ impl Effect for LissajousEffect {
     fn render(&mut self, frame: &mut Frame, context: &RenderContext<'_>) {
         let dt = context.delta_seconds.clamp(0.001, 0.1);
         let audio_active = self.values[4] > 0.5 && context.audio.available;
-        let bass = if audio_active { audio_bass(context.audio) } else { 0.0 };
-        let mid = if audio_active { audio_mid(context.audio) } else { 0.0 };
+        let bass = if audio_active {
+            audio_bass(context.audio)
+        } else {
+            0.0
+        };
+        let mid = if audio_active {
+            audio_mid(context.audio)
+        } else {
+            0.0
+        };
 
         // Decay buffer for phosphor trail
         let trail_decay = (self.values[2] / 100.0).clamp(0.2, 0.96);
@@ -277,8 +287,12 @@ impl Effect for LissajousEffect {
                 let t = (i as f32 / SAMPLES as f32) * 2.0 * PI;
                 let t_norm = i as f32 / SAMPLES as f32;
 
-                let px = center_x + radius * (wx * t + self.phase + self.delta).sin() * (1.0 + wobble * (t * 8.0).sin());
-                let py = center_y + radius * (wy * t + self.phase).sin() * (1.0 + wobble * (t * 8.0).cos());
+                let px = center_x
+                    + radius
+                        * (wx * t + self.phase + self.delta).sin()
+                        * (1.0 + wobble * (t * 8.0).sin());
+                let py = center_y
+                    + radius * (wy * t + self.phase).sin() * (1.0 + wobble * (t * 8.0).cos());
 
                 let col = self.sample_color(t_norm);
                 self.draw_point(px, py, col);
