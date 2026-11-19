@@ -1,4 +1,4 @@
-use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{alloc_boxed_2d, audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -138,7 +138,7 @@ impl LaserShowEffect {
     fn draw_laser_line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: Rgb) {
         let dx = x1 - x0;
         let dy = y1 - y0;
-        let steps = (dx.abs().max(dy.abs()) * 1.5).ceil() as usize;
+        let steps = raster_steps(dx.abs().max(dy.abs()), 1.5);
         if steps == 0 {
             return;
         }

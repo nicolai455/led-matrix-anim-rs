@@ -1,4 +1,4 @@
-use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -241,7 +241,10 @@ impl Effect for SpinningVinylEffect {
         // Arm shaft
         let dx = head_x - pivot_x;
         let dy = head_y - pivot_y;
-        let steps = dx.abs().max(dy.abs()) as usize;
+        let steps = raster_steps((dx.abs().max(dy.abs())) as f32, 1.0);
+        if steps == 0 {
+            return;
+        }
         for s in 0..=steps {
             let t = s as f32 / steps as f32;
             let ax = (pivot_x as f32 + t * dx as f32).round() as i32;

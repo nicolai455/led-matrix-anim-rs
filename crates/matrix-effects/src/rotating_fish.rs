@@ -401,9 +401,12 @@ impl Effect for RotatingFishEffect {
         };
         self.previous_ms = context.now_ms;
 
-        // Advance spin angle (in millidegrees to prevent cadence-dependent drift)
+        // Advance spin angle (in millidegrees to prevent cadence-dependent drift).
+        // Elapsed time is unbounded after a resume or a clock correction, so the
+        // product must saturate: a plain `*` panics on overflow in debug builds
+        // and silently wraps in release.
         let speed_deg = self.values[1].max(0.0) as u64;
-        self.phase = (self.phase + elapsed * speed_deg) % 360_000;
+        self.phase = (self.phase % 360_000 + elapsed.saturating_mul(speed_deg) % 360_000) % 360_000;
         let angle = (self.phase as f32) * 0.000_017_453_292;
 
         // Audio reactivity

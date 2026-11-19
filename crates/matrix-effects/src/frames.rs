@@ -115,7 +115,10 @@ impl Effect for FramesEffect {
             if elapsed >= delay {
                 let frames_to_advance = (elapsed / delay) as usize;
                 self.current_idx = (self.current_idx + frames_to_advance) % count;
-                self.last_ms += (frames_to_advance as u64) * delay;
+                // `elapsed / delay` is bounded only by u64::MAX; multiplying it
+                // back by `delay` can overflow after a long suspend or a clock
+                // correction. Anchor to the current timestamp instead.
+                self.last_ms = context.now_ms;
                 if source
                     .read_frame_into(self.current_idx, current_frame)
                     .is_err()

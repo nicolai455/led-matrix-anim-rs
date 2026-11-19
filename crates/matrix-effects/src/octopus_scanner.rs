@@ -237,7 +237,7 @@ impl Effect for OctopusScannerEffect {
             let sin_a = ang.sin();
 
             // Trace volumetric ray from center out to beam tip
-            let steps = (reach * 2.0).ceil() as usize;
+            let steps = crate::util::raster_steps(reach, 2.0);
             for s in 2..=steps {
                 let dist = s as f32 * 0.5;
                 let px = (cx + cos_a * dist).round() as i32;

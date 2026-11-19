@@ -220,7 +220,7 @@ impl Effect for DerbyFlowerEffect {
         self.color_cycle = (self.color_cycle + dt * 0.16) % 1.0;
 
         let pal = self.values[3] as usize;
-        let num_clusters = self.values[1].round() as usize;
+        let num_clusters = crate::util::bounded_count(self.values[1].round(), 12);
         let base_spread = self.values[2] + bass * 3.5;
 
         let cx = 15.5f32;

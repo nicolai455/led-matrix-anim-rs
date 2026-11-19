@@ -1,4 +1,4 @@
-use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, to_byte};
+use crate::util::{audio_bass, audio_mid, audio_treble, clamp01, hsv_to_rgb, raster_steps, to_byte};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -160,7 +160,7 @@ impl SpectrumOrbEffect {
     fn draw_spike_line(frame: &mut Frame, x0: f32, y0: f32, x1: f32, y1: f32, col0: Rgb, col1: Rgb) {
         let dx = x1 - x0;
         let dy = y1 - y0;
-        let steps = (dx.abs().max(dy.abs()) * 1.5).ceil() as usize;
+        let steps = raster_steps(dx.abs().max(dy.abs()), 1.5);
         if steps == 0 {
             return;
         }

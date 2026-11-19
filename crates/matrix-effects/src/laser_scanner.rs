@@ -1,4 +1,4 @@
-use crate::util::{audio_bass, audio_mid, audio_treble, hsv_to_rgb, to_byte};
+use crate::util::{audio_bass, audio_mid, audio_treble, hsv_to_rgb, raster_steps, to_byte};
 use matrix_core::{
     Effect, Frame, ParameterDescriptor, ParameterKind, RenderContext, Rgb, HEIGHT, WIDTH,
 };
@@ -129,7 +129,7 @@ impl LaserScannerEffect {
     fn draw_laser_line(frame: &mut Frame, x0: f32, y0: f32, x1: f32, y1: f32, col: Rgb, hot_core: bool) {
         let dx = x1 - x0;
         let dy = y1 - y0;
-        let steps = (dx.abs().max(dy.abs()) * 2.0).ceil() as usize;
+        let steps = raster_steps(dx.abs().max(dy.abs()), 2.0);
         if steps == 0 {
             return;
         }
@@ -237,7 +237,9 @@ impl Effect for LaserScannerEffect {
 
         let pal = self.values[3] as usize;
         let geom = self.values[1] as usize;
-        let num_rings = self.values[2].round() as usize;
+        // Clamped: the descriptor allows up to 12, but a restored or hostile
+        // value must never drive the ring loop above a bounded count.
+        let num_rings = crate::util::bounded_count(self.values[2].round(), 12).max(1);
 
         let cx = 15.5f32;
         let cy = 15.5f32;
