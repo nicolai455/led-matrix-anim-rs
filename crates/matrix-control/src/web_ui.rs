@@ -871,20 +871,19 @@ function renderNetworkProfiles() {
     row.appendChild(label);
     const actions = document.createElement('div');
     actions.className = 'playlist-entry-actions';
-    const button = (text, title, action) => {
+    const button = (text, title, action, actionName) => {
       const item = document.createElement('button');
       item.type = 'button'; item.className = 'btn'; item.textContent = text; item.title = title; item.setAttribute('aria-label', title); item.onclick = action;
+      // Stable hooks for the GUI E2E suite; set at creation so no querySelectorAll is needed.
+      item.dataset.networkIndex = String(index);
+      item.dataset.networkAction = actionName;
       return item;
     };
-    actions.appendChild(button('↑', 'Move Wi-Fi profile up', () => moveNetworkProfile(index, -1)));
-    actions.appendChild(button('↓', 'Move Wi-Fi profile down', () => moveNetworkProfile(index, 1)));
-    actions.appendChild(button('Edit', 'Edit Wi-Fi profile', () => editNetworkProfile(index)));
-    actions.appendChild(button('Remove', 'Remove Wi-Fi profile', () => { profiles.splice(index, 1); renderNetworkProfiles(); }));
+    actions.appendChild(button('↑', 'Move Wi-Fi profile up', () => moveNetworkProfile(index, -1), 'move-up'));
+    actions.appendChild(button('↓', 'Move Wi-Fi profile down', () => moveNetworkProfile(index, 1), 'move-down'));
+    actions.appendChild(button('Edit', 'Edit Wi-Fi profile', () => editNetworkProfile(index), 'edit'));
+    actions.appendChild(button('Remove', 'Remove Wi-Fi profile', () => { profiles.splice(index, 1); renderNetworkProfiles(); }, 'remove'));
     row.dataset.networkIndex = String(index);
-    actions.querySelectorAll('button').forEach((item, position) => {
-      item.dataset.networkIndex = String(index);
-      item.dataset.networkAction = ['move-up', 'move-down', 'edit', 'remove'][position];
-    });
     row.appendChild(actions); container.appendChild(row);
   });
 }
@@ -1112,7 +1111,7 @@ function renderPlaylistEntries(snapshot) {
 
     const actions = document.createElement('div');
     actions.className = 'playlist-entry-actions';
-    const button = (text, title, action) => {
+    const button = (text, title, action, actionName) => {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'btn';
@@ -1120,16 +1119,15 @@ function renderPlaylistEntries(snapshot) {
       item.title = title;
       item.setAttribute('aria-label', title);
       item.onclick = action;
+      // Stable hooks for the GUI E2E suite; set at creation so no querySelectorAll is needed.
+      item.dataset.playlistIndex = String(index);
+      item.dataset.playlistAction = actionName;
       return item;
     };
-    actions.appendChild(button('↑', 'Move entry up', () => movePlaylistEntry(index, -1)));
-    actions.appendChild(button('↓', 'Move entry down', () => movePlaylistEntry(index, 1)));
-    actions.appendChild(button('−', 'Remove entry', () => removePlaylistEntry(index)));
+    actions.appendChild(button('↑', 'Move entry up', () => movePlaylistEntry(index, -1), 'move-up'));
+    actions.appendChild(button('↓', 'Move entry down', () => movePlaylistEntry(index, 1), 'move-down'));
+    actions.appendChild(button('−', 'Remove entry', () => removePlaylistEntry(index), 'remove'));
     row.dataset.playlistIndex = String(index);
-    actions.querySelectorAll('button').forEach((item, position) => {
-      item.dataset.playlistIndex = String(index);
-      item.dataset.playlistAction = ['move-up', 'move-down', 'remove'][position];
-    });
     row.appendChild(actions);
     container.appendChild(row);
   });
