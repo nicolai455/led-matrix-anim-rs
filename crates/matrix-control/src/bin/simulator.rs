@@ -153,6 +153,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !has_default {
         engine.install_default_sound_playlist(matrix_effects::default_sound_playlist())?;
     }
+    // Fix: the default playlist must also become the *active* queue, otherwise a
+    // fresh boot shows 73 saved entries but an empty queue and a dead Start button.
+    // apply_playlist_config() stops playback, so the boot output stays dark.
+    let cycle_was_on = engine.snapshot_scalar()["cycle"] == "ON";
+    let active_queue_empty = engine
+        .playlist_config()
+        .get("entries")
+        .and_then(serde_json::Value::as_array)
+        .is_none_or(|entries| entries.is_empty());
+    if active_queue_empty {
+        engine.apply(
+            "playlist_select",
+            &json!({ "id": "sound-default" }).to_string(),
+        )?;
+        if cycle_was_on {
+            // Loading a queue clears auto-cycle; keep the configured boot behaviour.
+            engine.set_auto_cycle_restored(true);
+        }
+    }
     if !engine.is_on() {
         engine.apply("light", r#"{"state":"OFF"}"#)?;
     }
