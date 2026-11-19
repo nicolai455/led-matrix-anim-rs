@@ -518,3 +518,48 @@ fn playlist_configuration_persists_but_restore_never_resumes_playback_or_power()
         })
     );
 }
+
+
+/// The UI may only ever receive error text, never a dead render thread. Unknown
+/// effect ids are rejected at the command boundary (defence at parse time) and
+/// the render loop degrades to a stopped queue with a notice (defence at render
+/// time, covered by the engine unit tests).
+#[test]
+fn unknown_effect_ids_are_rejected_at_the_command_boundary() {
+    let mut engine = engine();
+    let payload = json!({
+        "entries": [
+            {"effectId": "a", "durationMs": 1_000},
+            {"effectId": "ghost", "durationMs": 1_000}
+        ],
+        "loop": false,
+    });
+    let error = engine
+        .apply("playlist_config", &payload.to_string())
+        .expect_err("a queue naming an unknown effect must be rejected");
+    assert!(error.contains("ghost"), "error must name the effect: {error}");
+    // Rejection is atomic: the previous queue is untouched.
+    assert_eq!(playlist(&engine)["entries"], json!([]));
+}
+
+#[test]
+fn a_saved_playlist_with_an_unknown_effect_is_not_restored_but_does_not_fail_the_boot() {
+    let mut boot = engine();
+    config(&mut boot, &[("a", 1_000)], false);
+    let mut saved: Value = serde_json::from_str(&serialize_runtime_state(&boot)).unwrap();
+    // Simulate a state written by a build that had an extra effect.
+    saved["playlistCollection"] = json!({
+        "playlists": [{
+            "id": "legacy",
+            "name": "Legacy queue",
+            "loop": false,
+            "entries": [{"effectId": "ghost", "durationMs": 1_000}]
+        }],
+        "selectedId": "legacy"
+    });
+
+    let mut restored = engine();
+    restore_runtime_state(&mut restored, &saved.to_string())
+        .expect("a stale queue must not abort the restore");
+    assert!(restored.playlist_collection().playlists.is_empty(), "the bad playlist must be dropped whole");
+}

@@ -119,6 +119,11 @@ struct PlaylistSnapshot {
     index: Option<usize>,
     effect_id: Option<String>,
     remaining_ms: u64,
+    /// Set when the playlist had to stop because an entry referenced an effect
+    /// that is not in this build's catalog. Reported instead of panicking.
+    /// Omitted from the snapshot when unset, so the schema only grows on error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notice: Option<String>,
 }
 
 pub struct Engine {
@@ -140,6 +145,9 @@ pub struct Engine {
     playlist_index: Option<usize>,
     playlist_remaining_ms: u64,
     playlist_last_update_ms: u64,
+    /// Last playlist-level problem reported to the UI (e.g. an entry whose
+    /// effect is missing from this build). Cleared on the next successful start.
+    playlist_notice: Option<String>,
     playlist_collection: PlaylistCollection,
     audio_mode: AudioMode,
     audio_available: bool,
@@ -230,6 +238,7 @@ impl Engine {
             playlist_index: None,
             playlist_remaining_ms: 0,
             playlist_last_update_ms: 0,
+            playlist_notice: None,
             playlist_collection: PlaylistCollection::default(),
             audio_mode: AudioMode::Off,
             audio_available: false,
@@ -432,6 +441,7 @@ impl Engine {
                 .playlist_index
                 .map(|index| self.playlist_entries[index].effect_id.clone()),
             remaining_ms: self.playlist_remaining_ms,
+            notice: self.playlist_notice.clone(),
         }
     }
 
@@ -628,9 +638,18 @@ impl Engine {
             }
             self.playlist_index = Some(index);
             self.playlist_remaining_ms = self.playlist_entries[index].duration_ms;
-            let effect_idx = self
-                .effect_index_by_id(&self.playlist_entries[index].effect_id)
-                .expect("configured playlist effect id remains in engine catalog");
+            let Some(effect_idx) = self.effect_index_by_id(&self.playlist_entries[index].effect_id)
+            else {
+                // The catalog can be smaller than the queue (firmware variant, a
+                // removed effect, an LFX stand-in). Stopping with a visible notice
+                // beats panicking: on the ESP `panic = "abort"` would reboot-loop.
+                let id = self.playlist_entries[index].effect_id.clone();
+                self.stop_playlist();
+                self.playlist_notice = Some(format!(
+                    "playlist stopped: entry {index} uses effect '{id}', which is not in this build"
+                ));
+                break;
+            };
             self.select_effect_idx(effect_idx);
 
             if overdue == 0 {
@@ -716,6 +735,13 @@ impl Engine {
                 if self.playlist_entries.is_empty() {
                     return Err("cannot start an empty playlist".to_string());
                 }
+                let first = self.playlist_entries[0].effect_id.clone();
+                let Some(effect_idx) = self.effect_index_by_id(&first) else {
+                    return Err(format!(
+                        "cannot start playlist: effect '{first}' is not in this build"
+                    ));
+                };
+                self.playlist_notice = None;
                 self.auto_cycle_ms = 0;
                 self.playlist_index = Some(0);
                 self.playlist_remaining_ms = self.playlist_entries[0].duration_ms;
@@ -724,9 +750,6 @@ impl Engine {
                 // Play is an explicit user action: wake the output while keeping
                 // ordinary boot and saved playlist restoration dark/stopped.
                 self.on = true;
-                let effect_idx = self
-                    .effect_index_by_id(&self.playlist_entries[0].effect_id)
-                    .expect("configured playlist effect id remains in engine catalog");
                 self.select_effect_idx(effect_idx);
             }
             "pause" => {
@@ -774,12 +797,19 @@ impl Engine {
                 } else {
                     current - 1
                 };
+                let effect_idx = match self.effect_index_by_id(&self.playlist_entries[index].effect_id) {
+                    Some(effect_idx) => effect_idx,
+                    None => {
+                        let id = self.playlist_entries[index].effect_id.clone();
+                        self.stop_playlist();
+                        return Err(format!(
+                            "cannot skip to entry {index}: effect '{id}' is not in this build"
+                        ));
+                    }
+                };
                 self.playlist_index = Some(index);
                 self.playlist_remaining_ms = self.playlist_entries[index].duration_ms;
                 self.playlist_last_update_ms = self.last_render_ms;
-                let effect_idx = self
-                    .effect_index_by_id(&self.playlist_entries[index].effect_id)
-                    .expect("configured playlist effect id remains in engine catalog");
                 self.select_effect_idx(effect_idx);
             }
             _ => return Err(
@@ -1252,12 +1282,10 @@ impl Engine {
 
     /// Full state snapshot matching legacy JSON schema.
     pub fn snapshot(&self) -> serde_json::Value {
-        serde_json::from_slice(
-            &self
-                .snapshot_json(&serde_json::Map::new())
-                .expect("serialize state"),
-        )
-        .expect("internally serialized state")
+        match self.snapshot_json(&serde_json::Map::new()) {
+            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|_| serde_json::json!({})),
+            Err(_) => serde_json::json!({}),
+        }
     }
 
     /// Small state without the effect parameter tree, for telemetry consumers.
@@ -1360,9 +1388,11 @@ impl Engine {
             fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
                 let scalar = self.0.snapshot_scalar();
                 let mut map = s.serialize_map(None)?;
-                for (key, value) in scalar.as_object().expect("scalar object") {
-                    if key != "effects" && !self.1.contains_key(key) {
-                        map.serialize_entry(key, value)?;
+                if let Some(object) = scalar.as_object() {
+                    for (key, value) in object {
+                        if key != "effects" && !self.1.contains_key(key) {
+                            map.serialize_entry(key, value)?;
+                        }
                     }
                 }
                 map.serialize_entry("playlistCollection", &self.0.playlist_collection)?;
@@ -1408,8 +1438,10 @@ impl Engine {
     /// Effect catalog matching legacy metadata format for discovery & Web UI.
     pub fn catalog(&self) -> serde_json::Value {
         // Keep the legacy Value API while sharing the streaming serializer.
-        serde_json::from_slice(&self.catalog_json().expect("catalog serialization"))
-            .expect("serialized catalog is valid JSON")
+        self.catalog_json()
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_else(|| serde_json::Value::Array(Vec::new()))
     }
 }
 
@@ -1508,6 +1540,42 @@ mod tests {
         fn render(&mut self, frame: &mut Frame, _context: &RenderContext<'_>) {
             frame.set(0, 0, Rgb::WHITE);
         }
+    }
+
+    #[test]
+    fn playlist_entry_with_unknown_effect_degrades_instead_of_panicking() {
+        // A persisted queue can name an effect this build does not have (firmware
+        // variant, removed effect). Validation blocks it at parse time, but a
+        // restored queue bypasses that path, so the render loop must degrade.
+        let dummy = Box::new(DummyEffect {
+            id: "dummy",
+            name: "Dummy Effect",
+            param_val: 40.0,
+        });
+        let mut engine = Engine::new(vec![dummy]).unwrap();
+        engine.playlist_entries = vec![
+            PlaylistEntry {
+                effect_id: "dummy".into(),
+                duration_ms: 1_000,
+            },
+            PlaylistEntry {
+                effect_id: "ghost".into(),
+                duration_ms: 1_000,
+            },
+        ];
+        engine.playlist_loop = false;
+        engine
+            .apply("playlist_control", r#"{"action":"start"}"#)
+            .unwrap();
+
+        // First tick advances past the first entry and lands on the unknown one.
+        engine.render(1_000, &AudioSnapshot::default());
+        engine.render(2_000, &AudioSnapshot::default());
+
+        let playlist = engine.snapshot()["playlist"].clone();
+        assert_eq!(playlist["status"], "stopped");
+        let notice = playlist["notice"].as_str().unwrap_or_default();
+        assert!(notice.contains("ghost"), "notice must name the effect: {playlist:?}");
     }
 
     #[test]
